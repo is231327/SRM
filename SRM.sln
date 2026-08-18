@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 18
-VisualStudioVersion = 18.9.12105.275 stable
+VisualStudioVersion = 18.9.12105.275
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SRMCore", "SRMCore\SRMCore.csproj", "{A342F12A-BA0C-4305-8E06-EBFF52DC1C74}"
 EndProject
@@ -13,12 +13,12 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SRMApp", "SRMApp\SRMApp.csp
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "ContainerServices", "ContainerServices", "{238D20A2-AD93-4677-B3FA-92EF781E6117}"
 	ProjectSection(SolutionItems) = preProject
+		docker-compose.yml = docker-compose.yml
 		ContainerServices\README.md = ContainerServices\README.md
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "PythonShelly", "PythonShelly", "{70BA836A-70F8-477D-A719-AF8E43424A44}"
 	ProjectSection(SolutionItems) = preProject
-		PythonShelly\compose.yaml = PythonShelly\compose.yaml
 		PythonShelly\dockerfile = PythonShelly\dockerfile
 		PythonShelly\main.py = PythonShelly\main.py
 		PythonShelly\requirements.txt = PythonShelly\requirements.txt
@@ -26,6 +26,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "PythonShelly", "PythonShell
 		PythonShelly\settings_actions.json = PythonShelly\settings_actions.json
 		PythonShelly\status.json = PythonShelly\status.json
 	EndProjectSection
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SRMShared", "SRMShared\SRMShared.csproj", "{DB4E332A-A467-4AD3-BE6A-C6F5414448AF}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -49,6 +51,10 @@ Global
 		{E3402767-A451-43BB-8584-827724BAACC4}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{E3402767-A451-43BB-8584-827724BAACC4}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{E3402767-A451-43BB-8584-827724BAACC4}.Release|Any CPU.Build.0 = Release|Any CPU
+		{DB4E332A-A467-4AD3-BE6A-C6F5414448AF}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{DB4E332A-A467-4AD3-BE6A-C6F5414448AF}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{DB4E332A-A467-4AD3-BE6A-C6F5414448AF}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{DB4E332A-A467-4AD3-BE6A-C6F5414448AF}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
