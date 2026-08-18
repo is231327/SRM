@@ -1,5 +1,5 @@
 using System.ComponentModel.DataAnnotations;
-using SRMShared.Validation;
+using SRMShared.Attributes;
 
 namespace SRMShared.DTOs.ShellyDevice;
 
