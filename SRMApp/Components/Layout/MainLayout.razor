@@ -1,4 +1,6 @@
-﻿@inherits LayoutComponentBase
+@inherits LayoutComponentBase
+@implements IDisposable
+@inject LanguageService LanguageService
 
 <div class="page">
     <div class="sidebar">
@@ -6,8 +8,17 @@
     </div>
 
     <main>
-        <div class="top-row px-4">
-            <a href="https://learn.microsoft.com/aspnet/core/" target="_blank">About</a>
+        <div class="top-row px-4 app-topbar">
+            <div class="topbar-title">SRM</div>
+            <div class="language-switch">
+                <label>@LanguageService.T("Language")</label>
+                <button class="lang-btn @(LanguageService.CurrentLanguage == "en" ? "active" : string.Empty)" @onclick='() => LanguageService.SetLanguage("en")'>
+                    @LanguageService.T("English")
+                </button>
+                <button class="lang-btn @(LanguageService.CurrentLanguage == "de" ? "active" : string.Empty)" @onclick='() => LanguageService.SetLanguage("de")'>
+                    @LanguageService.T("German")
+                </button>
+            </div>
         </div>
 
         <article class="content px-4">
@@ -21,3 +32,17 @@
     <a href="" class="reload">Reload</a>
     <a class="dismiss">🗙</a>
 </div>
+
+@code {
+    protected override void OnInitialized()
+    {
+        LanguageService.LanguageChanged += OnLanguageChanged;
+    }
+
+    private void OnLanguageChanged() => InvokeAsync(StateHasChanged);
+
+    public void Dispose()
+    {
+        LanguageService.LanguageChanged -= OnLanguageChanged;
+    }
+}

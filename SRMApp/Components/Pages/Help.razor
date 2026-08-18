@@ -1,0 +1,26 @@
+@page "/help"
+@inherits LocalizedComponentBase
+
+<PageTitle>@LanguageService.T("Help")</PageTitle>
+
+<div class="page-header">
+    <div>
+        <h1>@LanguageService.T("Help")</h1>
+        <p>@LanguageService.T("HelpText")</p>
+    </div>
+</div>
+
+<div class="help-grid">
+    <div class="panel-card">
+        <h3>@LanguageService.T("Customers")</h3>
+        <p class="subtle">Start with customers, then move into server rooms, then continue into agents and their devices.</p>
+    </div>
+    <div class="panel-card">
+        <h3>@LanguageService.T("Dashboard")</h3>
+        <p class="subtle">Use the dashboard for a quick status summary and direct entry points into the hierarchy.</p>
+    </div>
+    <div class="panel-card">
+        <h3>Validation</h3>
+        <p class="subtle">The forms follow the DTO validation rules from the backend contract. Invalid payloads are rejected by the API.</p>
+    </div>
+</div>

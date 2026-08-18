@@ -1,0 +1,87 @@
+@page "/agents"
+@rendermode InteractiveServer
+@inherits LocalizedComponentBase
+@inject ICoreApiClient ApiClient
+
+<PageTitle>@LanguageService.T("Agents")</PageTitle>
+@code {
+    [SupplyParameterFromQuery] public Guid? serverRoomId { get; set; }
+
+    private bool isLoading = true;
+    private List<AgentReadDto> agents = [];
+    private List<ServerRoomReadDto> serverRoomsForSelection = [];
+    private AgentCreateDto form = new() { IsActive = true };
+    private Guid? editingId;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (serverRoomId is not null)
+        {
+            form.ServerRoomId = serverRoomId.Value;
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        isLoading = true;
+        var all = await ApiClient.GetAgentsAsync();
+        serverRoomsForSelection = await ApiClient.GetServerRoomsAsync();
+        agents = serverRoomId is null ? all : all.Where(x => x.ServerRoomId == serverRoomId).ToList();
+        isLoading = false;
+    }
+
+    private void BeginEdit(AgentReadDto item)
+    {
+        editingId = item.Id;
+        form = new AgentCreateDto
+        {
+            ServerRoomId = item.ServerRoomId,
+            Name = item.Name,
+            ApiKeyReference = item.ApiKeyReference,
+            Version = item.Version,
+            LastKnownIpAddress = item.LastKnownIpAddress,
+            LastSeenAtUtc = item.LastSeenAtUtc,
+            IsActive = item.IsActive
+        };
+    }
+
+    private async Task SaveAsync()
+    {
+        if (editingId is null)
+            await ApiClient.CreateAgentAsync(form);
+        else
+            await ApiClient.UpdateAgentAsync(editingId.Value, new AgentUpdateDto
+            {
+                ServerRoomId = form.ServerRoomId,
+                Name = form.Name,
+                ApiKeyReference = form.ApiKeyReference,
+                Version = form.Version,
+                LastKnownIpAddress = form.LastKnownIpAddress,
+                LastSeenAtUtc = form.LastSeenAtUtc,
+                IsActive = form.IsActive
+            });
+
+        ResetForm();
+        await LoadAsync();
+    }
+
+    private async Task DeleteAsync(Guid id)
+    {
+        await ApiClient.DeleteAgentAsync(id);
+        if (editingId == id) ResetForm();
+        await LoadAsync();
+    }
+
+    private void ResetForm()
+    {
+        editingId = null;
+        form = new AgentCreateDto { ServerRoomId = serverRoomId ?? Guid.Empty, IsActive = true };
+    }
+}
+<div class="page-header"><div><h1>@LanguageService.T("Agents")</h1><p>@LanguageService.T("AgentChildren")</p></div>@if(serverRoomId is not null){<a class="btn btn-outline-primary" href="/serverrooms/@serverRoomId/details">@LanguageService.T("BackToServerRooms")</a>}</div>
+<div class="entity-grid">
+<section class="entity-list">@if(isLoading){<p>@LanguageService.T("Loading")</p>} else if(agents.Count==0){<p>@LanguageService.T("NoData")</p>} else { @foreach(var item in agents){<article class="entity-card"><div class="entity-card-header"><div><h3>@item.Name</h3><div class="subtle">@item.Version</div><div class="subtle">@item.LastKnownIpAddress</div></div><span class="badge-soft">@(item.IsActive ? LanguageService.T("Active") : "Inactive")</span></div><div class="child-links"><button class="btn btn-outline-primary btn-sm" @onclick="()=>BeginEdit(item)">@LanguageService.T("Edit")</button><button class="btn btn-outline-danger btn-sm" @onclick="()=>DeleteAsync(item.Id)">@LanguageService.T("Delete")</button><a class="btn btn-primary btn-sm" href="/shelly-devices?agentId=@item.Id">@LanguageService.T("ShellyDevices")</a><a class="btn btn-outline-primary btn-sm" href="/monitored-devices?agentId=@item.Id">@LanguageService.T("MonitoredDevices")</a></div></article>}} </section>
+<section class="form-card"><h3>@(editingId is null ? $"{LanguageService.T("Create")} {LanguageService.T("Agents")}" : $"{LanguageService.T("Update")} {LanguageService.T("Agents")}")</h3><EditForm Model="form" OnValidSubmit="SaveAsync"><DataAnnotationsValidator /><ValidationSummary /><div class="form-grid"><div><label class="form-label">Server Room</label><InputSelect class="form-select" @bind-Value="form.ServerRoomId" disabled="@(serverRoomId is not null)"><option value="@Guid.Empty">Select server room</option>@foreach(var room in serverRoomsForSelection){<option value="@room.Id">@room.Name</option>}</InputSelect></div><div><label class="form-label">@LanguageService.T("Name")</label><InputText class="form-control" @bind-Value="form.Name" /></div><div><label class="form-label">API Key Reference</label><InputText class="form-control" @bind-Value="form.ApiKeyReference" /></div><div><label class="form-label">Version</label><InputText class="form-control" @bind-Value="form.Version" /></div><div><label class="form-label">IP</label><InputText class="form-control" @bind-Value="form.LastKnownIpAddress" /></div><div><label class="form-label">Last Seen</label><InputDate class="form-control" @bind-Value="form.LastSeenAtUtc" /></div><div class="form-check mt-4"><InputCheckbox class="form-check-input" @bind-Value="form.IsActive" /><label class="form-check-label">@LanguageService.T("Active")</label></div></div><div class="form-actions"><button type="submit" class="btn btn-primary">@LanguageService.T("Save")</button><button type="button" class="btn btn-outline-secondary" @onclick="ResetForm">@LanguageService.T("Cancel")</button></div></EditForm></section>
+</div>

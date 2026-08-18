@@ -1,0 +1,149 @@
+@page "/sensor-readings"
+@rendermode InteractiveServer
+@inherits LocalizedComponentBase
+@inject ICoreApiClient ApiClient
+
+<PageTitle>@LanguageService.T("SensorReadings")</PageTitle>
+
+<div class="page-header">
+    <div>
+        <h1>@LanguageService.T("SensorReadings")</h1>
+        <p>@LanguageService.T("AgentChildren")</p>
+    </div>
+</div>
+
+<div class="entity-grid">
+    <section class="entity-list">
+        @if (isLoading)
+        {
+            <p>@LanguageService.T("Loading")</p>
+        }
+        else if (items.Count == 0)
+        {
+            <p>@LanguageService.T("NoData")</p>
+        }
+        else
+        {
+            @foreach (var item in items)
+            {
+                <article class="entity-card">
+                    <div class="entity-card-header">
+                        <div>
+                            <h3>@item.TemperatureCelsius C</h3>
+                            <div class="subtle">@LanguageService.T("RecordedAt"): @item.RecordedAtUtc.ToLocalTime()</div>
+                            <div class="subtle">Battery: @item.BatteryPercent | Brightness: @item.Brightness | Door: @(item.DoorOpen ? "Open" : "Closed")</div>
+                        </div>
+                    </div>
+                    <div class="child-links">
+                        <button class="btn btn-outline-primary btn-sm" @onclick="() => BeginEdit(item)">@LanguageService.T("Edit")</button>
+                        <button class="btn btn-outline-danger btn-sm" @onclick="() => DeleteAsync(item.Id)">@LanguageService.T("Delete")</button>
+                    </div>
+                </article>
+            }
+        }
+    </section>
+
+    <section class="form-card">
+        <h3>@(editingId is null ? $"{LanguageService.T("Create")} {LanguageService.T("SensorReadings")}" : $"{LanguageService.T("Update")} {LanguageService.T("SensorReadings")}")</h3>
+        <EditForm Model="form" OnValidSubmit="SaveAsync">
+            <DataAnnotationsValidator />
+            <ValidationSummary />
+            <div class="form-grid">
+                <div>
+                    <label class="form-label">Shelly Device</label>
+                    <InputSelect class="form-select" @bind-Value="form.ShellyDeviceId" disabled="@(shellyDeviceId is not null)">
+                        <option value="@Guid.Empty">Select Shelly device</option>
+                        @foreach (var device in shellyDevicesForSelection)
+                        {
+                            <option value="@device.Id">@device.Name</option>
+                        }
+                    </InputSelect>
+                </div>
+                <div><label class="form-label">Temperature C</label><InputNumber class="form-control" @bind-Value="form.TemperatureCelsius" /></div>
+                <div><label class="form-label">Battery %</label><InputNumber class="form-control" @bind-Value="form.BatteryPercent" /></div>
+                <div><label class="form-label">Brightness</label><InputNumber class="form-control" @bind-Value="form.Brightness" /></div>
+                <div><label class="form-label">@LanguageService.T("RecordedAt")</label><InputDate class="form-control" @bind-Value="form.RecordedAtUtc" /></div>
+                <div class="form-check mt-4"><InputCheckbox class="form-check-input" @bind-Value="form.DoorOpen" /><label class="form-check-label">Door Open</label></div>
+            </div>
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary">@LanguageService.T("Save")</button>
+                <button type="button" class="btn btn-outline-secondary" @onclick="ResetForm">@LanguageService.T("Cancel")</button>
+            </div>
+        </EditForm>
+    </section>
+</div>
+
+@code {
+    [SupplyParameterFromQuery] public Guid? shellyDeviceId { get; set; }
+
+    private bool isLoading = true;
+    private List<SensorReadingReadDto> items = [];
+    private List<ShellyDeviceReadDto> shellyDevicesForSelection = [];
+    private SensorReadingCreateDto form = new() { RecordedAtUtc = DateTime.UtcNow };
+    private Guid? editingId;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (shellyDeviceId is not null)
+        {
+            form.ShellyDeviceId = shellyDeviceId.Value;
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        isLoading = true;
+        var all = await ApiClient.GetSensorReadingsAsync();
+        shellyDevicesForSelection = await ApiClient.GetShellyDevicesAsync();
+        items = shellyDeviceId is null ? all : all.Where(x => x.ShellyDeviceId == shellyDeviceId).ToList();
+        isLoading = false;
+    }
+
+    private void BeginEdit(SensorReadingReadDto item)
+    {
+        editingId = item.Id;
+        form = new SensorReadingCreateDto
+        {
+            ShellyDeviceId = item.ShellyDeviceId,
+            TemperatureCelsius = item.TemperatureCelsius,
+            BatteryPercent = item.BatteryPercent,
+            Brightness = item.Brightness,
+            DoorOpen = item.DoorOpen,
+            RecordedAtUtc = item.RecordedAtUtc
+        };
+    }
+
+    private async Task SaveAsync()
+    {
+        if (editingId is null)
+            await ApiClient.CreateSensorReadingAsync(form);
+        else
+            await ApiClient.UpdateSensorReadingAsync(editingId.Value, new SensorReadingUpdateDto
+            {
+                ShellyDeviceId = form.ShellyDeviceId,
+                TemperatureCelsius = form.TemperatureCelsius,
+                BatteryPercent = form.BatteryPercent,
+                Brightness = form.Brightness,
+                DoorOpen = form.DoorOpen,
+                RecordedAtUtc = form.RecordedAtUtc
+            });
+
+        ResetForm();
+        await LoadAsync();
+    }
+
+    private async Task DeleteAsync(Guid id)
+    {
+        await ApiClient.DeleteSensorReadingAsync(id);
+        if (editingId == id) ResetForm();
+        await LoadAsync();
+    }
+
+    private void ResetForm()
+    {
+        editingId = null;
+        form = new SensorReadingCreateDto { ShellyDeviceId = shellyDeviceId ?? Guid.Empty, RecordedAtUtc = DateTime.UtcNow };
+    }
+}

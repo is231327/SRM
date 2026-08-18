@@ -1,7 +1,29 @@
-﻿@page "/"
+@page "/"
+@inherits LocalizedComponentBase
 
-<PageTitle>SRM Application</PageTitle>
+<PageTitle>@LanguageService.T("AppTitle")</PageTitle>
 
-<h1>Hello friend of excellent coding!</h1>
+<section class="hero">
+    <span class="badge-soft">SRM</span>
+    <h1>@LanguageService.T("WelcomeHeadline")</h1>
+    <p>@LanguageService.T("WelcomeText")</p>
+    <div class="hero-actions">
+        <a class="btn btn-light" href="/dashboard">@LanguageService.T("Dashboard")</a>
+        <a class="btn btn-outline-light" href="/customers">@LanguageService.T("Customers")</a>
+        <a class="btn btn-outline-light" href="/help">@LanguageService.T("Help")</a>
+    </div>
+</section>
 
-Welcome to SRM Application.
+<div class="panel-grid">
+    <div class="panel-card">
+        <h3>@LanguageService.T("Overview")</h3>
+        <p class="subtle">@LanguageService.T("HierarchyHint")</p>
+    </div>
+    <div class="panel-card">
+        <h3>@LanguageService.T("QuickActions")</h3>
+        <div class="child-links">
+            <a class="btn btn-primary" href="/customers">@LanguageService.T("Customers")</a>
+            <a class="btn btn-outline-primary" href="/contact">@LanguageService.T("Contact")</a>
+        </div>
+    </div>
+</div>

@@ -1,0 +1,161 @@
+@page "/shelly-devices"
+@rendermode InteractiveServer
+@inherits LocalizedComponentBase
+@inject ICoreApiClient ApiClient
+
+<PageTitle>@LanguageService.T("ShellyDevices")</PageTitle>
+
+<div class="page-header">
+    <div>
+        <h1>@LanguageService.T("ShellyDevices")</h1>
+        <p>@LanguageService.T("AgentChildren")</p>
+    </div>
+    @if (agentId is not null)
+    {
+        <a class="btn btn-outline-primary" href="/agents">@LanguageService.T("BackToAgents")</a>
+    }
+</div>
+
+<div class="entity-grid">
+    <section class="entity-list">
+        @if (isLoading)
+        {
+            <p>@LanguageService.T("Loading")</p>
+        }
+        else if (items.Count == 0)
+        {
+            <p>@LanguageService.T("NoData")</p>
+        }
+        else
+        {
+            @foreach (var item in items)
+            {
+                <article class="entity-card">
+                    <div class="entity-card-header">
+                        <div>
+                            <h3>@item.Name</h3>
+                            <div class="subtle">@item.DeviceType</div>
+                            <div class="subtle">@item.BaseUrl</div>
+                        </div>
+                        <span class="badge-soft">@(item.IsActive ? LanguageService.T("Active") : "Inactive")</span>
+                    </div>
+                    <div class="child-links">
+                        <button class="btn btn-outline-primary btn-sm" @onclick="() => BeginEdit(item)">@LanguageService.T("Edit")</button>
+                        <button class="btn btn-outline-danger btn-sm" @onclick="() => DeleteAsync(item.Id)">@LanguageService.T("Delete")</button>
+                        <a class="btn btn-primary btn-sm" href="/sensor-readings?shellyDeviceId=@item.Id">@LanguageService.T("SensorReadings")</a>
+                    </div>
+                </article>
+            }
+        }
+    </section>
+
+    <section class="form-card">
+        <h3>@(editingId is null ? $"{LanguageService.T("Create")} {LanguageService.T("ShellyDevices")}" : $"{LanguageService.T("Update")} {LanguageService.T("ShellyDevices")}")</h3>
+        <EditForm Model="form" OnValidSubmit="SaveAsync">
+            <DataAnnotationsValidator />
+            <ValidationSummary />
+            <div class="form-grid">
+                <div>
+                    <label class="form-label">Agent</label>
+                    <InputSelect class="form-select" @bind-Value="form.AgentId" disabled="@(agentId is not null)">
+                        <option value="@Guid.Empty">Select agent</option>
+                        @foreach (var agent in agentsForSelection)
+                        {
+                            <option value="@agent.Id">@agent.Name</option>
+                        }
+                    </InputSelect>
+                </div>
+                <div><label class="form-label">@LanguageService.T("Name")</label><InputText class="form-control" @bind-Value="form.Name" /></div>
+                <div><label class="form-label">Device Type</label><InputText class="form-control" @bind-Value="form.DeviceType" /></div>
+                <div><label class="form-label">Base URL</label><InputText class="form-control" @bind-Value="form.BaseUrl" /></div>
+                <div><label class="form-label">MAC</label><InputText class="form-control" @bind-Value="form.MacAddress" /></div>
+                <div><label class="form-label">Firmware</label><InputText class="form-control" @bind-Value="form.FirmwareVersion" /></div>
+                <div class="form-check mt-4"><InputCheckbox class="form-check-input" @bind-Value="form.IsVirtual" /><label class="form-check-label">Virtual</label></div>
+                <div class="form-check mt-4"><InputCheckbox class="form-check-input" @bind-Value="form.IsActive" /><label class="form-check-label">@LanguageService.T("Active")</label></div>
+            </div>
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary">@LanguageService.T("Save")</button>
+                <button type="button" class="btn btn-outline-secondary" @onclick="ResetForm">@LanguageService.T("Cancel")</button>
+            </div>
+        </EditForm>
+    </section>
+</div>
+
+@code {
+    [SupplyParameterFromQuery] public Guid? agentId { get; set; }
+
+    private bool isLoading = true;
+    private List<ShellyDeviceReadDto> items = [];
+    private List<AgentReadDto> agentsForSelection = [];
+    private ShellyDeviceCreateDto form = new() { IsActive = true };
+    private Guid? editingId;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (agentId is not null)
+        {
+            form.AgentId = agentId.Value;
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        isLoading = true;
+        var all = await ApiClient.GetShellyDevicesAsync();
+        agentsForSelection = await ApiClient.GetAgentsAsync();
+        items = agentId is null ? all : all.Where(x => x.AgentId == agentId).ToList();
+        isLoading = false;
+    }
+
+    private void BeginEdit(ShellyDeviceReadDto item)
+    {
+        editingId = item.Id;
+        form = new ShellyDeviceCreateDto
+        {
+            AgentId = item.AgentId,
+            Name = item.Name,
+            DeviceType = item.DeviceType,
+            BaseUrl = item.BaseUrl,
+            MacAddress = item.MacAddress,
+            FirmwareVersion = item.FirmwareVersion,
+            IsVirtual = item.IsVirtual,
+            IsActive = item.IsActive
+        };
+    }
+
+    private async Task SaveAsync()
+    {
+        if (editingId is null)
+            await ApiClient.CreateShellyDeviceAsync(form);
+        else
+            await ApiClient.UpdateShellyDeviceAsync(editingId.Value, new ShellyDeviceUpdateDto
+            {
+                AgentId = form.AgentId,
+                Name = form.Name,
+                DeviceType = form.DeviceType,
+                BaseUrl = form.BaseUrl,
+                MacAddress = form.MacAddress,
+                FirmwareVersion = form.FirmwareVersion,
+                IsVirtual = form.IsVirtual,
+                IsActive = form.IsActive
+            });
+
+        ResetForm();
+        await LoadAsync();
+    }
+
+    private async Task DeleteAsync(Guid id)
+    {
+        await ApiClient.DeleteShellyDeviceAsync(id);
+        if (editingId == id) ResetForm();
+        await LoadAsync();
+    }
+
+    private void ResetForm()
+    {
+        editingId = null;
+        form = new ShellyDeviceCreateDto { AgentId = agentId ?? Guid.Empty, IsActive = true };
+    }
+}

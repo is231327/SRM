@@ -1,0 +1,52 @@
+@page "/serverrooms/{ServerRoomId:guid}/details"
+@rendermode InteractiveServer
+@inherits LocalizedComponentBase
+@inject ICoreApiClient ApiClient
+
+<PageTitle>@LanguageService.T("ServerRoomChildren")</PageTitle>
+
+<div class="page-header">
+    <div>
+        <h1>@LanguageService.T("ServerRoomChildren")</h1>
+        <p>@LanguageService.T("HierarchyHint")</p>
+    </div>
+    <a class="btn btn-outline-primary" href="/serverrooms">@LanguageService.T("BackToServerRooms")</a>
+</div>
+
+@if (isLoading)
+{
+    <p>@LanguageService.T("Loading")</p>
+}
+else
+{
+    <div class="panel-grid">
+        <div class="panel-card">
+            <h3>@LanguageService.T("Agents")</h3>
+            <p class="subtle">@agents.Count</p>
+            <div class="child-links">
+                <a class="btn btn-primary btn-sm" href="/agents?serverRoomId=@ServerRoomId">@LanguageService.T("Agents")</a>
+            </div>
+        </div>
+        <div class="panel-card">
+            <h3>@LanguageService.T("MaintenanceWindows")</h3>
+            <p class="subtle">@maintenanceWindows.Count</p>
+            <div class="child-links">
+                <a class="btn btn-primary btn-sm" href="/maintenance-windows?serverRoomId=@ServerRoomId">@LanguageService.T("MaintenanceWindows")</a>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public Guid ServerRoomId { get; set; }
+    private bool isLoading = true;
+    private List<AgentReadDto> agents = [];
+    private List<MaintenanceWindowReadDto> maintenanceWindows = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        agents = (await ApiClient.GetAgentsAsync()).Where(x => x.ServerRoomId == ServerRoomId).ToList();
+        maintenanceWindows = (await ApiClient.GetMaintenanceWindowsAsync()).Where(x => x.ServerRoomId == ServerRoomId).ToList();
+        isLoading = false;
+    }
+}

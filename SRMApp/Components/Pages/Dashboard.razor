@@ -1,0 +1,69 @@
+@page "/dashboard"
+@rendermode InteractiveServer
+@inherits LocalizedComponentBase
+@inject ICoreApiClient ApiClient
+
+<PageTitle>@LanguageService.T("Dashboard")</PageTitle>
+
+<div class="page-header">
+    <div>
+        <h1>@LanguageService.T("Dashboard")</h1>
+        <p>@LanguageService.T("HierarchyHint")</p>
+    </div>
+</div>
+
+@if (isLoading)
+{
+    <p>@LanguageService.T("Loading")</p>
+}
+else
+{
+    <div class="stats-grid">
+        <div class="stat-card"><h3>@LanguageService.T("CustomersCard")</h3><div class="stat-value">@customers.Count</div></div>
+        <div class="stat-card"><h3>@LanguageService.T("RoomsCard")</h3><div class="stat-value">@serverRooms.Count</div></div>
+        <div class="stat-card"><h3>@LanguageService.T("AgentsCard")</h3><div class="stat-value">@agents.Count</div></div>
+        <div class="stat-card"><h3>@LanguageService.T("SensorsCard")</h3><div class="stat-value">@sensorReadings.Count</div></div>
+    </div>
+
+    <div class="panel-grid">
+        <div class="panel-card">
+            <h3>@LanguageService.T("QuickActions")</h3>
+            <div class="child-links">
+                <a class="btn btn-primary" href="/customers">@LanguageService.T("Customers")</a>
+                <a class="btn btn-outline-primary" href="/serverrooms">@LanguageService.T("ServerRooms")</a>
+                <a class="btn btn-outline-primary" href="/agents">@LanguageService.T("Agents")</a>
+            </div>
+        </div>
+        <div class="panel-card">
+            <h3>@LanguageService.T("SystemStatus")</h3>
+            <div class="info-list">
+                <div class="info-item"><strong>@LanguageService.T("MonitoredDevices")</strong><span>@monitoredDevices.Count</span></div>
+                <div class="info-item"><strong>@LanguageService.T("ShellyDevices")</strong><span>@shellyDevices.Count</span></div>
+                <div class="info-item"><strong>@LanguageService.T("MaintenanceWindows")</strong><span>@maintenanceWindows.Count</span></div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private bool isLoading = true;
+    private List<CustomerReadDto> customers = [];
+    private List<ServerRoomReadDto> serverRooms = [];
+    private List<AgentReadDto> agents = [];
+    private List<ShellyDeviceReadDto> shellyDevices = [];
+    private List<MonitoredDeviceReadDto> monitoredDevices = [];
+    private List<MaintenanceWindowReadDto> maintenanceWindows = [];
+    private List<SensorReadingReadDto> sensorReadings = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        customers = await ApiClient.GetCustomersAsync();
+        serverRooms = await ApiClient.GetServerRoomsAsync();
+        agents = await ApiClient.GetAgentsAsync();
+        shellyDevices = await ApiClient.GetShellyDevicesAsync();
+        monitoredDevices = await ApiClient.GetMonitoredDevicesAsync();
+        maintenanceWindows = await ApiClient.GetMaintenanceWindowsAsync();
+        sensorReadings = await ApiClient.GetSensorReadingsAsync();
+        isLoading = false;
+    }
+}

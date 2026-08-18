@@ -1,4 +1,6 @@
 using SRMApp.Components;
+using SRMApp.Localization;
+using SRMApp.Services;
 
 namespace SRMApp;
 
@@ -11,6 +13,9 @@ public class Program
         // Add services to the container.
         builder.Services.AddRazorComponents()
             .AddInteractiveServerComponents();
+        builder.Services.Configure<CoreApiOptions>(builder.Configuration.GetSection(CoreApiOptions.SectionName));
+        builder.Services.AddHttpClient<ICoreApiClient, CoreApiClient>();
+        builder.Services.AddScoped<LanguageService>();
 
         var app = builder.Build();
 

@@ -1,0 +1,153 @@
+@page "/monitored-devices"
+@rendermode InteractiveServer
+@inherits LocalizedComponentBase
+@inject ICoreApiClient ApiClient
+
+<PageTitle>@LanguageService.T("MonitoredDevices")</PageTitle>
+
+<div class="page-header">
+    <div>
+        <h1>@LanguageService.T("MonitoredDevices")</h1>
+        <p>@LanguageService.T("AgentChildren")</p>
+    </div>
+</div>
+
+<div class="entity-grid">
+    <section class="entity-list">
+        @if (isLoading)
+        {
+            <p>@LanguageService.T("Loading")</p>
+        }
+        else if (items.Count == 0)
+        {
+            <p>@LanguageService.T("NoData")</p>
+        }
+        else
+        {
+            @foreach (var item in items)
+            {
+                <article class="entity-card">
+                    <div class="entity-card-header">
+                        <div>
+                            <h3>@item.DisplayName</h3>
+                            <div class="subtle">@item.IpAddress</div>
+                            <div class="subtle">@item.IntervalSeconds s | @item.TimeoutMilliseconds ms</div>
+                        </div>
+                        <span class="badge-soft">@(item.IsActive ? LanguageService.T("Active") : "Inactive")</span>
+                    </div>
+                    <div class="child-links">
+                        <button class="btn btn-outline-primary btn-sm" @onclick="() => BeginEdit(item)">@LanguageService.T("Edit")</button>
+                        <button class="btn btn-outline-danger btn-sm" @onclick="() => DeleteAsync(item.Id)">@LanguageService.T("Delete")</button>
+                    </div>
+                </article>
+            }
+        }
+    </section>
+
+    <section class="form-card">
+        <h3>@(editingId is null ? $"{LanguageService.T("Create")} {LanguageService.T("MonitoredDevices")}" : $"{LanguageService.T("Update")} {LanguageService.T("MonitoredDevices")}")</h3>
+        <EditForm Model="form" OnValidSubmit="SaveAsync">
+            <DataAnnotationsValidator />
+            <ValidationSummary />
+            <div class="form-grid">
+                <div>
+                    <label class="form-label">Agent</label>
+                    <InputSelect class="form-select" @bind-Value="form.AgentId" disabled="@(agentId is not null)">
+                        <option value="@Guid.Empty">Select agent</option>
+                        @foreach (var agent in agentsForSelection)
+                        {
+                            <option value="@agent.Id">@agent.Name</option>
+                        }
+                    </InputSelect>
+                </div>
+                <div><label class="form-label">@LanguageService.T("Name")</label><InputText class="form-control" @bind-Value="form.DisplayName" /></div>
+                <div><label class="form-label">IP</label><InputText class="form-control" @bind-Value="form.IpAddress" /></div>
+                <div><label class="form-label">Interval (s)</label><InputNumber class="form-control" @bind-Value="form.IntervalSeconds" /></div>
+                <div><label class="form-label">Timeout (ms)</label><InputNumber class="form-control" @bind-Value="form.TimeoutMilliseconds" /></div>
+                <div><label class="form-label">Failure Threshold</label><InputNumber class="form-control" @bind-Value="form.FailureThreshold" /></div>
+                <div class="form-check mt-4"><InputCheckbox class="form-check-input" @bind-Value="form.IsActive" /><label class="form-check-label">@LanguageService.T("Active")</label></div>
+            </div>
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary">@LanguageService.T("Save")</button>
+                <button type="button" class="btn btn-outline-secondary" @onclick="ResetForm">@LanguageService.T("Cancel")</button>
+            </div>
+        </EditForm>
+    </section>
+</div>
+
+@code {
+    [SupplyParameterFromQuery] public Guid? agentId { get; set; }
+
+    private bool isLoading = true;
+    private List<MonitoredDeviceReadDto> items = [];
+    private List<AgentReadDto> agentsForSelection = [];
+    private MonitoredDeviceCreateDto form = new() { IsActive = true, IntervalSeconds = 30, TimeoutMilliseconds = 1000, FailureThreshold = 3 };
+    private Guid? editingId;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (agentId is not null)
+        {
+            form.AgentId = agentId.Value;
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        isLoading = true;
+        var all = await ApiClient.GetMonitoredDevicesAsync();
+        agentsForSelection = await ApiClient.GetAgentsAsync();
+        items = agentId is null ? all : all.Where(x => x.AgentId == agentId).ToList();
+        isLoading = false;
+    }
+
+    private void BeginEdit(MonitoredDeviceReadDto item)
+    {
+        editingId = item.Id;
+        form = new MonitoredDeviceCreateDto
+        {
+            AgentId = item.AgentId,
+            DisplayName = item.DisplayName,
+            IpAddress = item.IpAddress,
+            IntervalSeconds = item.IntervalSeconds,
+            TimeoutMilliseconds = item.TimeoutMilliseconds,
+            FailureThreshold = item.FailureThreshold,
+            IsActive = item.IsActive
+        };
+    }
+
+    private async Task SaveAsync()
+    {
+        if (editingId is null)
+            await ApiClient.CreateMonitoredDeviceAsync(form);
+        else
+            await ApiClient.UpdateMonitoredDeviceAsync(editingId.Value, new MonitoredDeviceUpdateDto
+            {
+                AgentId = form.AgentId,
+                DisplayName = form.DisplayName,
+                IpAddress = form.IpAddress,
+                IntervalSeconds = form.IntervalSeconds,
+                TimeoutMilliseconds = form.TimeoutMilliseconds,
+                FailureThreshold = form.FailureThreshold,
+                IsActive = form.IsActive
+            });
+
+        ResetForm();
+        await LoadAsync();
+    }
+
+    private async Task DeleteAsync(Guid id)
+    {
+        await ApiClient.DeleteMonitoredDeviceAsync(id);
+        if (editingId == id) ResetForm();
+        await LoadAsync();
+    }
+
+    private void ResetForm()
+    {
+        editingId = null;
+        form = new MonitoredDeviceCreateDto { AgentId = agentId ?? Guid.Empty, IsActive = true, IntervalSeconds = 30, TimeoutMilliseconds = 1000, FailureThreshold = 3 };
+    }
+}

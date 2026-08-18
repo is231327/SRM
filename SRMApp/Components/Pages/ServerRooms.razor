@@ -1,0 +1,143 @@
+@page "/serverrooms"
+@page "/customers/{CustomerId:guid}/serverrooms"
+@rendermode InteractiveServer
+@inherits LocalizedComponentBase
+@inject ICoreApiClient ApiClient
+
+<PageTitle>@LanguageService.T("ServerRooms")</PageTitle>
+
+<div class="page-header">
+    <div>
+        <h1>@LanguageService.T("ServerRooms")</h1>
+        <p>@LanguageService.T("ServerRoomChildren")</p>
+    </div>
+    @if (CustomerId is not null)
+    {
+        <a class="btn btn-outline-primary" href="/customers">@LanguageService.T("BackToCustomers")</a>
+    }
+</div>
+
+<div class="entity-grid">
+    <section class="entity-list">
+        @if (isLoading)
+        {
+            <p>@LanguageService.T("Loading")</p>
+        }
+        else if (serverRooms.Count == 0)
+        {
+            <p>@LanguageService.T("NoData")</p>
+        }
+        else
+        {
+            @foreach (var room in serverRooms)
+            {
+                <article class="entity-card">
+                    <div class="entity-card-header">
+                        <div>
+                            <h3>@room.Name</h3>
+                            <div class="subtle">@room.LocationDescription</div>
+                            <div class="subtle">Warning: @room.TemperatureWarningThreshold C | Critical: @room.TemperatureCriticalThreshold C</div>
+                        </div>
+                        <span class="badge-soft">@(room.MonitoringEnabled ? LanguageService.T("Active") : "Inactive")</span>
+                    </div>
+                    <div class="child-links">
+                        <button class="btn btn-outline-primary btn-sm" @onclick="() => BeginEdit(room)">@LanguageService.T("Edit")</button>
+                        <button class="btn btn-outline-danger btn-sm" @onclick="() => DeleteAsync(room.Id)">@LanguageService.T("Delete")</button>
+                        <a class="btn btn-primary btn-sm" href="/serverrooms/@room.Id/details">@LanguageService.T("Overview")</a>
+                    </div>
+                </article>
+            }
+        }
+    </section>
+
+    <section class="form-card">
+        <h3>@(editingId is null ? $"{LanguageService.T("Create")} {LanguageService.T("ServerRooms")}" : $"{LanguageService.T("Update")} {LanguageService.T("ServerRooms")}")</h3>
+        <EditForm Model="form" OnValidSubmit="SaveAsync">
+            <DataAnnotationsValidator />
+            <ValidationSummary />
+            <div class="form-grid">
+                <div>
+                    <label class="form-label">Customer</label>
+                    <InputSelect class="form-select" @bind-Value="form.CustomerId" disabled="@(CustomerId is not null)">
+                        <option value="@Guid.Empty">Select customer</option>
+                        @foreach (var customer in customersForSelection)
+                        {
+                            <option value="@customer.Id">@customer.Name</option>
+                        }
+                    </InputSelect>
+                </div>
+                <div><label class="form-label">@LanguageService.T("Name")</label><InputText class="form-control" @bind-Value="form.Name" /></div>
+                <div><label class="form-label">@LanguageService.T("Description")</label><InputText class="form-control" @bind-Value="form.LocationDescription" /></div>
+                <div><label class="form-label">Warning Threshold</label><InputNumber class="form-control" @bind-Value="form.TemperatureWarningThreshold" /></div>
+                <div><label class="form-label">Critical Threshold</label><InputNumber class="form-control" @bind-Value="form.TemperatureCriticalThreshold" /></div>
+                <div class="form-check mt-4"><InputCheckbox class="form-check-input" @bind-Value="form.MonitoringEnabled" /><label class="form-check-label">@LanguageService.T("Active")</label></div>
+            </div>
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary">@LanguageService.T("Save")</button>
+                <button type="button" class="btn btn-outline-secondary" @onclick="ResetForm">@LanguageService.T("Cancel")</button>
+            </div>
+        </EditForm>
+    </section>
+</div>
+
+@code {
+    [Parameter] public Guid? CustomerId { get; set; }
+
+    private bool isLoading = true;
+    private List<ServerRoomReadDto> serverRooms = [];
+    private List<CustomerReadDto> customersForSelection = [];
+    private ServerRoomCreateDto form = new() { MonitoringEnabled = true, TemperatureWarningThreshold = 25, TemperatureCriticalThreshold = 30 };
+    private Guid? editingId;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (CustomerId is not null) form.CustomerId = CustomerId.Value;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        isLoading = true;
+        var allRooms = await ApiClient.GetServerRoomsAsync();
+        customersForSelection = await ApiClient.GetCustomersAsync();
+        serverRooms = CustomerId is null ? allRooms : allRooms.Where(x => x.CustomerId == CustomerId).ToList();
+        isLoading = false;
+    }
+
+    private void BeginEdit(ServerRoomReadDto room)
+    {
+        editingId = room.Id;
+        form = new ServerRoomCreateDto
+        {
+            CustomerId = room.CustomerId,
+            Name = room.Name,
+            LocationDescription = room.LocationDescription,
+            TemperatureWarningThreshold = room.TemperatureWarningThreshold,
+            TemperatureCriticalThreshold = room.TemperatureCriticalThreshold,
+            MonitoringEnabled = room.MonitoringEnabled
+        };
+    }
+
+    private async Task SaveAsync()
+    {
+        if (editingId is null)
+            await ApiClient.CreateServerRoomAsync(form);
+        else
+            await ApiClient.UpdateServerRoomAsync(editingId.Value, new ServerRoomUpdateDto { CustomerId = form.CustomerId, Name = form.Name, LocationDescription = form.LocationDescription, TemperatureWarningThreshold = form.TemperatureWarningThreshold, TemperatureCriticalThreshold = form.TemperatureCriticalThreshold, MonitoringEnabled = form.MonitoringEnabled });
+        ResetForm();
+        await LoadAsync();
+    }
+
+    private async Task DeleteAsync(Guid id)
+    {
+        await ApiClient.DeleteServerRoomAsync(id);
+        if (editingId == id) ResetForm();
+        await LoadAsync();
+    }
+
+    private void ResetForm()
+    {
+        editingId = null;
+        form = new ServerRoomCreateDto { CustomerId = CustomerId ?? Guid.Empty, MonitoringEnabled = true, TemperatureWarningThreshold = 25, TemperatureCriticalThreshold = 30 };
+    }
+}

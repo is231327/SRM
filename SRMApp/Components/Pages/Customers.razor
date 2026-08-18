@@ -1,77 +1,118 @@
-﻿@page "/customer"
+@page "/customers"
 @rendermode InteractiveServer
-@using Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage
-@using System.Text.Json
-@using Newtonsoft.Json
-@using RestSharp
-@inject ProtectedSessionStorage ProtectedSessionStore
-@inject NavigationManager NavManager
+@inherits LocalizedComponentBase
+@inject ICoreApiClient ApiClient
 
-<PageTitle>Customers</PageTitle>
+<PageTitle>@LanguageService.T("Customers")</PageTitle>
 
-<h1>Customers</h1>
+<div class="page-header">
+    <div>
+        <h1>@LanguageService.T("Customers")</h1>
+        <p>@LanguageService.T("CustomerChildren")</p>
+    </div>
+</div>
 
-@if (customerList == null)
-{
-    <p><em>Loading...</em></p>
-}
-else
-{
-    <table class="table">
-        <thead>
-            <tr>
-                <th>Customer</th>
-                <th>Temp</th>
-                <th>Battery</th>
-                <th>DoorOpen</th>
-                <th>KeepAliveTimestamp</th>
-                <th>Edit</th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach (var item in customerList)
+<div class="entity-grid">
+    <section class="entity-list">
+        @if (isLoading)
+        {
+            <p>@LanguageService.T("Loading")</p>
+        }
+        else if (customers.Count == 0)
+        {
+            <p>@LanguageService.T("NoData")</p>
+        }
+        else
+        {
+            @foreach (var customer in customers)
             {
-                <tr>
-                    <td>@item.CustomerName</td>
-                    <td>@item.CurrentTemp</td>
-                    <td>@item.CurrentBattery</td>
-                    <td>@item.DoorOpen</td>
-                    <td>@item.KeepAliveTimestamp.ToShortDateString()</td>
-                    <td>
-                        <a href="/CustomerEdit?id=@item.CustomerId" class="btn btn-primary btn-sm">Edit</a>
-                    </td>
-                </tr>
+                <article class="entity-card">
+                    <div class="entity-card-header">
+                        <div>
+                            <h3>@customer.Name</h3>
+                            <div class="subtle">@customer.ContactEmail</div>
+                            <div class="subtle">@customer.ContactPhone</div>
+                        </div>
+                        <span class="badge-soft">@(customer.IsActive ? LanguageService.T("Active") : "Inactive")</span>
+                    </div>
+                    <div class="child-links">
+                        <button class="btn btn-outline-primary btn-sm" @onclick="() => BeginEdit(customer)">@LanguageService.T("Edit")</button>
+                        <button class="btn btn-outline-danger btn-sm" @onclick="() => DeleteAsync(customer.Id)">@LanguageService.T("Delete")</button>
+                        <a class="btn btn-primary btn-sm" href="/customers/@customer.Id/serverrooms">@LanguageService.T("ServerRooms")</a>
+                    </div>
+                </article>
             }
-        </tbody>
-    </table>
-}
+        }
+    </section>
 
+    <section class="form-card">
+        <h3>@(editingId is null ? $"{LanguageService.T("Create")} {LanguageService.T("Customers")}" : $"{LanguageService.T("Update")} {LanguageService.T("Customers")}")</h3>
+        <EditForm Model="form" OnValidSubmit="SaveAsync">
+            <DataAnnotationsValidator />
+            <ValidationSummary />
+            <div class="form-grid">
+                <div><label class="form-label">@LanguageService.T("Name")</label><InputText class="form-control" @bind-Value="form.Name" /></div>
+                <div><label class="form-label">External Reference</label><InputText class="form-control" @bind-Value="form.ExternalReference" /></div>
+                <div><label class="form-label">Email</label><InputText class="form-control" @bind-Value="form.ContactEmail" /></div>
+                <div><label class="form-label">Phone</label><InputText class="form-control" @bind-Value="form.ContactPhone" /></div>
+                <div class="form-check mt-4"><InputCheckbox class="form-check-input" @bind-Value="form.IsActive" /><label class="form-check-label">@LanguageService.T("Active")</label></div>
+            </div>
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary">@LanguageService.T("Save")</button>
+                <button type="button" class="btn btn-outline-secondary" @onclick="ResetForm">@LanguageService.T("Cancel")</button>
+            </div>
+        </EditForm>
+    </section>
+</div>
 
 @code {
+    private bool isLoading = true;
+    private List<CustomerReadDto> customers = [];
+    private CustomerCreateDto form = new() { IsActive = true };
+    private Guid? editingId;
 
-    private List<CoreServiceData>? customerList = null;
+    protected override async Task OnInitializedAsync() => await LoadAsync();
 
-    protected override async Task OnAfterRenderAsync(bool firstRender)
+    private async Task LoadAsync()
     {
-        await base.OnAfterRenderAsync(firstRender);
-        if (firstRender)
-        {
-            string token = (await ProtectedSessionStore.GetAsync<string>("token")).Value ?? "";
-            //HACK implement Token
-            // if (token == "")
-            // {
-            //     NavManager.NavigateTo("/");
-            // }
-
-            RestClient client = new RestClient("http://localhost:5236/CoreService");
-            RestRequest request = new RestRequest("", Method.Get);
-            RestResponse response = client.Execute(request);
-            customerList = JsonConvert.DeserializeObject<List<CoreServiceData>>(response.Content);
-            
-            StateHasChanged();
-        }
+        isLoading = true;
+        customers = await ApiClient.GetCustomersAsync();
+        isLoading = false;
     }
 
+    private void BeginEdit(CustomerReadDto customer)
+    {
+        editingId = customer.Id;
+        form = new CustomerCreateDto
+        {
+            Name = customer.Name,
+            ExternalReference = customer.ExternalReference,
+            ContactEmail = customer.ContactEmail,
+            ContactPhone = customer.ContactPhone,
+            IsActive = customer.IsActive
+        };
+    }
 
+    private async Task SaveAsync()
+    {
+        if (editingId is null)
+            await ApiClient.CreateCustomerAsync(form);
+        else
+            await ApiClient.UpdateCustomerAsync(editingId.Value, new CustomerUpdateDto { Name = form.Name, ExternalReference = form.ExternalReference, ContactEmail = form.ContactEmail, ContactPhone = form.ContactPhone, IsActive = form.IsActive });
+        ResetForm();
+        await LoadAsync();
+    }
+
+    private async Task DeleteAsync(Guid id)
+    {
+        await ApiClient.DeleteCustomerAsync(id);
+        if (editingId == id) ResetForm();
+        await LoadAsync();
+    }
+
+    private void ResetForm()
+    {
+        editingId = null;
+        form = new CustomerCreateDto { IsActive = true };
+    }
 }
-

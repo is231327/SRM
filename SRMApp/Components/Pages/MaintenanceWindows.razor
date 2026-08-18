@@ -1,0 +1,146 @@
+@page "/maintenance-windows"
+@rendermode InteractiveServer
+@inherits LocalizedComponentBase
+@inject ICoreApiClient ApiClient
+
+<PageTitle>@LanguageService.T("MaintenanceWindows")</PageTitle>
+
+<div class="page-header">
+    <div>
+        <h1>@LanguageService.T("MaintenanceWindows")</h1>
+        <p>@LanguageService.T("ServerRoomChildren")</p>
+    </div>
+</div>
+
+<div class="entity-grid">
+    <section class="entity-list">
+        @if (isLoading)
+        {
+            <p>@LanguageService.T("Loading")</p>
+        }
+        else if (items.Count == 0)
+        {
+            <p>@LanguageService.T("NoData")</p>
+        }
+        else
+        {
+            @foreach (var item in items)
+            {
+                <article class="entity-card">
+                    <div class="entity-card-header">
+                        <div>
+                            <h3>@item.Title</h3>
+                            <div class="subtle">@item.StartUtc.ToLocalTime() - @item.EndUtc.ToLocalTime()</div>
+                            <div class="subtle">@item.Description</div>
+                        </div>
+                    </div>
+                    <div class="child-links">
+                        <button class="btn btn-outline-primary btn-sm" @onclick="() => BeginEdit(item)">@LanguageService.T("Edit")</button>
+                        <button class="btn btn-outline-danger btn-sm" @onclick="() => DeleteAsync(item.Id)">@LanguageService.T("Delete")</button>
+                    </div>
+                </article>
+            }
+        }
+    </section>
+
+    <section class="form-card">
+        <h3>@(editingId is null ? $"{LanguageService.T("Create")} {LanguageService.T("MaintenanceWindows")}" : $"{LanguageService.T("Update")} {LanguageService.T("MaintenanceWindows")}")</h3>
+        <EditForm Model="form" OnValidSubmit="SaveAsync">
+            <DataAnnotationsValidator />
+            <ValidationSummary />
+            <div class="form-grid">
+                <div>
+                    <label class="form-label">Server Room</label>
+                    <InputSelect class="form-select" @bind-Value="form.ServerRoomId" disabled="@(serverRoomId is not null)">
+                        <option value="@Guid.Empty">Select server room</option>
+                        @foreach (var room in serverRoomsForSelection)
+                        {
+                            <option value="@room.Id">@room.Name</option>
+                        }
+                    </InputSelect>
+                </div>
+                <div><label class="form-label">@LanguageService.T("MaintenanceTitle")</label><InputText class="form-control" @bind-Value="form.Title" /></div>
+                <div><label class="form-label">Start</label><InputDate class="form-control" @bind-Value="form.StartUtc" /></div>
+                <div><label class="form-label">End</label><InputDate class="form-control" @bind-Value="form.EndUtc" /></div>
+                <div><label class="form-label">@LanguageService.T("Description")</label><InputText class="form-control" @bind-Value="form.Description" /></div>
+            </div>
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary">@LanguageService.T("Save")</button>
+                <button type="button" class="btn btn-outline-secondary" @onclick="ResetForm">@LanguageService.T("Cancel")</button>
+            </div>
+        </EditForm>
+    </section>
+</div>
+
+@code {
+    [SupplyParameterFromQuery] public Guid? serverRoomId { get; set; }
+
+    private bool isLoading = true;
+    private List<MaintenanceWindowReadDto> items = [];
+    private List<ServerRoomReadDto> serverRoomsForSelection = [];
+    private MaintenanceWindowCreateDto form = new() { StartUtc = DateTime.UtcNow, EndUtc = DateTime.UtcNow.AddHours(1) };
+    private Guid? editingId;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (serverRoomId is not null)
+        {
+            form.ServerRoomId = serverRoomId.Value;
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        isLoading = true;
+        var all = await ApiClient.GetMaintenanceWindowsAsync();
+        serverRoomsForSelection = await ApiClient.GetServerRoomsAsync();
+        items = serverRoomId is null ? all : all.Where(x => x.ServerRoomId == serverRoomId).ToList();
+        isLoading = false;
+    }
+
+    private void BeginEdit(MaintenanceWindowReadDto item)
+    {
+        editingId = item.Id;
+        form = new MaintenanceWindowCreateDto
+        {
+            ServerRoomId = item.ServerRoomId,
+            Title = item.Title,
+            StartUtc = item.StartUtc,
+            EndUtc = item.EndUtc,
+            Description = item.Description
+        };
+    }
+
+    private async Task SaveAsync()
+    {
+        if (editingId is null)
+            await ApiClient.CreateMaintenanceWindowAsync(form);
+        else
+            await ApiClient.UpdateMaintenanceWindowAsync(editingId.Value, new MaintenanceWindowUpdateDto
+            {
+                ServerRoomId = form.ServerRoomId,
+                Title = form.Title,
+                StartUtc = form.StartUtc,
+                EndUtc = form.EndUtc,
+                Description = form.Description
+            });
+
+        ResetForm();
+        await LoadAsync();
+    }
+
+    private async Task DeleteAsync(Guid id)
+    {
+        await ApiClient.DeleteMaintenanceWindowAsync(id);
+        if (editingId == id) ResetForm();
+        await LoadAsync();
+    }
+
+    private void ResetForm()
+    {
+        editingId = null;
+        form = new MaintenanceWindowCreateDto { ServerRoomId = serverRoomId ?? Guid.Empty, StartUtc = DateTime.UtcNow, EndUtc = DateTime.UtcNow.AddHours(1) };
+    }
+}
