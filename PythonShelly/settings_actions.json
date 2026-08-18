@@ -1,0 +1,66 @@
+{
+    "actions": {
+        "report_url": [
+            {
+                "index": 0,
+                "urls": [],
+                "enabled": false
+            }
+        ],
+        "dark_url": [
+            {
+                "index": 0,
+                "urls": [],
+                "enabled": false,
+                "dark_threshold": 1000.0
+            }
+        ],
+        "twilight_url": [
+            {
+                "index": 0,
+                "urls": [],
+                "enabled": false,
+                "twilight_threshold": 300
+            }
+        ],
+        "open_url": [
+            {
+                "index": 0,
+                "urls": [],
+                "enabled": false
+            }
+        ],
+        "close_url": [
+            {
+                "index": 0,
+                "urls": [],
+                "enabled": false
+            }
+        ],
+        "vibration_url": [
+            {
+                "index": 0,
+                "urls": [],
+                "enabled": false
+            }
+        ],
+        "temp_over_url": [
+            {
+                "index": 0,
+                "urls": [],
+                "enabled": false,
+                "temp_over_value": 21.5,
+                "temp_over_onetime": false
+            }
+        ],
+        "temp_under_url": [
+            {
+                "index": 0,
+                "urls": [],
+                "enabled": false,
+                "temp_under_value": 19.7,
+                "temp_under_onetime": false
+            }
+        ]
+    }
+}

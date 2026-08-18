@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Project Description</title>
+</head>
+<body>
+    <header>
+        <h1>Python-Shelly Project</h1>
+    </header>
+    <main>
+        <section>
+            <h2>About the Project</h2>
+            <p>This project, named Python-Shelly, is part of the BIS6-Building Secure Architecture course.</p>
+            <p>This application tries to replicate the functions of a Shelly Door/Window2.</p>
+        </section>
+        <section>
+            <h2>Features</h2>
+            <ul>
+                <li>HTTP API configuration</li>
+            </ul>
+        </section>
+        <section>
+            <h2>Technologies Used</h2>
+            <ul>
+                <li>Python</li>
+                <li>HTML</li>
+            </ul>
+        </section>
+        <section>
+            <h2>Differences</h2>
+            <p>This project is a simulation of the Shelly Door/Window2; it does not have the exact same functionalities as the original product.</p>
+            <p>The "/settings/actions" endpoint (might) works differently than the real one.</p>
+            <p>To use this endpoint, take the action you want to modify, add "_", and the name of the parameter you want to modify.</p>
+            <p>Example: dark_url + enabled = dark_url_enabled</p>
+            <p><code>/settings/actions?dark_url_enabled=true</code></p>
+        </section>
+        <section>
+            <h2>Examples for use</h2>
+            <p>To use the API, you can send GET requests to the following endpoints:</p>
+            <ul>
+                <li><code>http://127.0.0.1:5000/status</code> - Get current status</li>
+                <li><code>http://127.0.0.1:5000/settings?temperature_unit=C</code> - Set temperature unit to Celsius</li>
+                <li><code>http://127.0.0.1:5000/settings/actions?close_url_enabled=true</code> - Enable close URL action</li>
+            </ul>
+        </section>
+    </main>
+    <footer>
+        <p>&copy; 2025 Python-Shelly Project</p>
+    </footer>
+</body>
+</html>

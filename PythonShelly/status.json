@@ -1,0 +1,31 @@
+{
+    "is_valid": true,
+    "act_reasons": [
+        "periodic"
+    ],
+    "tmp": {
+        "value": 17.8,
+        "units": "C",
+        "tC": 17.8,
+        "tF": 64.04,
+        "is_valid": true
+    },
+    "lux": {
+        "value": 76531,
+        "illumination": "light",
+        "is_valid": true
+    },
+    "accel": {
+        "tilt": 77,
+        "vibration": 0,
+        "vibration_time": 60
+    },
+    "sensor": {
+        "state": "open",
+        "is_valid": true
+    },
+    "bat": {
+        "value": 0,
+        "voltage": 0.0
+    }
+}

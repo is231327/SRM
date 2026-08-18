@@ -1,0 +1,19 @@
+services:
+    shelly1:
+        extra_hosts:
+            - "host.docker.internal:host-gateway"
+        build: .
+        ports:
+            - "5000:5000"
+    shelly2:
+        extra_hosts:
+            - "host.docker.internal:host-gateway"
+        build: .
+        ports:
+            - "5001:5000"
+    shelly3:
+        extra_hosts:
+            - "host.docker.internal:host-gateway"
+        build: .
+        ports:
+            - "5002:5000"

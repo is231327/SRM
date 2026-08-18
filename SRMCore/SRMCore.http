@@ -1,0 +1,6 @@
+@SRMCore_HostAddress = http://localhost:5236
+
+GET {{SRMCore_HostAddress}}/srmcore/
+Accept: application/json
+
+###

@@ -1,0 +1,36 @@
+{
+    "device": {
+        "sleep_mode": true
+    },
+    "actions": {
+        "active": false,
+        "names": [
+            "report_url",
+            "dark_url",
+            "twilight_url",
+            "open_url",
+            "close_url",
+            "vibration_url",
+            "temp_over_url",
+            "temp_under_url"
+        ]
+    },
+    "dark_threshold": 100,
+    "twilight_threshold": 300,
+    "sleep_mode": {
+        "period": 6,
+        "unit": "h"
+    },
+    "led_status_disable": false,
+    "lux_wakeup_enable": true,
+    "tilt_enabled": false,
+    "tilt_calibrated": false,
+    "vibration_enabled": false,
+    "vibration_sensitivity": 10,
+    "reverse_open_close": false,
+    "sensors": {
+        "temperature_threshold": 1,
+        "temperature_unit": "C"
+    },
+    "temperature_offset": 0
+}

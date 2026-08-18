@@ -1,0 +1,77 @@
+﻿@page "/customer"
+@rendermode InteractiveServer
+@using Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage
+@using System.Text.Json
+@using Newtonsoft.Json
+@using RestSharp
+@inject ProtectedSessionStorage ProtectedSessionStore
+@inject NavigationManager NavManager
+
+<PageTitle>Customers</PageTitle>
+
+<h1>Customers</h1>
+
+@if (customerList == null)
+{
+    <p><em>Loading...</em></p>
+}
+else
+{
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Customer</th>
+                <th>Temp</th>
+                <th>Battery</th>
+                <th>DoorOpen</th>
+                <th>KeepAliveTimestamp</th>
+                <th>Edit</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var item in customerList)
+            {
+                <tr>
+                    <td>@item.CustomerName</td>
+                    <td>@item.CurrentTemp</td>
+                    <td>@item.CurrentBattery</td>
+                    <td>@item.DoorOpen</td>
+                    <td>@item.KeepAliveTimestamp.ToShortDateString()</td>
+                    <td>
+                        <a href="/CustomerEdit?id=@item.CustomerId" class="btn btn-primary btn-sm">Edit</a>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+
+@code {
+
+    private List<CoreServiceData>? customerList = null;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        await base.OnAfterRenderAsync(firstRender);
+        if (firstRender)
+        {
+            string token = (await ProtectedSessionStore.GetAsync<string>("token")).Value ?? "";
+            //HACK implement Token
+            // if (token == "")
+            // {
+            //     NavManager.NavigateTo("/");
+            // }
+
+            RestClient client = new RestClient("http://localhost:5236/CoreService");
+            RestRequest request = new RestRequest("", Method.Get);
+            RestResponse response = client.Execute(request);
+            customerList = JsonConvert.DeserializeObject<List<CoreServiceData>>(response.Content);
+            
+            StateHasChanged();
+        }
+    }
+
+
+}
+
