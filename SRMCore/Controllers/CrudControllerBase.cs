@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using SRMCore.Mappings.Interfaces;
 using SRMCore.Services.Interfaces;
@@ -6,6 +7,7 @@ using SRMShared.Entities;
 namespace SRMCore.Controllers;
 
 [ApiController]
+[Authorize(Roles = "SystemAdmin,Employee,CustomerAdmin,Customer")]
 public abstract class CrudControllerBase<TEntity, TCreateDto, TUpdateDto, TReadDto>(
     ICrudService<TEntity> service,
     ICrudDtoMapper<TEntity, TCreateDto, TUpdateDto, TReadDto> mapper) : ControllerBase

@@ -1,13 +1,19 @@
+using System.Text;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
 using SRMCore.Data;
+using SRMCore.Middleware;
 using SRMCore.Mappings;
 using SRMCore.Mappings.Interfaces;
+using SRMCore.Security;
 using SRMCore.Services;
 using SRMCore.Services.Interfaces;
 using SRMShared.DTOs.Agent;
 using SRMShared.DTOs.Customer;
 using SRMShared.DTOs.MaintenanceWindow;
 using SRMShared.DTOs.MonitoredDevice;
+using SRMShared.DTOs.MonitoredDevicePingResult;
 using SRMShared.DTOs.SensorReading;
 using SRMShared.DTOs.ServerRoom;
 using SRMShared.DTOs.ShellyDevice;
@@ -21,8 +27,26 @@ public class Program
     public static void Main(string[] args)
     {
         var builder = WebApplication.CreateBuilder(args);
+        builder.Services.AddHttpContextAccessor();
         builder.Services.AddDbContext<SrmCoreDbContext>(options =>
             options.UseSqlServer(builder.Configuration.GetConnectionString("SrmCoreDatabase")));
+        builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+            .AddJwtBearer(options =>
+            {
+                options.TokenValidationParameters = new TokenValidationParameters
+                {
+                    ValidateIssuer = true,
+                    ValidateAudience = true,
+                    ValidateIssuerSigningKey = true,
+                    ValidateLifetime = true,
+                    ValidIssuer = builder.Configuration["Jwt:Issuer"],
+                    ValidAudience = builder.Configuration["Jwt:Audience"],
+                    IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(builder.Configuration["Jwt:SigningKey"] ?? string.Empty)),
+                    ClockSkew = TimeSpan.FromMinutes(1)
+                };
+            });
+        builder.Services.AddAuthorization();
+        builder.Services.AddScoped<ICurrentUserContext, CurrentUserContext>();
         builder.Services.AddScoped<ICustomerService, CustomerService>();
         builder.Services.AddScoped<IServerRoomService, ServerRoomService>();
         builder.Services.AddScoped<IAgentService, AgentService>();
@@ -59,6 +83,8 @@ public class Program
         }
 
         app.UseHttpsRedirection();
+        app.UseMiddleware<AuthorizationExceptionMiddleware>();
+        app.UseAuthentication();
         app.UseAuthorization();
         app.MapControllers();
 

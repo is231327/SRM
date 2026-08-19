@@ -1,0 +1,570 @@
+using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
+using SRMAuth.Data;
+using SRMAuth.Security;
+using SRMAuth.Services.Interfaces;
+using SRMShared.Auth;
+using SRMShared.DTOs.Auth;
+using SRMShared.Entities;
+
+namespace SRMAuth.Services;
+
+public class AuthService(
+    SrmAuthDbContext dbContext,
+    IPasswordHasher<AuthUser> passwordHasher,
+    IJwtTokenService jwtTokenService,
+    ICurrentUserContext currentUserContext) : IAuthService
+{
+    public async Task<AuthTokenResponseDto?> LoginAsync(LoginRequestDto request, CancellationToken cancellationToken = default)
+    {
+        var user = await dbContext.Users
+            .Include(x => x.UserRoles)
+                .ThenInclude(x => x.Role)
+            .Include(x => x.CustomerUsers)
+            .FirstOrDefaultAsync(x => x.Username == request.Username && x.IsActive, cancellationToken);
+
+        if (user is null)
+        {
+            return null;
+        }
+
+        var passwordResult = passwordHasher.VerifyHashedPassword(user, user.PasswordHash, request.Password);
+        if (passwordResult is PasswordVerificationResult.Failed)
+        {
+            return null;
+        }
+
+        user.LastLoginAtUtc = DateTime.UtcNow;
+        user.UpdatedAtUtc = DateTime.UtcNow;
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        var roles = user.UserRoles
+            .Select(x => x.Role?.Name)
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Cast<string>()
+            .Distinct()
+            .ToArray();
+
+        var customerId = user.CustomerUsers.Select(x => (Guid?)x.CustomerId).FirstOrDefault();
+        var token = jwtTokenService.CreateUserAccessToken(user, roles, customerId);
+
+        return new AuthTokenResponseDto
+        {
+            AccessToken = token.AccessToken,
+            ExpiresAtUtc = token.ExpiresAtUtc,
+            Username = user.Username,
+            Roles = roles,
+            CustomerId = customerId
+        };
+    }
+
+    public async Task<AuthTokenResponseDto?> LoginAgentAsync(AgentLoginRequestDto request, CancellationToken cancellationToken = default)
+    {
+        var agentCredential = await dbContext.AgentCredentials
+            .FirstOrDefaultAsync(x => x.ClientIdentifier == request.ClientIdentifier && x.IsActive, cancellationToken);
+
+        if (agentCredential is null)
+        {
+            return null;
+        }
+
+        var verificationResult = passwordHasher.VerifyHashedPassword(
+            new AuthUser { Username = agentCredential.ClientIdentifier },
+            agentCredential.SecretHash,
+            request.ClientSecret);
+
+        if (verificationResult is PasswordVerificationResult.Failed)
+        {
+            return null;
+        }
+
+        agentCredential.LastAuthenticatedAtUtc = DateTime.UtcNow;
+        agentCredential.UpdatedAtUtc = DateTime.UtcNow;
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        var token = jwtTokenService.CreateAgentAccessToken(agentCredential);
+        return new AuthTokenResponseDto
+        {
+            AccessToken = token.AccessToken,
+            ExpiresAtUtc = token.ExpiresAtUtc,
+            Username = agentCredential.ClientIdentifier,
+            Roles = new[] { "Agent" },
+            AgentId = agentCredential.AgentId
+        };
+    }
+
+    public async Task<UserProfileDto?> GetOwnProfileAsync(Guid userId, CancellationToken cancellationToken = default)
+    {
+        var user = await dbContext.Users
+            .Include(x => x.UserRoles)
+                .ThenInclude(x => x.Role)
+            .Include(x => x.CustomerUsers)
+            .FirstOrDefaultAsync(x => x.Id == userId && x.IsActive, cancellationToken);
+
+        return user is null ? null : MapProfile(user);
+    }
+
+    public async Task<UserProfileDto?> UpdateOwnProfileAsync(Guid userId, UpdateOwnProfileRequestDto request, CancellationToken cancellationToken = default)
+    {
+        var user = await dbContext.Users
+            .Include(x => x.UserRoles)
+                .ThenInclude(x => x.Role)
+            .Include(x => x.CustomerUsers)
+            .FirstOrDefaultAsync(x => x.Id == userId && x.IsActive, cancellationToken);
+
+        if (user is null)
+        {
+            return null;
+        }
+
+        user.Email = request.Email;
+        user.FirstName = request.FirstName;
+        user.LastName = request.LastName;
+        user.PhoneNumber = request.PhoneNumber;
+        user.UpdatedAtUtc = DateTime.UtcNow;
+
+        await dbContext.SaveChangesAsync(cancellationToken);
+        return MapProfile(user);
+    }
+
+    public async Task ChangePasswordAsync(Guid userId, ChangePasswordRequestDto request, CancellationToken cancellationToken = default)
+    {
+        var user = await dbContext.Users.FirstOrDefaultAsync(x => x.Id == userId && x.IsActive, cancellationToken);
+        if (user is null)
+        {
+            throw new InvalidOperationException("The user account could not be found or is inactive.");
+        }
+
+        var passwordResult = passwordHasher.VerifyHashedPassword(user, user.PasswordHash, request.CurrentPassword);
+        if (passwordResult is PasswordVerificationResult.Failed)
+        {
+            throw new InvalidOperationException("The current password is incorrect.");
+        }
+
+        if (request.CurrentPassword == request.NewPassword)
+        {
+            throw new InvalidOperationException("The new password must be different from the current password.");
+        }
+
+        EnsurePasswordPolicy(request.NewPassword);
+
+        user.PasswordHash = passwordHasher.HashPassword(user, request.NewPassword);
+        user.MustChangePassword = false;
+        user.UpdatedAtUtc = DateTime.UtcNow;
+
+        await dbContext.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task<UserProfileDto?> CreateUserAsync(CreateUserRequestDto request, CancellationToken cancellationToken = default)
+    {
+        EnsureCanManageUsers();
+        await EnsureRequestedAssignmentAllowedAsync(request.Roles, request.CustomerId, cancellationToken);
+
+        var existingUser = await dbContext.Users.AnyAsync(
+            x => x.Username == request.Username || x.Email == request.Email,
+            cancellationToken);
+
+        if (existingUser)
+        {
+            return null;
+        }
+
+        var user = new AuthUser
+        {
+            Username = request.Username,
+            Email = request.Email,
+            FirstName = request.FirstName,
+            LastName = request.LastName,
+            PhoneNumber = request.PhoneNumber,
+            IsActive = true,
+            MustChangePassword = true
+        };
+        EnsurePasswordPolicy(request.Password);
+        user.PasswordHash = passwordHasher.HashPassword(user, request.Password);
+
+        dbContext.Users.Add(user);
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        var roles = await dbContext.Roles
+            .Where(x => request.Roles.Contains(x.Name))
+            .ToListAsync(cancellationToken);
+
+        foreach (var role in roles)
+        {
+            dbContext.UserRoles.Add(new AuthUserRole
+            {
+                UserId = user.Id,
+                RoleId = role.Id
+            });
+        }
+
+        var requiresCustomerAssignment = request.Roles.Contains(AuthRoles.ToName(AuthRoleType.CustomerAdmin))
+            || request.Roles.Contains(AuthRoles.ToName(AuthRoleType.Customer));
+
+        if (requiresCustomerAssignment && request.CustomerId.HasValue)
+        {
+            dbContext.CustomerUsers.Add(new CustomerUser
+            {
+                UserId = user.Id,
+                CustomerId = request.CustomerId.Value
+            });
+        }
+
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        user = await dbContext.Users
+            .Include(x => x.UserRoles)
+                .ThenInclude(x => x.Role)
+            .Include(x => x.CustomerUsers)
+            .FirstAsync(x => x.Id == user.Id, cancellationToken);
+
+        return MapProfile(user);
+    }
+
+    public async Task<List<UserManagementDto>> GetUsersAsync(CancellationToken cancellationToken = default)
+    {
+        EnsureCanManageUsers();
+
+        return await ApplyUserManagementScope(
+                dbContext.Users
+                    .AsNoTracking()
+                    .Include(x => x.UserRoles)
+                        .ThenInclude(x => x.Role)
+                    .Include(x => x.CustomerUsers))
+            .OrderBy(x => x.Username)
+            .Select(x => MapManagementDto(x))
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<UserManagementDto?> UpdateUserAsync(Guid userId, UpdateUserRequestDto request, CancellationToken cancellationToken = default)
+    {
+        EnsureCanManageUsers();
+        await EnsureRequestedAssignmentAllowedAsync(request.Roles, request.CustomerId, cancellationToken);
+
+        var user = await ApplyUserManagementScope(
+                dbContext.Users
+                    .Include(x => x.UserRoles)
+                    .ThenInclude(x => x.Role)
+                    .Include(x => x.CustomerUsers))
+            .FirstOrDefaultAsync(x => x.Id == userId, cancellationToken);
+
+        if (user is null)
+        {
+            return null;
+        }
+
+        var duplicateExists = await dbContext.Users.AnyAsync(
+            x => x.Id != userId && (x.Username == request.Username || x.Email == request.Email),
+            cancellationToken);
+
+        if (duplicateExists)
+        {
+            return null;
+        }
+
+        user.Username = request.Username;
+        user.Email = request.Email;
+        user.FirstName = request.FirstName;
+        user.LastName = request.LastName;
+        user.PhoneNumber = request.PhoneNumber;
+        user.IsActive = request.IsActive;
+        user.UpdatedAtUtc = DateTime.UtcNow;
+
+        var roles = await dbContext.Roles
+            .Where(x => request.Roles.Contains(x.Name))
+            .ToListAsync(cancellationToken);
+
+        dbContext.UserRoles.RemoveRange(user.UserRoles);
+        user.UserRoles.Clear();
+
+        foreach (var role in roles)
+        {
+            user.UserRoles.Add(new AuthUserRole
+            {
+                UserId = user.Id,
+                RoleId = role.Id
+            });
+        }
+
+        dbContext.CustomerUsers.RemoveRange(user.CustomerUsers);
+        user.CustomerUsers.Clear();
+
+        var requiresCustomerAssignment = request.Roles.Contains(AuthRoles.ToName(AuthRoleType.CustomerAdmin))
+            || request.Roles.Contains(AuthRoles.ToName(AuthRoleType.Customer));
+
+        if (requiresCustomerAssignment && request.CustomerId.HasValue)
+        {
+            user.CustomerUsers.Add(new CustomerUser
+            {
+                UserId = user.Id,
+                CustomerId = request.CustomerId.Value
+            });
+        }
+
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        user = await dbContext.Users
+            .AsNoTracking()
+            .Include(x => x.UserRoles)
+                .ThenInclude(x => x.Role)
+            .Include(x => x.CustomerUsers)
+            .FirstAsync(x => x.Id == userId, cancellationToken);
+
+        return MapManagementDto(user);
+    }
+
+    public async Task<bool> ResetUserPasswordAsync(Guid userId, ResetUserPasswordRequestDto request, CancellationToken cancellationToken = default)
+    {
+        EnsureCanManageUsers();
+
+        var user = await ApplyUserManagementScope(dbContext.Users)
+            .FirstOrDefaultAsync(x => x.Id == userId, cancellationToken);
+
+        if (user is null)
+        {
+            return false;
+        }
+
+        EnsurePasswordPolicy(request.NewPassword);
+        user.PasswordHash = passwordHasher.HashPassword(user, request.NewPassword);
+        user.MustChangePassword = true;
+        user.UpdatedAtUtc = DateTime.UtcNow;
+
+        await dbContext.SaveChangesAsync(cancellationToken);
+        return true;
+    }
+
+    public async Task<AgentCredentialReadDto?> CreateAgentCredentialAsync(AgentCredentialCreateRequestDto request, CancellationToken cancellationToken = default)
+    {
+        EnsureCanManageUsers();
+
+        var duplicateExists = await dbContext.AgentCredentials.AnyAsync(
+            x => x.ClientIdentifier == request.ClientIdentifier,
+            cancellationToken);
+
+        if (duplicateExists)
+        {
+            return null;
+        }
+
+        EnsurePasswordPolicy(request.ClientSecret);
+
+        var credential = new AgentCredential
+        {
+            AgentId = request.AgentId,
+            ClientIdentifier = request.ClientIdentifier,
+            IsActive = request.IsActive
+        };
+        credential.SecretHash = passwordHasher.HashPassword(new AuthUser { Username = credential.ClientIdentifier }, request.ClientSecret);
+
+        dbContext.AgentCredentials.Add(credential);
+        await dbContext.SaveChangesAsync(cancellationToken);
+        return MapAgentCredential(credential);
+    }
+
+    public async Task<List<AgentCredentialReadDto>> GetAgentCredentialsAsync(CancellationToken cancellationToken = default)
+    {
+        EnsureCanManageUsers();
+
+        return await dbContext.AgentCredentials
+            .AsNoTracking()
+            .OrderBy(x => x.ClientIdentifier)
+            .Select(x => MapAgentCredential(x))
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<AgentCredentialReadDto?> UpdateAgentCredentialAsync(Guid credentialId, AgentCredentialUpdateRequestDto request, CancellationToken cancellationToken = default)
+    {
+        EnsureCanManageUsers();
+
+        var credential = await dbContext.AgentCredentials.FirstOrDefaultAsync(x => x.Id == credentialId, cancellationToken);
+        if (credential is null)
+        {
+            return null;
+        }
+
+        var duplicateExists = await dbContext.AgentCredentials.AnyAsync(
+            x => x.Id != credentialId && x.ClientIdentifier == request.ClientIdentifier,
+            cancellationToken);
+
+        if (duplicateExists)
+        {
+            return null;
+        }
+
+        credential.AgentId = request.AgentId;
+        credential.ClientIdentifier = request.ClientIdentifier;
+        credential.IsActive = request.IsActive;
+        credential.UpdatedAtUtc = DateTime.UtcNow;
+
+        if (!string.IsNullOrWhiteSpace(request.NewClientSecret))
+        {
+            EnsurePasswordPolicy(request.NewClientSecret);
+            credential.SecretHash = passwordHasher.HashPassword(new AuthUser { Username = credential.ClientIdentifier }, request.NewClientSecret);
+        }
+
+        await dbContext.SaveChangesAsync(cancellationToken);
+        return MapAgentCredential(credential);
+    }
+
+    private static UserProfileDto MapProfile(AuthUser user)
+    {
+        return new UserProfileDto
+        {
+            Id = user.Id,
+            Username = user.Username,
+            Email = user.Email,
+            FirstName = user.FirstName,
+            LastName = user.LastName,
+            PhoneNumber = user.PhoneNumber,
+            Roles = user.UserRoles
+                .Select(x => x.Role?.Name)
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .Cast<string>()
+                .Distinct()
+                .ToArray(),
+            CustomerId = user.CustomerUsers.Select(x => (Guid?)x.CustomerId).FirstOrDefault(),
+            MustChangePassword = user.MustChangePassword
+        };
+    }
+
+    private static UserManagementDto MapManagementDto(AuthUser user)
+    {
+        return new UserManagementDto
+        {
+            Id = user.Id,
+            Username = user.Username,
+            Email = user.Email,
+            FirstName = user.FirstName,
+            LastName = user.LastName,
+            PhoneNumber = user.PhoneNumber,
+            Roles = user.UserRoles
+                .Select(x => x.Role?.Name)
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .Cast<string>()
+                .Distinct()
+                .ToArray(),
+            CustomerId = user.CustomerUsers.Select(x => (Guid?)x.CustomerId).FirstOrDefault(),
+            IsActive = user.IsActive,
+            MustChangePassword = user.MustChangePassword,
+            LastLoginAtUtc = user.LastLoginAtUtc
+        };
+    }
+
+    private static AgentCredentialReadDto MapAgentCredential(AgentCredential credential)
+    {
+        return new AgentCredentialReadDto
+        {
+            Id = credential.Id,
+            AgentId = credential.AgentId,
+            ClientIdentifier = credential.ClientIdentifier,
+            IsActive = credential.IsActive,
+            LastAuthenticatedAtUtc = credential.LastAuthenticatedAtUtc,
+            CreatedAtUtc = credential.CreatedAtUtc,
+            UpdatedAtUtc = credential.UpdatedAtUtc
+        };
+    }
+
+    private void EnsureCanManageUsers()
+    {
+        if (!currentUserContext.CanManageUsers)
+        {
+            throw new UnauthorizedAccessException("The current user is not allowed to manage users.");
+        }
+    }
+
+    private IQueryable<AuthUser> ApplyUserManagementScope(IQueryable<AuthUser> query)
+    {
+        if (currentUserContext.IsSystemAdmin)
+        {
+            return query;
+        }
+
+        if (currentUserContext.IsEmployee)
+        {
+            return query.Where(x =>
+                x.UserRoles.Any(ur =>
+                    ur.Role != null &&
+                    (ur.Role.Name == AuthRoles.ToName(AuthRoleType.CustomerAdmin)
+                    || ur.Role.Name == AuthRoles.ToName(AuthRoleType.Customer))));
+        }
+
+        if (currentUserContext.IsCustomerAdmin)
+        {
+            var customerId = currentUserContext.CustomerId
+                ?? throw new UnauthorizedAccessException("Customer administrators require a customer claim.");
+
+            return query.Where(x =>
+                x.CustomerUsers.Any(cu => cu.CustomerId == customerId)
+                && x.UserRoles.Any(ur =>
+                    ur.Role != null &&
+                    (ur.Role.Name == AuthRoles.ToName(AuthRoleType.CustomerAdmin)
+                    || ur.Role.Name == AuthRoles.ToName(AuthRoleType.Customer))));
+        }
+
+        return query.Where(_ => false);
+    }
+
+    private async Task EnsureRequestedAssignmentAllowedAsync(
+        IReadOnlyCollection<string> requestedRoles,
+        Guid? requestedCustomerId,
+        CancellationToken cancellationToken)
+    {
+        var roles = requestedRoles
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Distinct()
+            .ToArray();
+
+        if (roles.Length == 0)
+        {
+            throw new UnauthorizedAccessException("At least one role is required.");
+        }
+
+        if (currentUserContext.IsSystemAdmin)
+        {
+            return;
+        }
+
+        var allowedRoles = new[]
+        {
+            AuthRoles.ToName(AuthRoleType.CustomerAdmin),
+            AuthRoles.ToName(AuthRoleType.Customer)
+        };
+
+        if (roles.Except(allowedRoles).Any())
+        {
+            throw new UnauthorizedAccessException("The current user is not allowed to assign the requested role.");
+        }
+
+        if (!requestedCustomerId.HasValue)
+        {
+            throw new UnauthorizedAccessException("A customer assignment is required for the requested role.");
+        }
+
+        if (currentUserContext.IsCustomerAdmin)
+        {
+            var currentCustomerId = currentUserContext.CustomerId
+                ?? throw new UnauthorizedAccessException("Customer administrators require a customer claim.");
+
+            if (requestedCustomerId.Value != currentCustomerId)
+            {
+                throw new UnauthorizedAccessException("Customer administrators may only manage users of their own customer.");
+            }
+        }
+
+        var customerExists = await dbContext.Set<Customer>().AnyAsync(x => x.Id == requestedCustomerId.Value, cancellationToken);
+        if (!customerExists)
+        {
+            throw new UnauthorizedAccessException("The requested customer does not exist.");
+        }
+    }
+
+    private static void EnsurePasswordPolicy(string password)
+    {
+        var errors = PasswordPolicy.Validate(password);
+        if (errors.Count > 0)
+        {
+            throw new InvalidOperationException(string.Join(" ", errors));
+        }
+    }
+}

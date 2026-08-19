@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using SRMCore.Mappings.Interfaces;
 using SRMCore.Services.Interfaces;
@@ -8,6 +9,7 @@ namespace SRMCore.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[Authorize(Roles = "SystemAdmin,Employee")]
 public class CustomersController(
     ICustomerService service,
     ICrudDtoMapper<Customer, CustomerCreateDto, CustomerUpdateDto, CustomerReadDto> mapper)

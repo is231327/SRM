@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using SRMCore.Data;
 using SRMCore.Mappings.Interfaces;
+using SRMCore.Security;
 using SRMCore.Services.Interfaces;
 using SRMShared.DTOs.Agent;
 using SRMShared.DTOs.AgentRuntime;
@@ -12,14 +13,20 @@ namespace SRMCore.Services;
 
 public class AgentRuntimeService(
     SrmCoreDbContext dbContext,
+    ICurrentUserContext currentUserContext,
     ICrudDtoMapper<Agent, AgentCreateDto, AgentUpdateDto, AgentReadDto> agentMapper,
     ICrudDtoMapper<ShellyDevice, ShellyDeviceCreateDto, ShellyDeviceUpdateDto, ShellyDeviceReadDto> shellyMapper,
     ICrudDtoMapper<MonitoredDevice, MonitoredDeviceCreateDto, MonitoredDeviceUpdateDto, MonitoredDeviceReadDto> monitoredDeviceMapper) : IAgentRuntimeService
 {
     public async Task<AgentRuntimeConfigurationDto?> GetRuntimeConfigurationAsync()
     {
-       
-        var agentId = dbContext.Agents.FirstOrDefault().Id;
+        if (!currentUserContext.IsAgent)
+        {
+            throw new ForbiddenAccessException("Only authenticated agents may access agent runtime configuration.");
+        }
+
+        var agentId = currentUserContext.AgentId
+            ?? throw new ForbiddenAccessException("Agent tokens require an agent identifier claim.");
 
         var agent = await dbContext.Agents
             .AsNoTracking()

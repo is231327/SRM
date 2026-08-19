@@ -1,4 +1,4 @@
-@SRMAuth_HostAddress = http://localhost:5296
+@SRMAuth_HostAddress = https://localhost:7031
 
 GET {{SRMAuth_HostAddress}}/srmauth/
 Accept: application/json
