@@ -11,4 +11,5 @@ public class MonitoredDevice : BaseEntity
     public bool IsActive { get; set; }
 
     public Agent? Agent { get; set; }
+    public ICollection<MonitoredDevicePingResult> PingResults { get; set; } = new List<MonitoredDevicePingResult>();
 }

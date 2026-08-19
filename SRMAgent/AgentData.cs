@@ -2,11 +2,13 @@ namespace SRMAgent;
 
 public class AgentData
 {
-    public string CustomerId { get; set; } = "";
-    public string AgentId { get; set; } = "";
-    public string ShellyId { get; set; } = "";
-    public float CurrentTemp { get; set; } = 0;
-    public float CurrentBattery { get; set; } = 0;
-    public bool DoorOpen { get; set; } = false;
-    public DateTime KeepAliveTimestamp { get; set; } = DateTime.MinValue;
+    public string AgentId { get; set; } = string.Empty;
+    public string AgentName { get; set; } = string.Empty;
+    public DateTime? LastConfigurationRefreshAtUtc { get; set; }
+    public DateTime? LastMonitoringCycleAtUtc { get; set; }
+    public int ShellyDeviceCount { get; set; }
+    public int MonitoredDeviceCount { get; set; }
+    public int SubmittedSensorReadingCount { get; set; }
+    public int ReachableMonitoredDeviceCount { get; set; }
+    public int UnreachableMonitoredDeviceCount { get; set; }
 }

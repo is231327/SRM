@@ -10,6 +10,7 @@ public class SrmCoreDbContext(DbContextOptions<SrmCoreDbContext> options) : DbCo
     public DbSet<Agent> Agents => Set<Agent>();
     public DbSet<ShellyDevice> ShellyDevices => Set<ShellyDevice>();
     public DbSet<MonitoredDevice> MonitoredDevices => Set<MonitoredDevice>();
+    public DbSet<MonitoredDevicePingResult> MonitoredDevicePingResults => Set<MonitoredDevicePingResult>();
     public DbSet<MaintenanceWindow> MaintenanceWindows => Set<MaintenanceWindow>();
     public DbSet<SensorReading> SensorReadings => Set<SensorReading>();
 
@@ -43,6 +44,12 @@ public class SrmCoreDbContext(DbContextOptions<SrmCoreDbContext> options) : DbCo
             .HasMany(agent => agent.MonitoredDevices)
             .WithOne(monitoredDevice => monitoredDevice.Agent)
             .HasForeignKey(monitoredDevice => monitoredDevice.AgentId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<MonitoredDevice>()
+            .HasMany(monitoredDevice => monitoredDevice.PingResults)
+            .WithOne(pingResult => pingResult.MonitoredDevice)
+            .HasForeignKey(pingResult => pingResult.MonitoredDeviceId)
             .OnDelete(DeleteBehavior.Cascade);
 
         modelBuilder.Entity<ShellyDevice>()

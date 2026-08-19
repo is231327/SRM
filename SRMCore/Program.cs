@@ -26,8 +26,11 @@ public class Program
         builder.Services.AddScoped<ICustomerService, CustomerService>();
         builder.Services.AddScoped<IServerRoomService, ServerRoomService>();
         builder.Services.AddScoped<IAgentService, AgentService>();
+        builder.Services.AddScoped<IAgentReportingService, AgentReportingService>();
+        builder.Services.AddScoped<IAgentRuntimeService, AgentRuntimeService>();
         builder.Services.AddScoped<IShellyDeviceService, ShellyDeviceService>();
         builder.Services.AddScoped<IMonitoredDeviceService, MonitoredDeviceService>();
+        builder.Services.AddScoped<IMonitoredDevicePingResultService, MonitoredDevicePingResultService>();
         builder.Services.AddScoped<IMaintenanceWindowService, MaintenanceWindowService>();
         builder.Services.AddScoped<ISensorReadingService, SensorReadingService>();
         builder.Services.AddScoped<ICrudDtoMapper<Customer, CustomerCreateDto, CustomerUpdateDto, CustomerReadDto>, CustomerDtoMapper>();
@@ -35,6 +38,7 @@ public class Program
         builder.Services.AddScoped<ICrudDtoMapper<Agent, AgentCreateDto, AgentUpdateDto, AgentReadDto>, AgentDtoMapper>();
         builder.Services.AddScoped<ICrudDtoMapper<ShellyDevice, ShellyDeviceCreateDto, ShellyDeviceUpdateDto, ShellyDeviceReadDto>, ShellyDeviceDtoMapper>();
         builder.Services.AddScoped<ICrudDtoMapper<MonitoredDevice, MonitoredDeviceCreateDto, MonitoredDeviceUpdateDto, MonitoredDeviceReadDto>, MonitoredDeviceDtoMapper>();
+        builder.Services.AddScoped<ICrudDtoMapper<MonitoredDevicePingResult, MonitoredDevicePingResultCreateDto, MonitoredDevicePingResultUpdateDto, MonitoredDevicePingResultReadDto>, MonitoredDevicePingResultDtoMapper>();
         builder.Services.AddScoped<ICrudDtoMapper<MaintenanceWindow, MaintenanceWindowCreateDto, MaintenanceWindowUpdateDto, MaintenanceWindowReadDto>, MaintenanceWindowDtoMapper>();
         builder.Services.AddScoped<ICrudDtoMapper<SensorReading, SensorReadingCreateDto, SensorReadingUpdateDto, SensorReadingReadDto>, SensorReadingDtoMapper>();
         builder.Services.AddControllers();
