@@ -3,13 +3,14 @@ using SRMCore.Data;
 using SRMCore.Services;
 using SRMCore.Services.Interfaces;
 using SRMShared.Entities;
+using SRMUnitTests.TestHelpers;
 
 namespace SRMUnitTests.Services;
 
 [TestFixture]
 public class MaintenanceWindowServiceTests : CrudServiceTestBase<MaintenanceWindow>
 {
-    protected override ICrudService<MaintenanceWindow> CreateService(SrmCoreDbContext context) => new MaintenanceWindowService(context);
+    protected override ICrudService<MaintenanceWindow> CreateService(SrmCoreDbContext context) => new MaintenanceWindowService(context, CoreCurrentUserContextFactory.Create());
 
     protected override MaintenanceWindow CreateEntity() => new()
     {

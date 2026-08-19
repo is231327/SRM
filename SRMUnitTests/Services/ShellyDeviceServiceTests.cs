@@ -3,13 +3,14 @@ using SRMCore.Data;
 using SRMCore.Services;
 using SRMCore.Services.Interfaces;
 using SRMShared.Entities;
+using SRMUnitTests.TestHelpers;
 
 namespace SRMUnitTests.Services;
 
 [TestFixture]
 public class ShellyDeviceServiceTests : CrudServiceTestBase<ShellyDevice>
 {
-    protected override ICrudService<ShellyDevice> CreateService(SrmCoreDbContext context) => new ShellyDeviceService(context);
+    protected override ICrudService<ShellyDevice> CreateService(SrmCoreDbContext context) => new ShellyDeviceService(context, CoreCurrentUserContextFactory.Create());
 
     protected override ShellyDevice CreateEntity() => new()
     {

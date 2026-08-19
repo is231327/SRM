@@ -16,7 +16,7 @@ public class CustomersControllerTests
     public async Task Create_ShouldReturnCreatedAtActionWithReadDto()
     {
         using var context = DbContextFactory.CreateContext();
-        var service = new CustomerService(context);
+        var service = new CustomerService(context, CoreCurrentUserContextFactory.Create());
         var controller = new CustomersController(service, new CustomerDtoMapper());
 
         var result = await controller.Create(new CustomerCreateDto
@@ -42,7 +42,7 @@ public class CustomersControllerTests
     public async Task GetById_ShouldReturnNotFoundForUnknownCustomer()
     {
         using var context = DbContextFactory.CreateContext();
-        var service = new CustomerService(context);
+        var service = new CustomerService(context, CoreCurrentUserContextFactory.Create());
         var controller = new CustomersController(service, new CustomerDtoMapper());
 
         var result = await controller.GetById(Guid.NewGuid());
@@ -78,7 +78,7 @@ public class CustomersControllerTests
         });
         await context.SaveChangesAsync();
 
-        var service = new CustomerService(context);
+        var service = new CustomerService(context, CoreCurrentUserContextFactory.Create());
         var controller = new CustomersController(service, new CustomerDtoMapper());
 
         var result = await controller.GetAll();
@@ -96,7 +96,7 @@ public class CustomersControllerTests
     public async Task Delete_ShouldReturnNoContentForExistingCustomer()
     {
         using var context = DbContextFactory.CreateContext();
-        var service = new CustomerService(context);
+        var service = new CustomerService(context, CoreCurrentUserContextFactory.Create());
         var controller = new CustomersController(service, new CustomerDtoMapper());
         var created = await service.CreateAsync(new Customer
         {

@@ -25,13 +25,13 @@ public class MonitoredDevicesControllerTests : CrudControllerTestBase<MonitoredD
     protected override async Task<ActionResult<MonitoredDeviceReadDto>> ExecuteCreateAsync(MonitoredDeviceCreateDto dto)
     {
         using var context = DbContextFactory.CreateContext();
-        return await new MonitoredDevicesController(new MonitoredDeviceService(context), new MonitoredDeviceDtoMapper()).Create(dto);
+        return await new MonitoredDevicesController(new MonitoredDeviceService(context, CoreCurrentUserContextFactory.Create()), new MonitoredDeviceDtoMapper()).Create(dto);
     }
 
     protected override async Task<IActionResult> ExecuteDeleteAsync(Guid id)
     {
         using var context = DbContextFactory.CreateContext();
-        var controller = new MonitoredDevicesController(new MonitoredDeviceService(context), new MonitoredDeviceDtoMapper());
+        var controller = new MonitoredDevicesController(new MonitoredDeviceService(context, CoreCurrentUserContextFactory.Create()), new MonitoredDeviceDtoMapper());
         var created = (CreatedAtActionResult)(await controller.Create(CreateDto())).Result!;
         var createdId = (Guid)created.Value!.GetType().GetProperty("Id")!.GetValue(created.Value)!;
         return await controller.Delete(createdId);
@@ -40,7 +40,7 @@ public class MonitoredDevicesControllerTests : CrudControllerTestBase<MonitoredD
     protected override async Task<ActionResult<IEnumerable<MonitoredDeviceReadDto>>> ExecuteGetAllAsync()
     {
         using var context = DbContextFactory.CreateContext();
-        var controller = new MonitoredDevicesController(new MonitoredDeviceService(context), new MonitoredDeviceDtoMapper());
+        var controller = new MonitoredDevicesController(new MonitoredDeviceService(context, CoreCurrentUserContextFactory.Create()), new MonitoredDeviceDtoMapper());
         await controller.Create(CreateDto());
         return await controller.GetAll();
     }
@@ -48,6 +48,6 @@ public class MonitoredDevicesControllerTests : CrudControllerTestBase<MonitoredD
     protected override async Task<ActionResult<MonitoredDeviceReadDto>> ExecuteGetByIdAsync(Guid id)
     {
         using var context = DbContextFactory.CreateContext();
-        return await new MonitoredDevicesController(new MonitoredDeviceService(context), new MonitoredDeviceDtoMapper()).GetById(id);
+        return await new MonitoredDevicesController(new MonitoredDeviceService(context, CoreCurrentUserContextFactory.Create()), new MonitoredDeviceDtoMapper()).GetById(id);
     }
 }

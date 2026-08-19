@@ -26,13 +26,13 @@ public class ShellyDevicesControllerTests : CrudControllerTestBase<ShellyDeviceC
     protected override async Task<ActionResult<ShellyDeviceReadDto>> ExecuteCreateAsync(ShellyDeviceCreateDto dto)
     {
         using var context = DbContextFactory.CreateContext();
-        return await new ShellyDevicesController(new ShellyDeviceService(context), new ShellyDeviceDtoMapper()).Create(dto);
+        return await new ShellyDevicesController(new ShellyDeviceService(context, CoreCurrentUserContextFactory.Create()), new ShellyDeviceDtoMapper()).Create(dto);
     }
 
     protected override async Task<IActionResult> ExecuteDeleteAsync(Guid id)
     {
         using var context = DbContextFactory.CreateContext();
-        var controller = new ShellyDevicesController(new ShellyDeviceService(context), new ShellyDeviceDtoMapper());
+        var controller = new ShellyDevicesController(new ShellyDeviceService(context, CoreCurrentUserContextFactory.Create()), new ShellyDeviceDtoMapper());
         var created = (CreatedAtActionResult)(await controller.Create(CreateDto())).Result!;
         var createdId = (Guid)created.Value!.GetType().GetProperty("Id")!.GetValue(created.Value)!;
         return await controller.Delete(createdId);
@@ -41,7 +41,7 @@ public class ShellyDevicesControllerTests : CrudControllerTestBase<ShellyDeviceC
     protected override async Task<ActionResult<IEnumerable<ShellyDeviceReadDto>>> ExecuteGetAllAsync()
     {
         using var context = DbContextFactory.CreateContext();
-        var controller = new ShellyDevicesController(new ShellyDeviceService(context), new ShellyDeviceDtoMapper());
+        var controller = new ShellyDevicesController(new ShellyDeviceService(context, CoreCurrentUserContextFactory.Create()), new ShellyDeviceDtoMapper());
         await controller.Create(CreateDto());
         return await controller.GetAll();
     }
@@ -49,6 +49,6 @@ public class ShellyDevicesControllerTests : CrudControllerTestBase<ShellyDeviceC
     protected override async Task<ActionResult<ShellyDeviceReadDto>> ExecuteGetByIdAsync(Guid id)
     {
         using var context = DbContextFactory.CreateContext();
-        return await new ShellyDevicesController(new ShellyDeviceService(context), new ShellyDeviceDtoMapper()).GetById(id);
+        return await new ShellyDevicesController(new ShellyDeviceService(context, CoreCurrentUserContextFactory.Create()), new ShellyDeviceDtoMapper()).GetById(id);
     }
 }

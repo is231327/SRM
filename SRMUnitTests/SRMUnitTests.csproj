@@ -9,7 +9,7 @@
 
   <ItemGroup>
     <PackageReference Include="coverlet.collector" Version="6.0.4" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="10.0.0-preview.4.25258.110" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="10.0.0-rc.1.25451.107" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.0" />
     <PackageReference Include="NUnit" Version="4.3.2" />
     <PackageReference Include="NUnit.Analyzers" Version="4.7.0" />
@@ -23,6 +23,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\SRMCore\SRMCore.csproj" />
+    <ProjectReference Include="..\SRMAuth\SRMAuth.csproj" />
     <ProjectReference Include="..\SRMShared\SRMShared.csproj" />
   </ItemGroup>
 

@@ -3,13 +3,14 @@ using SRMCore.Data;
 using SRMCore.Services;
 using SRMCore.Services.Interfaces;
 using SRMShared.Entities;
+using SRMUnitTests.TestHelpers;
 
 namespace SRMUnitTests.Services;
 
 [TestFixture]
 public class ServerRoomServiceTests : CrudServiceTestBase<ServerRoom>
 {
-    protected override ICrudService<ServerRoom> CreateService(SrmCoreDbContext context) => new ServerRoomService(context);
+    protected override ICrudService<ServerRoom> CreateService(SrmCoreDbContext context) => new ServerRoomService(context, CoreCurrentUserContextFactory.Create());
 
     protected override ServerRoom CreateEntity() => new()
     {

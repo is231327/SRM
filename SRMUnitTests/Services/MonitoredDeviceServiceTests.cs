@@ -3,13 +3,14 @@ using SRMCore.Data;
 using SRMCore.Services;
 using SRMCore.Services.Interfaces;
 using SRMShared.Entities;
+using SRMUnitTests.TestHelpers;
 
 namespace SRMUnitTests.Services;
 
 [TestFixture]
 public class MonitoredDeviceServiceTests : CrudServiceTestBase<MonitoredDevice>
 {
-    protected override ICrudService<MonitoredDevice> CreateService(SrmCoreDbContext context) => new MonitoredDeviceService(context);
+    protected override ICrudService<MonitoredDevice> CreateService(SrmCoreDbContext context) => new MonitoredDeviceService(context, CoreCurrentUserContextFactory.Create());
 
     protected override MonitoredDevice CreateEntity() => new()
     {

@@ -12,7 +12,7 @@ public class CustomerServiceTests
     public async Task CreateAsync_ShouldAssignIdAndTimestamps()
     {
         using var context = DbContextFactory.CreateContext();
-        var service = new CustomerService(context);
+        var service = new CustomerService(context, CoreCurrentUserContextFactory.Create());
         var customer = new Customer
         {
             Name = "Customer A",
@@ -33,7 +33,7 @@ public class CustomerServiceTests
     public async Task GetAllAsync_ShouldReturnPersistedCustomers()
     {
         using var context = DbContextFactory.CreateContext();
-        var service = new CustomerService(context);
+        var service = new CustomerService(context, CoreCurrentUserContextFactory.Create());
 
         await service.CreateAsync(new Customer { Name = "A", ExternalReference = "A-1", ContactEmail = "a@example.com", ContactPhone = "1", IsActive = true });
         await service.CreateAsync(new Customer { Name = "B", ExternalReference = "B-1", ContactEmail = "b@example.com", ContactPhone = "2", IsActive = false });
@@ -48,7 +48,7 @@ public class CustomerServiceTests
     public async Task UpdateAsync_ShouldModifyExistingCustomerAndRefreshTimestamp()
     {
         using var context = DbContextFactory.CreateContext();
-        var service = new CustomerService(context);
+        var service = new CustomerService(context, CoreCurrentUserContextFactory.Create());
 
         var created = await service.CreateAsync(new Customer
         {
@@ -81,7 +81,7 @@ public class CustomerServiceTests
     public async Task UpdateAsync_ShouldReturnNullForUnknownId()
     {
         using var context = DbContextFactory.CreateContext();
-        var service = new CustomerService(context);
+        var service = new CustomerService(context, CoreCurrentUserContextFactory.Create());
 
         var result = await service.UpdateAsync(Guid.NewGuid(), new Customer { Name = "Missing" });
 
@@ -92,7 +92,7 @@ public class CustomerServiceTests
     public async Task DeleteAsync_ShouldRemoveExistingCustomer()
     {
         using var context = DbContextFactory.CreateContext();
-        var service = new CustomerService(context);
+        var service = new CustomerService(context, CoreCurrentUserContextFactory.Create());
         var created = await service.CreateAsync(new Customer
         {
             Name = "Delete Me",

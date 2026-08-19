@@ -24,13 +24,13 @@ public class ServerRoomsControllerTests : CrudControllerTestBase<ServerRoomCreat
     protected override async Task<ActionResult<ServerRoomReadDto>> ExecuteCreateAsync(ServerRoomCreateDto dto)
     {
         using var context = DbContextFactory.CreateContext();
-        return await new ServerRoomsController(new ServerRoomService(context), new ServerRoomDtoMapper()).Create(dto);
+        return await new ServerRoomsController(new ServerRoomService(context, CoreCurrentUserContextFactory.Create()), new ServerRoomDtoMapper()).Create(dto);
     }
 
     protected override async Task<IActionResult> ExecuteDeleteAsync(Guid id)
     {
         using var context = DbContextFactory.CreateContext();
-        var controller = new ServerRoomsController(new ServerRoomService(context), new ServerRoomDtoMapper());
+        var controller = new ServerRoomsController(new ServerRoomService(context, CoreCurrentUserContextFactory.Create()), new ServerRoomDtoMapper());
         var created = (CreatedAtActionResult)(await controller.Create(CreateDto())).Result!;
         var createdId = (Guid)created.Value!.GetType().GetProperty("Id")!.GetValue(created.Value)!;
         return await controller.Delete(createdId);
@@ -39,7 +39,7 @@ public class ServerRoomsControllerTests : CrudControllerTestBase<ServerRoomCreat
     protected override async Task<ActionResult<IEnumerable<ServerRoomReadDto>>> ExecuteGetAllAsync()
     {
         using var context = DbContextFactory.CreateContext();
-        var controller = new ServerRoomsController(new ServerRoomService(context), new ServerRoomDtoMapper());
+        var controller = new ServerRoomsController(new ServerRoomService(context, CoreCurrentUserContextFactory.Create()), new ServerRoomDtoMapper());
         await controller.Create(CreateDto());
         return await controller.GetAll();
     }
@@ -47,6 +47,6 @@ public class ServerRoomsControllerTests : CrudControllerTestBase<ServerRoomCreat
     protected override async Task<ActionResult<ServerRoomReadDto>> ExecuteGetByIdAsync(Guid id)
     {
         using var context = DbContextFactory.CreateContext();
-        return await new ServerRoomsController(new ServerRoomService(context), new ServerRoomDtoMapper()).GetById(id);
+        return await new ServerRoomsController(new ServerRoomService(context, CoreCurrentUserContextFactory.Create()), new ServerRoomDtoMapper()).GetById(id);
     }
 }

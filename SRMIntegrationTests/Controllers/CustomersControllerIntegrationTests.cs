@@ -25,7 +25,7 @@ public class CustomersControllerIntegrationTests
 
         using (var createContext = SqlServerDbContextFactory.CreateContext())
         {
-            var controller = new CustomersController(new CustomerService(createContext), new CustomerDtoMapper());
+            var controller = new CustomersController(new CustomerService(createContext, CoreCurrentUserContextFactory.Create()), new CustomerDtoMapper());
 
             var createResult = await controller.Create(new CustomerCreateDto
             {
@@ -42,7 +42,7 @@ public class CustomersControllerIntegrationTests
         }
 
         using var readContext = SqlServerDbContextFactory.CreateContext();
-        var readController = new CustomersController(new CustomerService(readContext), new CustomerDtoMapper());
+        var readController = new CustomersController(new CustomerService(readContext, CoreCurrentUserContextFactory.Create()), new CustomerDtoMapper());
         var getResult = await readController.GetById(createdId);
 
         Assert.That(getResult.Result, Is.InstanceOf<OkObjectResult>());

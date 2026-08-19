@@ -3,13 +3,14 @@ using SRMCore.Data;
 using SRMCore.Services;
 using SRMCore.Services.Interfaces;
 using SRMShared.Entities;
+using SRMUnitTests.TestHelpers;
 
 namespace SRMUnitTests.Services;
 
 [TestFixture]
 public class SensorReadingServiceTests : CrudServiceTestBase<SensorReading>
 {
-    protected override ICrudService<SensorReading> CreateService(SrmCoreDbContext context) => new SensorReadingService(context);
+    protected override ICrudService<SensorReading> CreateService(SrmCoreDbContext context) => new SensorReadingService(context, CoreCurrentUserContextFactory.Create());
 
     protected override SensorReading CreateEntity() => new()
     {

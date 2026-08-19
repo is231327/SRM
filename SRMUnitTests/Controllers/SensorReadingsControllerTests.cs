@@ -24,13 +24,13 @@ public class SensorReadingsControllerTests : CrudControllerTestBase<SensorReadin
     protected override async Task<ActionResult<SensorReadingReadDto>> ExecuteCreateAsync(SensorReadingCreateDto dto)
     {
         using var context = DbContextFactory.CreateContext();
-        return await new SensorReadingsController(new SensorReadingService(context), new SensorReadingDtoMapper()).Create(dto);
+        return await new SensorReadingsController(new SensorReadingService(context, CoreCurrentUserContextFactory.Create()), new SensorReadingDtoMapper()).Create(dto);
     }
 
     protected override async Task<IActionResult> ExecuteDeleteAsync(Guid id)
     {
         using var context = DbContextFactory.CreateContext();
-        var controller = new SensorReadingsController(new SensorReadingService(context), new SensorReadingDtoMapper());
+        var controller = new SensorReadingsController(new SensorReadingService(context, CoreCurrentUserContextFactory.Create()), new SensorReadingDtoMapper());
         var created = (CreatedAtActionResult)(await controller.Create(CreateDto())).Result!;
         var createdId = (Guid)created.Value!.GetType().GetProperty("Id")!.GetValue(created.Value)!;
         return await controller.Delete(createdId);
@@ -39,7 +39,7 @@ public class SensorReadingsControllerTests : CrudControllerTestBase<SensorReadin
     protected override async Task<ActionResult<IEnumerable<SensorReadingReadDto>>> ExecuteGetAllAsync()
     {
         using var context = DbContextFactory.CreateContext();
-        var controller = new SensorReadingsController(new SensorReadingService(context), new SensorReadingDtoMapper());
+        var controller = new SensorReadingsController(new SensorReadingService(context, CoreCurrentUserContextFactory.Create()), new SensorReadingDtoMapper());
         await controller.Create(CreateDto());
         return await controller.GetAll();
     }
@@ -47,6 +47,6 @@ public class SensorReadingsControllerTests : CrudControllerTestBase<SensorReadin
     protected override async Task<ActionResult<SensorReadingReadDto>> ExecuteGetByIdAsync(Guid id)
     {
         using var context = DbContextFactory.CreateContext();
-        return await new SensorReadingsController(new SensorReadingService(context), new SensorReadingDtoMapper()).GetById(id);
+        return await new SensorReadingsController(new SensorReadingService(context, CoreCurrentUserContextFactory.Create()), new SensorReadingDtoMapper()).GetById(id);
     }
 }

@@ -23,13 +23,13 @@ public class MaintenanceWindowsControllerTests : CrudControllerTestBase<Maintena
     protected override async Task<ActionResult<MaintenanceWindowReadDto>> ExecuteCreateAsync(MaintenanceWindowCreateDto dto)
     {
         using var context = DbContextFactory.CreateContext();
-        return await new MaintenanceWindowsController(new MaintenanceWindowService(context), new MaintenanceWindowDtoMapper()).Create(dto);
+        return await new MaintenanceWindowsController(new MaintenanceWindowService(context, CoreCurrentUserContextFactory.Create()), new MaintenanceWindowDtoMapper()).Create(dto);
     }
 
     protected override async Task<IActionResult> ExecuteDeleteAsync(Guid id)
     {
         using var context = DbContextFactory.CreateContext();
-        var controller = new MaintenanceWindowsController(new MaintenanceWindowService(context), new MaintenanceWindowDtoMapper());
+        var controller = new MaintenanceWindowsController(new MaintenanceWindowService(context, CoreCurrentUserContextFactory.Create()), new MaintenanceWindowDtoMapper());
         var created = (CreatedAtActionResult)(await controller.Create(CreateDto())).Result!;
         var createdId = (Guid)created.Value!.GetType().GetProperty("Id")!.GetValue(created.Value)!;
         return await controller.Delete(createdId);
@@ -38,7 +38,7 @@ public class MaintenanceWindowsControllerTests : CrudControllerTestBase<Maintena
     protected override async Task<ActionResult<IEnumerable<MaintenanceWindowReadDto>>> ExecuteGetAllAsync()
     {
         using var context = DbContextFactory.CreateContext();
-        var controller = new MaintenanceWindowsController(new MaintenanceWindowService(context), new MaintenanceWindowDtoMapper());
+        var controller = new MaintenanceWindowsController(new MaintenanceWindowService(context, CoreCurrentUserContextFactory.Create()), new MaintenanceWindowDtoMapper());
         await controller.Create(CreateDto());
         return await controller.GetAll();
     }
@@ -46,6 +46,6 @@ public class MaintenanceWindowsControllerTests : CrudControllerTestBase<Maintena
     protected override async Task<ActionResult<MaintenanceWindowReadDto>> ExecuteGetByIdAsync(Guid id)
     {
         using var context = DbContextFactory.CreateContext();
-        return await new MaintenanceWindowsController(new MaintenanceWindowService(context), new MaintenanceWindowDtoMapper()).GetById(id);
+        return await new MaintenanceWindowsController(new MaintenanceWindowService(context, CoreCurrentUserContextFactory.Create()), new MaintenanceWindowDtoMapper()).GetById(id);
     }
 }

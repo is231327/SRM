@@ -19,7 +19,7 @@ public class CustomerServiceIntegrationTests
     public async Task CreateAsync_ShouldPersistCustomerInSqlServer()
     {
         using var context = SqlServerDbContextFactory.CreateContext();
-        var service = new CustomerService(context);
+        var service = new CustomerService(context, CoreCurrentUserContextFactory.Create());
 
         var created = await service.CreateAsync(new Customer
         {
@@ -45,7 +45,7 @@ public class CustomerServiceIntegrationTests
 
         using (var setupContext = SqlServerDbContextFactory.CreateContext())
         {
-            var service = new CustomerService(setupContext);
+            var service = new CustomerService(setupContext, CoreCurrentUserContextFactory.Create());
             var created = await service.CreateAsync(new Customer
             {
                 Name = "Delete Customer",
@@ -59,7 +59,7 @@ public class CustomerServiceIntegrationTests
 
         using (var deleteContext = SqlServerDbContextFactory.CreateContext())
         {
-            var service = new CustomerService(deleteContext);
+            var service = new CustomerService(deleteContext, CoreCurrentUserContextFactory.Create());
             var deleted = await service.DeleteAsync(customerId);
             Assert.That(deleted, Is.True);
         }

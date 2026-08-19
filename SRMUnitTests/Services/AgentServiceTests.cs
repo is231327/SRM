@@ -3,13 +3,14 @@ using SRMCore.Data;
 using SRMCore.Services;
 using SRMCore.Services.Interfaces;
 using SRMShared.Entities;
+using SRMUnitTests.TestHelpers;
 
 namespace SRMUnitTests.Services;
 
 [TestFixture]
 public class AgentServiceTests : CrudServiceTestBase<Agent>
 {
-    protected override ICrudService<Agent> CreateService(SrmCoreDbContext context) => new AgentService(context);
+    protected override ICrudService<Agent> CreateService(SrmCoreDbContext context) => new AgentService(context, CoreCurrentUserContextFactory.Create());
 
     protected override Agent CreateEntity() => new()
     {

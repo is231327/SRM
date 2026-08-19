@@ -25,13 +25,13 @@ public class AgentsControllerTests : CrudControllerTestBase<AgentCreateDto, Agen
     protected override async Task<ActionResult<AgentReadDto>> ExecuteCreateAsync(AgentCreateDto dto)
     {
         using var context = DbContextFactory.CreateContext();
-        return await new AgentsController(new AgentService(context), new AgentDtoMapper()).Create(dto);
+        return await new AgentsController(new AgentService(context, CoreCurrentUserContextFactory.Create()), new AgentDtoMapper()).Create(dto);
     }
 
     protected override async Task<IActionResult> ExecuteDeleteAsync(Guid id)
     {
         using var context = DbContextFactory.CreateContext();
-        var controller = new AgentsController(new AgentService(context), new AgentDtoMapper());
+        var controller = new AgentsController(new AgentService(context, CoreCurrentUserContextFactory.Create()), new AgentDtoMapper());
         var created = (CreatedAtActionResult)(await controller.Create(CreateDto())).Result!;
         var createdId = (Guid)created.Value!.GetType().GetProperty("Id")!.GetValue(created.Value)!;
         return await controller.Delete(createdId);
@@ -40,7 +40,7 @@ public class AgentsControllerTests : CrudControllerTestBase<AgentCreateDto, Agen
     protected override async Task<ActionResult<IEnumerable<AgentReadDto>>> ExecuteGetAllAsync()
     {
         using var context = DbContextFactory.CreateContext();
-        var controller = new AgentsController(new AgentService(context), new AgentDtoMapper());
+        var controller = new AgentsController(new AgentService(context, CoreCurrentUserContextFactory.Create()), new AgentDtoMapper());
         await controller.Create(CreateDto());
         return await controller.GetAll();
     }
@@ -48,6 +48,6 @@ public class AgentsControllerTests : CrudControllerTestBase<AgentCreateDto, Agen
     protected override async Task<ActionResult<AgentReadDto>> ExecuteGetByIdAsync(Guid id)
     {
         using var context = DbContextFactory.CreateContext();
-        return await new AgentsController(new AgentService(context), new AgentDtoMapper()).GetById(id);
+        return await new AgentsController(new AgentService(context, CoreCurrentUserContextFactory.Create()), new AgentDtoMapper()).GetById(id);
     }
 }
