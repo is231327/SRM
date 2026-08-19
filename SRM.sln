@@ -27,6 +27,10 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "PythonShelly", "PythonShell
 		PythonShelly\status.json = PythonShelly\status.json
 	EndProjectSection
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SRMUnitTests", "SRMUnitTests\SRMUnitTests.csproj", "{3A377DF7-AEE1-42A6-8FF9-21BB34AAEA3A}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SRMIntegrationTests", "SRMIntegrationTests\SRMIntegrationTests.csproj", "{450B12A2-359C-4558-86B9-1668CB3FEF46}"
+EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SRMShared", "SRMShared\SRMShared.csproj", "{DB4E332A-A467-4AD3-BE6A-C6F5414448AF}"
 EndProject
 Global
@@ -51,6 +55,14 @@ Global
 		{E3402767-A451-43BB-8584-827724BAACC4}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{E3402767-A451-43BB-8584-827724BAACC4}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{E3402767-A451-43BB-8584-827724BAACC4}.Release|Any CPU.Build.0 = Release|Any CPU
+		{3A377DF7-AEE1-42A6-8FF9-21BB34AAEA3A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{3A377DF7-AEE1-42A6-8FF9-21BB34AAEA3A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{3A377DF7-AEE1-42A6-8FF9-21BB34AAEA3A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{3A377DF7-AEE1-42A6-8FF9-21BB34AAEA3A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{450B12A2-359C-4558-86B9-1668CB3FEF46}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{450B12A2-359C-4558-86B9-1668CB3FEF46}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{450B12A2-359C-4558-86B9-1668CB3FEF46}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{450B12A2-359C-4558-86B9-1668CB3FEF46}.Release|Any CPU.Build.0 = Release|Any CPU
 		{DB4E332A-A467-4AD3-BE6A-C6F5414448AF}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{DB4E332A-A467-4AD3-BE6A-C6F5414448AF}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{DB4E332A-A467-4AD3-BE6A-C6F5414448AF}.Release|Any CPU.ActiveCfg = Release|Any CPU
