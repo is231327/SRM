@@ -12,4 +12,5 @@ public class MonitoredDevice : BaseEntity
 
     public Agent? Agent { get; set; }
     public ICollection<MonitoredDevicePingResult> PingResults { get; set; } = new List<MonitoredDevicePingResult>();
+    public ICollection<Incident> Incidents { get; set; } = new List<Incident>();
 }

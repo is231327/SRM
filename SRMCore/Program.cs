@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using SRMCore.Data;
+using SRMCore.Configuration;
 using SRMCore.Middleware;
 using SRMCore.Mappings;
 using SRMCore.Mappings.Interfaces;
@@ -12,6 +13,7 @@ using SRMCore.Services;
 using SRMCore.Services.Interfaces;
 using SRMShared.DTOs.Agent;
 using SRMShared.DTOs.Customer;
+using SRMShared.DTOs.Incident;
 using SRMShared.DTOs.MaintenanceWindow;
 using SRMShared.DTOs.MonitoredDevice;
 using SRMShared.DTOs.MonitoredDevicePingResult;
@@ -28,6 +30,7 @@ public class Program
     public static void Main(string[] args)
     {
         var builder = WebApplication.CreateBuilder(args);
+        builder.Services.Configure<RedmineOptions>(builder.Configuration.GetSection(RedmineOptions.SectionName));
         builder.Services.AddHttpContextAccessor();
         builder.Services.AddDbContext<SrmCoreDbContext>(options =>
             options.UseSqlServer(builder.Configuration.GetConnectionString("SrmCoreDatabase")));
@@ -75,6 +78,11 @@ public class Program
         builder.Services.AddScoped<IAgentService, AgentService>();
         builder.Services.AddScoped<IAgentReportingService, AgentReportingService>();
         builder.Services.AddScoped<IAgentRuntimeService, AgentRuntimeService>();
+        builder.Services.AddScoped<IIncidentService, IncidentService>();
+        builder.Services.AddScoped<IIncidentQueryService, IncidentQueryService>();
+        builder.Services.AddScoped<ITicketDispatchService, TicketDispatchService>();
+        builder.Services.AddHttpClient<IRedmineTicketingClient, RedmineTicketingClient>();
+        builder.Services.AddHostedService<RedmineTicketWorker>();
         builder.Services.AddScoped<IShellyDeviceService, ShellyDeviceService>();
         builder.Services.AddScoped<IMonitoredDeviceService, MonitoredDeviceService>();
         builder.Services.AddScoped<IMonitoredDevicePingResultService, MonitoredDevicePingResultService>();

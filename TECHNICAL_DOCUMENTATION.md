@@ -11,7 +11,7 @@ As of Saturday, July 18, 2026, the project contains:
 - `SRMApp` as the Blazor frontend
 - `SRMAgent` as the customer-side monitoring agent
 
-Ticket system integration is still intentionally deferred to a later phase.
+Ticket system integration is partially implemented. Incidents, queued ticket synchronization, and the Redmine worker exist, but local Redmine still requires manual project and API-key setup before end-to-end synchronization will succeed.
 
 ## Backend Scope
 
@@ -24,6 +24,8 @@ The Core API is responsible for:
 - storing monitored-device ping result history reported by agents
 - managing maintenance windows
 - storing sensor readings reported from Shelly devices
+- persisting incidents derived from monitoring data
+- persisting queued ticket synchronization state for Redmine integration
 
 The Core API exposes RESTful CRUD endpoints for each current domain entity and is documented through OpenAPI and Scalar.
 
@@ -121,6 +123,7 @@ The current frontend structure includes:
 - a customer management page
 - a server room management page
 - a server room detail page for hierarchical navigation
+- a read-only incident list and incident detail flow
 - dedicated pages for agents, Shelly devices, monitored devices, monitored-device ping results, maintenance windows, and sensor readings
 - a help page
 - a contact page
@@ -135,6 +138,7 @@ The current navigation model is hierarchical:
 - monitored-device ping results can be managed from the monitored device context
 - maintenance windows remain managed from the server room context
 - sensor readings can be managed from the Shelly device context
+- incidents can be reviewed from the server room context and from the relevant Shelly device or monitored device context
 
 `SRMApp` accesses backend data through typed HTTP clients and DTO contracts from `SRMShared`.
 It does not access `SRMCore` controllers or services directly in-process.
@@ -171,7 +175,6 @@ The implementation includes:
 
 The current agent implementation does not yet perform:
 
-- advanced alert generation or ticket creation based on the persisted failure state
 - richer webhook hardening if the final Shelly delivery model requires it
 
 ## Test Status
@@ -219,11 +222,13 @@ The frontend has been verified at build level through `dotnet build SRMApp\SRMAp
 - SQL Server runs in a Docker container
 - `SRMCore` uses SQL Server through Entity Framework Core
 - `SRMAuth` currently also uses SQL Server for identity data, refresh tokens, and token revocation data
+- local Redmine can run in Docker through `docker-compose.yml`
 - Redis is part of the required target architecture for `SRMAuth`, but it is not yet used by the current implementation
 - the current implementation initializes the schema through `Database.EnsureCreated()`
 - database schema changes require the SQL Server Docker data volume or database to be recreated unless the project is later switched to EF Core migrations
 - no secrets must be stored directly in source code
 - the initial auth seed users are read from the `AuthSeedData` section in the `SRMAuth` JSON configuration files
+- additional development-only demo data is seeded at backend startup when the databases are empty
 - API endpoint base URLs for `SRMApp` and `SRMAgent` are read directly from their JSON configuration files
 
 ## Initial Data Model
@@ -239,6 +244,11 @@ erDiagram
     AGENT ||--o{ MONITORED_DEVICE : monitors
     MONITORED_DEVICE ||--o{ MONITORED_DEVICE_PING_RESULT : produces
     SHELLY_DEVICE ||--o{ SENSOR_READING : sources
+    SERVER_ROOM ||--o{ INCIDENT : raises
+    SHELLY_DEVICE ||--o{ INCIDENT : may_source
+    MONITORED_DEVICE ||--o{ INCIDENT : may_source
+    INCIDENT ||--o{ INCIDENT_EVENT : records
+    INCIDENT ||--o{ TICKET_LINK : syncs_to
 
     CUSTOMER {
         uuid Id PK
@@ -337,6 +347,50 @@ erDiagram
         datetime RecordedAtUtc
         datetime CreatedAtUtc
     }
+
+    INCIDENT {
+        uuid Id PK
+        uuid ServerRoomId FK
+        uuid ShellyDeviceId FK
+        uuid MonitoredDeviceId FK
+        int Type
+        int Severity
+        int Status
+        string CorrelationKey
+        string Summary
+        string Description
+        datetime OpenedAtUtc
+        datetime ResolvedAtUtc
+        datetime ClosedAtUtc
+        datetime LastOccurredAtUtc
+        datetime CreatedAtUtc
+        datetime UpdatedAtUtc
+    }
+
+    INCIDENT_EVENT {
+        uuid Id PK
+        uuid IncidentId FK
+        string EventType
+        string Message
+        datetime OccurredAtUtc
+        datetime CreatedAtUtc
+        datetime UpdatedAtUtc
+    }
+
+    TICKET_LINK {
+        uuid Id PK
+        uuid IncidentId FK
+        string ProviderName
+        string ExternalTicketId
+        string ExternalTicketUrl
+        int SyncStatus
+        string LastErrorMessage
+        datetime LastSyncAttemptAtUtc
+        datetime CreatedInExternalSystemAtUtc
+        datetime LastCommentedAtUtc
+        datetime CreatedAtUtc
+        datetime UpdatedAtUtc
+    }
 ```
 
 ## Table Descriptions
@@ -383,13 +437,24 @@ This table intentionally keeps the door state together with the other Shelly dat
 
 `SensorReading` only references `ShellyDevice`. The related `Agent` and `ServerRoom` can be derived through `ShellyDevice -> Agent -> ServerRoom`, which avoids redundant foreign keys and inconsistency risk.
 
+### `Incident`
+
+Represents an active or resolved monitoring problem derived from raw monitoring data. It is the backend business object that sits between telemetry persistence and future external Redmine ticket synchronization.
+
+### `IncidentEvent`
+
+Represents one state-relevant event within an incident lifecycle, for example a trigger or a resolution. It is used to retain a backend-side history of how the incident evolved over time.
+
+### `TicketLink`
+
+Represents the synchronization state between a backend incident and the external ticket system. In the current implementation it is used as queued persistence state for the active Redmine worker.
+
 ## Notes and Open Design Decisions
 
 - The authentication and authorization design is documented in `AUTHENTICATION_AUTHORIZATION_CONCEPT.md`.
 - Agents are authenticated through `AgentCredential` machine credentials instead of `AuthUser` human accounts.
 - The implemented auth persistence currently differs from the target architecture because token state is still stored in SQL Server instead of Redis.
-- Ticket integration is specified in `TICKET_INTEGRATION_SPECIFICATION.md` but is not implemented yet.
-- Incident persistence is not yet modeled because the first ticket-integration slice has not been implemented yet.
+- Ticket integration is specified in `TICKET_INTEGRATION_SPECIFICATION.md`; incident persistence, queue-state persistence, and the Redmine worker are implemented, but local Redmine still requires manual project and API-key setup before end-to-end ticket synchronization will succeed.
 - The current model treats `ServerRoom` as the aggregate root for `Agent` and `MaintenanceWindow`.
 - The current model treats `Agent` as the technical parent for `ShellyDevice` and `MonitoredDevice`.
 - The current frontend pages provide CRUD-oriented management structure, but deeper UX polish, richer validation feedback, and production-grade navigation behavior still need further iteration.

@@ -2,6 +2,7 @@ using System.Net.Http.Json;
 using System.Net.Http.Headers;
 using SRMShared.DTOs.Agent;
 using SRMShared.DTOs.Customer;
+using SRMShared.DTOs.Incident;
 using SRMShared.DTOs.MaintenanceWindow;
 using SRMShared.DTOs.MonitoredDevice;
 using SRMShared.DTOs.MonitoredDevicePingResult;
@@ -55,6 +56,8 @@ public class CoreApiClient(HttpClient httpClient, AuthSessionService authSession
     public async Task<SensorReadingReadDto?> CreateSensorReadingAsync(SensorReadingCreateDto dto) => await PostAsync<SensorReadingCreateDto, SensorReadingReadDto>("api/sensorreadings", dto);
     public async Task<SensorReadingReadDto?> UpdateSensorReadingAsync(Guid id, SensorReadingUpdateDto dto) => await PutAsync<SensorReadingUpdateDto, SensorReadingReadDto>($"api/sensorreadings/{id}", dto);
     public async Task<bool> DeleteSensorReadingAsync(Guid id) => await DeleteAsync($"api/sensorreadings/{id}");
+    public async Task<List<IncidentReadDto>> GetIncidentsAsync() => await GetListAsync<IncidentReadDto>("api/incidents");
+    public async Task<IncidentReadDto?> GetIncidentAsync(Guid id) => await GetAsync<IncidentReadDto>($"api/incidents/{id}");
 
     private async Task<List<T>> GetListAsync<T>(string path)
     {
@@ -73,6 +76,26 @@ public class CoreApiClient(HttpClient httpClient, AuthSessionService authSession
         catch
         {
             return [];
+        }
+    }
+
+    private async Task<T?> GetAsync<T>(string path)
+    {
+        ConfigureBaseAddress();
+        var ensured = await authApiClient.EnsureAccessTokenAsync();
+        if (!ensured)
+        {
+            return default;
+        }
+
+        ApplyBearerToken();
+        try
+        {
+            return await _httpClient.GetFromJsonAsync<T>(path);
+        }
+        catch
+        {
+            return default;
         }
     }
 

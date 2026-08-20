@@ -13,4 +13,5 @@ public class ShellyDevice : BaseEntity
 
     public Agent? Agent { get; set; }
     public ICollection<SensorReading> SensorReadings { get; set; } = new List<SensorReading>();
+    public ICollection<Incident> Incidents { get; set; } = new List<Incident>();
 }

@@ -1,5 +1,6 @@
 using SRMShared.DTOs.Agent;
 using SRMShared.DTOs.Customer;
+using SRMShared.DTOs.Incident;
 using SRMShared.DTOs.MaintenanceWindow;
 using SRMShared.DTOs.MonitoredDevice;
 using SRMShared.DTOs.MonitoredDevicePingResult;
@@ -51,4 +52,7 @@ public interface ICoreApiClient
     Task<SensorReadingReadDto?> CreateSensorReadingAsync(SensorReadingCreateDto dto);
     Task<SensorReadingReadDto?> UpdateSensorReadingAsync(Guid id, SensorReadingUpdateDto dto);
     Task<bool> DeleteSensorReadingAsync(Guid id);
+
+    Task<List<IncidentReadDto>> GetIncidentsAsync();
+    Task<IncidentReadDto?> GetIncidentAsync(Guid id);
 }

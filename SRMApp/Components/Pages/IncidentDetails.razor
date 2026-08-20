@@ -1,0 +1,113 @@
+@page "/incidents/{IncidentId:guid}"
+@rendermode InteractiveServer
+@inherits LocalizedComponentBase
+@inject ICoreApiClient ApiClient
+
+<PageTitle>@LanguageService.T("IncidentDetails")</PageTitle>
+
+<div class="page-header">
+    <div>
+        <h1>@LanguageService.T("IncidentDetails")</h1>
+        <p>@LanguageService.T("IncidentDetailsDescription")</p>
+    </div>
+    <a class="btn btn-outline-primary" href="/incidents">@LanguageService.T("BackToIncidents")</a>
+</div>
+
+@if (isLoading)
+{
+    <p>@LanguageService.T("Loading")</p>
+}
+else if (incident is null)
+{
+    <p>@LanguageService.T("NoData")</p>
+}
+else
+{
+    <div class="entity-grid">
+        <section class="form-card">
+            <h3>@incident.Summary</h3>
+            <div class="form-grid">
+                <div><label class="form-label">@LanguageService.T("IncidentType")</label><div>@LanguageService.T(incident.Type.ToString())</div></div>
+                <div><label class="form-label">@LanguageService.T("Severity")</label><div>@LanguageService.T(incident.Severity.ToString())</div></div>
+                <div><label class="form-label">@LanguageService.T("Status")</label><div>@LanguageService.T(incident.Status.ToString())</div></div>
+                <div><label class="form-label">@LanguageService.T("ServerRoom")</label><div>@incident.ServerRoomName</div></div>
+                <div><label class="form-label">@LanguageService.T("ShellyDevice")</label><div>@(string.IsNullOrWhiteSpace(incident.ShellyDeviceName) ? "-" : incident.ShellyDeviceName)</div></div>
+                <div><label class="form-label">@LanguageService.T("MonitoredDevice")</label><div>@(string.IsNullOrWhiteSpace(incident.MonitoredDeviceName) ? "-" : incident.MonitoredDeviceName)</div></div>
+                <div><label class="form-label">@LanguageService.T("OpenedAt")</label><div>@incident.OpenedAtUtc.ToLocalTime()</div></div>
+                <div><label class="form-label">@LanguageService.T("ResolvedAt")</label><div>@(incident.ResolvedAtUtc?.ToLocalTime().ToString() ?? "-")</div></div>
+                <div><label class="form-label">@LanguageService.T("LastOccurredAt")</label><div>@(incident.LastOccurredAtUtc?.ToLocalTime().ToString() ?? "-")</div></div>
+                <div><label class="form-label">@LanguageService.T("CorrelationKey")</label><div>@incident.CorrelationKey</div></div>
+                <div style="grid-column: 1 / -1;"><label class="form-label">@LanguageService.T("Description")</label><div>@incident.Description</div></div>
+            </div>
+        </section>
+
+        <section class="entity-list">
+            <h3>@LanguageService.T("TicketLinks")</h3>
+            @if (incident.TicketLinks.Count == 0)
+            {
+                <p>@LanguageService.T("NoData")</p>
+            }
+            else
+            {
+                @foreach (var link in incident.TicketLinks)
+                {
+                    <article class="entity-card">
+                        <div class="entity-card-header">
+                            <div>
+                                <h3>@link.ProviderName</h3>
+                                <div class="subtle">@LanguageService.T("TicketSyncStatus"): @LanguageService.T(link.SyncStatus.ToString())</div>
+                                <div class="subtle">@LanguageService.T("ExternalTicketId"): @(string.IsNullOrWhiteSpace(link.ExternalTicketId) ? "-" : link.ExternalTicketId)</div>
+                                <div class="subtle">@LanguageService.T("LastSyncAttemptAt"): @(link.LastSyncAttemptAtUtc?.ToLocalTime().ToString() ?? "-")</div>
+                                @if (!string.IsNullOrWhiteSpace(link.LastErrorMessage))
+                                {
+                                    <div class="subtle">@LanguageService.T("LastMessage"): @link.LastErrorMessage</div>
+                                }
+                            </div>
+                        </div>
+                        @if (!string.IsNullOrWhiteSpace(link.ExternalTicketUrl))
+                        {
+                            <div class="child-links">
+                                <a class="btn btn-outline-primary btn-sm" href="@link.ExternalTicketUrl" target="_blank">@LanguageService.T("OpenTicket")</a>
+                            </div>
+                        }
+                    </article>
+                }
+            }
+
+            <h3 class="mt-4">@LanguageService.T("IncidentEvents")</h3>
+            @if (incident.Events.Count == 0)
+            {
+                <p>@LanguageService.T("NoData")</p>
+            }
+            else
+            {
+                @foreach (var entry in incident.Events)
+                {
+                    <article class="entity-card">
+                        <div class="entity-card-header">
+                            <div>
+                                <h3>@entry.EventType</h3>
+                                <div class="subtle">@entry.OccurredAtUtc.ToLocalTime()</div>
+                                <div class="subtle">@entry.Message</div>
+                            </div>
+                        </div>
+                    </article>
+                }
+            }
+        </section>
+    </div>
+}
+
+@code {
+    [Parameter] public Guid IncidentId { get; set; }
+
+    private bool isLoading = true;
+    private IncidentReadDto? incident;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        isLoading = true;
+        incident = await ApiClient.GetIncidentAsync(IncidentId);
+        isLoading = false;
+    }
+}

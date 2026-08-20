@@ -37,6 +37,7 @@
                     </div>
                     <div class="child-links">
                         <a class="btn btn-primary btn-sm" href="/monitored-device-ping-results?monitoredDeviceId=@item.Id">@LanguageService.T("MonitoredDevicePingResults")</a>
+                        <a class="btn btn-outline-primary btn-sm" href="/incidents?monitoredDeviceId=@item.Id">@LanguageService.T("Incidents")</a>
                         <button class="btn btn-outline-primary btn-sm" @onclick="() => BeginEdit(item)">@LanguageService.T("Edit")</button>
                         <button class="btn btn-outline-danger btn-sm" @onclick="() => DeleteAsync(item.Id)">@LanguageService.T("Delete")</button>
                     </div>

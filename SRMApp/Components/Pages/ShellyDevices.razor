@@ -43,6 +43,7 @@
                         <button class="btn btn-outline-primary btn-sm" @onclick="() => BeginEdit(item)">@LanguageService.T("Edit")</button>
                         <button class="btn btn-outline-danger btn-sm" @onclick="() => DeleteAsync(item.Id)">@LanguageService.T("Delete")</button>
                         <a class="btn btn-primary btn-sm" href="/sensor-readings?shellyDeviceId=@item.Id">@LanguageService.T("SensorReadings")</a>
+                        <a class="btn btn-outline-primary btn-sm" href="/incidents?shellyDeviceId=@item.Id">@LanguageService.T("Incidents")</a>
                     </div>
                 </article>
             }

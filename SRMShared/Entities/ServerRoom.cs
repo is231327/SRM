@@ -12,4 +12,5 @@ public class ServerRoom : BaseEntity
     public Customer? Customer { get; set; }
     public ICollection<Agent> Agents { get; set; } = new List<Agent>();
     public ICollection<MaintenanceWindow> MaintenanceWindows { get; set; } = new List<MaintenanceWindow>();
+    public ICollection<Incident> Incidents { get; set; } = new List<Incident>();
 }

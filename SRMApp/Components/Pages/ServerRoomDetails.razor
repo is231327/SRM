@@ -34,6 +34,13 @@ else
                 <a class="btn btn-primary btn-sm" href="/maintenance-windows?serverRoomId=@ServerRoomId">@LanguageService.T("MaintenanceWindows")</a>
             </div>
         </div>
+        <div class="panel-card">
+            <h3>@LanguageService.T("Incidents")</h3>
+            <p class="subtle">@incidents.Count</p>
+            <div class="child-links">
+                <a class="btn btn-primary btn-sm" href="/incidents?serverRoomId=@ServerRoomId">@LanguageService.T("Incidents")</a>
+            </div>
+        </div>
     </div>
 }
 
@@ -42,11 +49,13 @@ else
     private bool isLoading = true;
     private List<AgentReadDto> agents = [];
     private List<MaintenanceWindowReadDto> maintenanceWindows = [];
+    private List<IncidentReadDto> incidents = [];
 
     protected override async Task OnInitializedAsync()
     {
         agents = (await ApiClient.GetAgentsAsync()).Where(x => x.ServerRoomId == ServerRoomId).ToList();
         maintenanceWindows = (await ApiClient.GetMaintenanceWindowsAsync()).Where(x => x.ServerRoomId == ServerRoomId).ToList();
+        incidents = (await ApiClient.GetIncidentsAsync()).Where(x => x.ServerRoomId == ServerRoomId).ToList();
         isLoading = false;
     }
 }

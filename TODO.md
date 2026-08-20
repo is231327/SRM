@@ -7,10 +7,11 @@
 - Keep SQL Server for identity data only in `SRMAuth`, and use Redis for refresh tokens and access-token revocation.
 - Add optional brightness and battery monitoring in the UI and alerting logic.
 - Add alerting rules and escalation logic.
-- Add persisted incident management that sits between raw monitoring data and external tickets.
 - Add ticket creation rules derived from sensor readings, ping failures, and maintenance windows.
 - Add duplicate suppression and correlation for repeated incident conditions.
-- Add ticket resolution and closure behavior once incident lifecycle rules are defined.
+- Add comment-only ticket resolution behavior once incident lifecycle rules are implemented.
+- Add automated integration coverage for the Redmine worker and Redmine API synchronization flow.
+- Add retry/backoff refinement and operational monitoring for failed Redmine synchronizations.
 - Add audit logging for configuration changes and critical events.
 - Add soft delete or archival strategy for historical business data where required.
 - Add database migrations and a repeatable database recreation workflow for the SQL Server Docker container.
@@ -64,6 +65,9 @@
 - A dedicated authenticated agent reporting path exists in `SRMCore`.
 - `SRMAgent` loads runtime configuration from `SRMCore`, polls configured virtual Shelly devices, and executes monitored-device ping checks in a background worker.
 - Monitored-device ping results are persisted in `SRMCore`, and the agent reports consecutive failure counts plus failure-threshold state.
+- Incident persistence is implemented in `SRMCore` for door, temperature, and monitored-device failure conditions.
+- Agent-reported sensor readings and ping results now trigger backend incident evaluation.
+- Ticket links are persisted in `SRMCore`, and a queued Redmine worker processes `PendingCreate` and `PendingComment` entries.
 - Machine principals are managed as `AgentCredential` entries and can be maintained from the UI.
 - Door state remains part of `SensorReading` instead of being modeled as a separate domain entity.
 - `SensorReading` references only `ShellyDevice`; `Agent` and `ServerRoom` are derived relations.
@@ -71,6 +75,7 @@
 - Access tokens can be refreshed and revoked through `SRMAuth`.
 - Logout revokes both refresh tokens and the active access-token JTI.
 - Administrative password resets force the target user to change the password on next login.
+- Development-only demo data is auto-seeded into `SRMCore` and `SRMAuth` when the databases are empty.
 - Ticket integration remains out of scope for the current iteration.
 
 ## Operational Notes
@@ -81,6 +86,8 @@
 - Because this version includes the persisted `MonitoredDevicePingResult` table, the SQL Server Docker data volume must be recreated before runtime testing if the old Core schema still exists.
 - Because this version renamed the auth-side machine principal model to `AgentCredential`, the auth SQL Server data volume or database must be recreated before runtime testing if the old auth schema still exists.
 - Because this version removed the obsolete `AgentCredentials -> Agent` foreign key from `SRMAuth`, the auth SQL Server data volume or database must be recreated before runtime testing if the old auth schema still exists.
+- Because this version adds the `Incident`, `IncidentEvent`, and `TicketLink` tables to `SRMCore`, the SQL Server Docker data volume or database must be recreated before runtime testing if the old Core schema still exists.
+- Local Redmine now runs through `docker-compose.yml`, but it still requires manual project creation and API-key configuration before ticket synchronization can succeed.
 - When you start the next manual test round, include authentication, forced password change after admin reset, self-service profile update, password-policy validation, and the agent monitoring flow in the test scope.
 - When the auth schema changes again, the SQL Server Docker database or volume must be recreated unless the project is moved to EF Core migrations.
 

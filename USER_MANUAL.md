@@ -26,6 +26,7 @@ Depending on your role, you can use the application to:
 - manage monitored devices
 - review ping results
 - review sensor readings
+- review incidents and ticket synchronization status
 - manage maintenance windows
 - manage users
 - manage agent credentials
@@ -94,6 +95,7 @@ From a server room entry, you can continue to:
 
 - agents
 - maintenance windows
+- incidents
 
 ## Managing Agents
 
@@ -118,6 +120,8 @@ On the Shelly device page, you can:
 
 From a Shelly device entry, you can open the related sensor readings.
 
+You can also open related incidents for the selected Shelly device.
+
 ## Managing Monitored Devices
 
 On the monitored device page, you can:
@@ -127,6 +131,24 @@ On the monitored device page, you can:
 - delete monitored devices
 
 From a monitored device entry, you can open the related ping results.
+
+You can also open related incidents for the selected monitored device.
+
+## Reviewing Incidents
+
+The incident pages show problems derived from monitoring data.
+
+Typical information includes:
+
+- incident type
+- severity
+- current status
+- server room and source device
+- open and resolution times
+- event history
+- ticket synchronization status
+
+The application shows ticket-related information for visibility only. Ticket changes remain managed in the ticket system itself.
 
 ## Reviewing Sensor Readings
 
@@ -221,7 +243,7 @@ These pages provide orientation and project-related contact information.
 
 At the current stage:
 
-- ticket system integration is not available yet
+- ticket synchronization to Redmine requires separate Redmine configuration before it can work end to end
 - the application is still being expanded and improved
 - some advanced security and session features are planned for a later step
 
@@ -236,3 +258,4 @@ When testing the application, also check:
 - profile update
 - sensor readings
 - ping results
+- incidents and ticket synchronization status

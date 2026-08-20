@@ -33,7 +33,7 @@ public class AgentReportingServiceTests
             AgentId = agent.Id
         };
 
-        var service = new AgentReportingService(context, currentUserContext);
+        var service = new AgentReportingService(context, currentUserContext, new IncidentService(context, new TicketDispatchService(context)));
         var dto = new AgentSensorReadingReportDto
         {
             ShellyDeviceId = shelly.Id,
@@ -74,7 +74,7 @@ public class AgentReportingServiceTests
             AgentId = otherAgent.Id
         };
 
-        var service = new AgentReportingService(context, currentUserContext);
+        var service = new AgentReportingService(context, currentUserContext, new IncidentService(context, new TicketDispatchService(context)));
 
         Assert.ThrowsAsync<ForbiddenAccessException>(() => service.CreateSensorReadingAsync(new AgentSensorReadingReportDto
         {
@@ -109,7 +109,7 @@ public class AgentReportingServiceTests
             AgentId = agent.Id
         };
 
-        var service = new AgentReportingService(context, currentUserContext);
+        var service = new AgentReportingService(context, currentUserContext, new IncidentService(context, new TicketDispatchService(context)));
 
         var created = await service.CreatePingResultAsync(new AgentPingResultReportDto
         {

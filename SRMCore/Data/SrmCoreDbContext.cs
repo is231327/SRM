@@ -13,6 +13,9 @@ public class SrmCoreDbContext(DbContextOptions<SrmCoreDbContext> options) : DbCo
     public DbSet<MonitoredDevicePingResult> MonitoredDevicePingResults => Set<MonitoredDevicePingResult>();
     public DbSet<MaintenanceWindow> MaintenanceWindows => Set<MaintenanceWindow>();
     public DbSet<SensorReading> SensorReadings => Set<SensorReading>();
+    public DbSet<Incident> Incidents => Set<Incident>();
+    public DbSet<IncidentEvent> IncidentEvents => Set<IncidentEvent>();
+    public DbSet<TicketLink> TicketLinks => Set<TicketLink>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -57,6 +60,63 @@ public class SrmCoreDbContext(DbContextOptions<SrmCoreDbContext> options) : DbCo
             .WithOne(sensorReading => sensorReading.ShellyDevice)
             .HasForeignKey(sensorReading => sensorReading.ShellyDeviceId)
             .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<ServerRoom>()
+            .HasMany(serverRoom => serverRoom.Incidents)
+            .WithOne(incident => incident.ServerRoom)
+            .HasForeignKey(incident => incident.ServerRoomId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<ShellyDevice>()
+            .HasMany(shellyDevice => shellyDevice.Incidents)
+            .WithOne(incident => incident.ShellyDevice)
+            .HasForeignKey(incident => incident.ShellyDeviceId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<MonitoredDevice>()
+            .HasMany(monitoredDevice => monitoredDevice.Incidents)
+            .WithOne(incident => incident.MonitoredDevice)
+            .HasForeignKey(incident => incident.MonitoredDeviceId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<Incident>()
+            .Property(incident => incident.Type)
+            .HasConversion<int>();
+
+        modelBuilder.Entity<Incident>()
+            .Property(incident => incident.Severity)
+            .HasConversion<int>();
+
+        modelBuilder.Entity<Incident>()
+            .Property(incident => incident.Status)
+            .HasConversion<int>();
+
+        modelBuilder.Entity<Incident>()
+            .Property(incident => incident.CorrelationKey)
+            .HasMaxLength(256);
+
+        modelBuilder.Entity<Incident>()
+            .HasIndex(incident => new { incident.CorrelationKey, incident.Status });
+
+        modelBuilder.Entity<Incident>()
+            .HasMany(incident => incident.Events)
+            .WithOne(incidentEvent => incidentEvent.Incident)
+            .HasForeignKey(incidentEvent => incidentEvent.IncidentId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<Incident>()
+            .HasMany(incident => incident.TicketLinks)
+            .WithOne(ticketLink => ticketLink.Incident)
+            .HasForeignKey(ticketLink => ticketLink.IncidentId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<TicketLink>()
+            .Property(ticketLink => ticketLink.SyncStatus)
+            .HasConversion<int>();
+
+        modelBuilder.Entity<TicketLink>()
+            .Property(ticketLink => ticketLink.ProviderName)
+            .HasMaxLength(64);
     }
 
     public override int SaveChanges()

@@ -9,7 +9,8 @@ namespace SRMCore.Services;
 
 public class AgentReportingService(
     SrmCoreDbContext dbContext,
-    ICurrentUserContext currentUserContext) : IAgentReportingService
+    ICurrentUserContext currentUserContext,
+    IIncidentService incidentService) : IAgentReportingService
 {
     public async Task<SensorReading> CreateSensorReadingAsync(AgentSensorReadingReportDto dto)
     {
@@ -45,6 +46,7 @@ public class AgentReportingService(
 
         dbContext.SensorReadings.Add(sensorReading);
         await dbContext.SaveChangesAsync();
+        await incidentService.EvaluateSensorReadingAsync(sensorReading);
         return sensorReading;
     }
 
@@ -83,6 +85,7 @@ public class AgentReportingService(
 
         dbContext.Set<MonitoredDevicePingResult>().Add(pingResult);
         await dbContext.SaveChangesAsync();
+        await incidentService.EvaluatePingResultAsync(pingResult);
         return pingResult;
     }
 }
