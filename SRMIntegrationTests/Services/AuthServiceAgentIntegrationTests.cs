@@ -1,4 +1,6 @@
 using Microsoft.AspNetCore.Identity;
+using Microsoft.Extensions.Options;
+using SRMAuth.Configuration;
 using SRMAuth.Data;
 using SRMAuth.Services;
 using SRMIntegrationTests.TestHelpers;
@@ -39,7 +41,8 @@ public class AuthServiceAgentIntegrationTests
             context,
             passwordHasher,
             new FakeJwtTokenService(),
-            AuthCurrentUserContextFactory.Create());
+            AuthCurrentUserContextFactory.Create(),
+            Options.Create(new JwtOptions()));
 
         var result = await service.LoginAgentAsync(new AgentLoginRequestDto
         {

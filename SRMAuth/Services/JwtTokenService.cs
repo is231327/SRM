@@ -14,13 +14,14 @@ public class JwtTokenService(IOptions<JwtOptions> options) : IJwtTokenService
 {
     private readonly JwtOptions _options = options.Value;
 
-    public (string AccessToken, DateTime ExpiresAtUtc) CreateUserAccessToken(AuthUser user, IEnumerable<string> roles, Guid? customerId)
+    public (string AccessToken, DateTime ExpiresAtUtc, string TokenJti) CreateUserAccessToken(AuthUser user, IEnumerable<string> roles, Guid? customerId)
     {
+        var tokenJti = Guid.NewGuid().ToString();
         var claims = new List<Claim>
         {
             new(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
             new(JwtRegisteredClaimNames.UniqueName, user.Username),
-            new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
+            new(JwtRegisteredClaimNames.Jti, tokenJti),
             new(ClaimTypes.NameIdentifier, user.Id.ToString()),
             new(ClaimTypes.Name, user.Username)
         };
@@ -32,16 +33,17 @@ public class JwtTokenService(IOptions<JwtOptions> options) : IJwtTokenService
             claims.Add(new Claim(AuthClaimTypes.CustomerId, customerId.Value.ToString()));
         }
 
-        return CreateToken(claims);
+        return CreateToken(claims, tokenJti);
     }
 
-    public (string AccessToken, DateTime ExpiresAtUtc) CreateAgentAccessToken(AgentCredential agentCredential)
+    public (string AccessToken, DateTime ExpiresAtUtc, string TokenJti) CreateAgentAccessToken(AgentCredential agentCredential)
     {
+        var tokenJti = Guid.NewGuid().ToString();
         var claims = new List<Claim>
         {
             new(JwtRegisteredClaimNames.Sub, agentCredential.Id.ToString()),
             new(JwtRegisteredClaimNames.UniqueName, agentCredential.ClientIdentifier),
-            new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
+            new(JwtRegisteredClaimNames.Jti, tokenJti),
             new(ClaimTypes.NameIdentifier, agentCredential.Id.ToString()),
             new(ClaimTypes.Name, agentCredential.ClientIdentifier),
             new(ClaimTypes.Role, AuthRoles.ToName(AuthRoleType.Agent)),
@@ -49,10 +51,10 @@ public class JwtTokenService(IOptions<JwtOptions> options) : IJwtTokenService
             new(AuthClaimTypes.Scope, "agent.api")
         };
 
-        return CreateToken(claims);
+        return CreateToken(claims, tokenJti);
     }
 
-    private (string AccessToken, DateTime ExpiresAtUtc) CreateToken(IEnumerable<Claim> claims)
+    private (string AccessToken, DateTime ExpiresAtUtc, string TokenJti) CreateToken(IEnumerable<Claim> claims, string tokenJti)
     {
         var expiresAtUtc = DateTime.UtcNow.AddMinutes(_options.AccessTokenLifetimeMinutes);
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_options.SigningKey));
@@ -66,6 +68,6 @@ public class JwtTokenService(IOptions<JwtOptions> options) : IJwtTokenService
             expires: expiresAtUtc,
             signingCredentials: credentials);
 
-        return (new JwtSecurityTokenHandler().WriteToken(token), expiresAtUtc);
+        return (new JwtSecurityTokenHandler().WriteToken(token), expiresAtUtc, tokenJti);
     }
 }

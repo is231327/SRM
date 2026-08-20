@@ -12,6 +12,8 @@ public class AuthSessionService(ProtectedSessionStorage protectedSessionStorage)
     public event Action? AuthenticationChanged;
 
     public string? AccessToken { get; private set; }
+    public string? RefreshToken { get; private set; }
+    public DateTime? AccessTokenExpiresAtUtc { get; private set; }
     public UserProfileDto? CurrentUser { get; private set; }
     public bool IsInitialized => _isInitialized;
 
@@ -39,6 +41,8 @@ public class AuthSessionService(ProtectedSessionStorage protectedSessionStorage)
             if (result.Success && result.Value is not null)
             {
                 AccessToken = result.Value.AccessToken;
+                RefreshToken = result.Value.RefreshToken;
+                AccessTokenExpiresAtUtc = result.Value.AccessTokenExpiresAtUtc;
                 CurrentUser = result.Value.CurrentUser;
             }
         }
@@ -50,13 +54,17 @@ public class AuthSessionService(ProtectedSessionStorage protectedSessionStorage)
         AuthenticationChanged?.Invoke();
     }
 
-    public async Task SetSessionAsync(string accessToken, UserProfileDto profile)
+    public async Task SetSessionAsync(AuthTokenResponseDto tokenResponse, UserProfileDto profile)
     {
-        AccessToken = accessToken;
+        AccessToken = tokenResponse.AccessToken;
+        RefreshToken = tokenResponse.RefreshToken;
+        AccessTokenExpiresAtUtc = tokenResponse.ExpiresAtUtc;
         CurrentUser = profile;
         await protectedSessionStorage.SetAsync(StorageKey, new AuthSessionState
         {
-            AccessToken = accessToken,
+            AccessToken = tokenResponse.AccessToken,
+            RefreshToken = tokenResponse.RefreshToken,
+            AccessTokenExpiresAtUtc = tokenResponse.ExpiresAtUtc,
             CurrentUser = profile
         });
         AuthenticationChanged?.Invoke();
@@ -77,14 +85,25 @@ public class AuthSessionService(ProtectedSessionStorage protectedSessionStorage)
     public async Task ClearAsync()
     {
         AccessToken = null;
+        RefreshToken = null;
+        AccessTokenExpiresAtUtc = null;
         CurrentUser = null;
         await protectedSessionStorage.DeleteAsync(StorageKey);
         AuthenticationChanged?.Invoke();
     }
 
-    public void SetSessionInMemory(string accessToken, UserProfileDto profile)
+    public bool CanRefresh => !string.IsNullOrWhiteSpace(RefreshToken);
+
+    public bool IsAccessTokenExpiredOrExpiringSoon()
     {
-        AccessToken = accessToken;
+        return !AccessTokenExpiresAtUtc.HasValue || AccessTokenExpiresAtUtc.Value <= DateTime.UtcNow.AddMinutes(1);
+    }
+
+    public void SetSessionInMemory(AuthTokenResponseDto tokenResponse, UserProfileDto profile)
+    {
+        AccessToken = tokenResponse.AccessToken;
+        RefreshToken = tokenResponse.RefreshToken;
+        AccessTokenExpiresAtUtc = tokenResponse.ExpiresAtUtc;
         CurrentUser = profile;
         AuthenticationChanged?.Invoke();
     }
@@ -92,6 +111,8 @@ public class AuthSessionService(ProtectedSessionStorage protectedSessionStorage)
     public void ClearInMemory()
     {
         AccessToken = null;
+        RefreshToken = null;
+        AccessTokenExpiresAtUtc = null;
         CurrentUser = null;
         AuthenticationChanged?.Invoke();
     }
@@ -107,6 +128,8 @@ public class AuthSessionService(ProtectedSessionStorage protectedSessionStorage)
         await protectedSessionStorage.SetAsync(StorageKey, new AuthSessionState
         {
             AccessToken = AccessToken!,
+            RefreshToken = RefreshToken ?? string.Empty,
+            AccessTokenExpiresAtUtc = AccessTokenExpiresAtUtc,
             CurrentUser = CurrentUser
         });
     }
@@ -120,5 +143,7 @@ public class AuthSessionService(ProtectedSessionStorage protectedSessionStorage)
 internal sealed class AuthSessionState
 {
     public string AccessToken { get; set; } = string.Empty;
+    public string RefreshToken { get; set; } = string.Empty;
+    public DateTime? AccessTokenExpiresAtUtc { get; set; }
     public UserProfileDto? CurrentUser { get; set; }
 }

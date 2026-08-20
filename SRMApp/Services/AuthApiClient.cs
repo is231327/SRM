@@ -15,24 +15,110 @@ public class AuthApiClient(
     {
         ConfigureBaseAddress();
         var response = await _httpClient.PostAsJsonAsync("api/auth/login", request);
-        return response.IsSuccessStatusCode
-            ? await response.Content.ReadFromJsonAsync<AuthTokenResponseDto>()
-            : null;
+        if (response.IsSuccessStatusCode)
+        {
+            return await response.Content.ReadFromJsonAsync<AuthTokenResponseDto>();
+        }
+
+        throw new InvalidOperationException(await ExtractErrorMessageAsync(response));
+    }
+
+    public async Task<AuthTokenResponseDto?> RefreshAsync()
+    {
+        ConfigureBaseAddress();
+        if (!authSessionService.CanRefresh || string.IsNullOrWhiteSpace(authSessionService.RefreshToken))
+        {
+            return null;
+        }
+
+        var response = await _httpClient.PostAsJsonAsync("api/auth/refresh", new RefreshTokenRequestDto
+        {
+            RefreshToken = authSessionService.RefreshToken
+        });
+
+        if (!response.IsSuccessStatusCode)
+        {
+            authSessionService.ClearInMemory();
+            return null;
+        }
+
+        var token = await response.Content.ReadFromJsonAsync<AuthTokenResponseDto>();
+        if (token is null)
+        {
+            authSessionService.ClearInMemory();
+            return null;
+        }
+
+        var profile = await GetOwnProfileCoreAsync(token.AccessToken);
+        if (profile is null)
+        {
+            authSessionService.ClearInMemory();
+            return null;
+        }
+
+        await authSessionService.SetSessionAsync(token, profile);
+        return token;
+    }
+
+    public async Task LogoutAsync()
+    {
+        ConfigureBaseAddress();
+        ApplyBearerToken();
+
+        try
+        {
+            await _httpClient.PostAsJsonAsync("api/auth/logout", new LogoutRequestDto
+            {
+                RefreshToken = authSessionService.RefreshToken ?? string.Empty
+            });
+        }
+        catch
+        {
+        }
+
+        await authSessionService.ClearAsync();
+    }
+
+    public async Task<bool> EnsureAccessTokenAsync()
+    {
+        if (!authSessionService.IsAuthenticated)
+        {
+            return false;
+        }
+
+        if (!authSessionService.IsAccessTokenExpiredOrExpiringSoon())
+        {
+            return true;
+        }
+
+        return await RefreshAsync() is not null;
     }
 
     public async Task<UserProfileDto?> GetOwnProfileAsync(string? accessToken = null)
     {
         ConfigureBaseAddress();
+        if (accessToken is null)
+        {
+            var ensured = await EnsureAccessTokenAsync();
+            if (!ensured)
+            {
+                return null;
+            }
+        }
+
         ApplyBearerToken(accessToken);
-        var response = await _httpClient.GetAsync("api/auth/me");
-        return response.IsSuccessStatusCode
-            ? await response.Content.ReadFromJsonAsync<UserProfileDto>()
-            : null;
+        return await GetOwnProfileCoreAsync(accessToken ?? authSessionService.AccessToken);
     }
 
     public async Task<UserProfileDto?> UpdateOwnProfileAsync(UpdateOwnProfileRequestDto request)
     {
         ConfigureBaseAddress();
+        var ensured = await EnsureAccessTokenAsync();
+        if (!ensured)
+        {
+            return null;
+        }
+
         ApplyBearerToken();
         var response = await _httpClient.PutAsJsonAsync("api/auth/me", request);
         return response.IsSuccessStatusCode
@@ -43,6 +129,12 @@ public class AuthApiClient(
     public async Task ChangePasswordAsync(ChangePasswordRequestDto request)
     {
         ConfigureBaseAddress();
+        var ensured = await EnsureAccessTokenAsync();
+        if (!ensured)
+        {
+            throw new InvalidOperationException("The session has expired.");
+        }
+
         ApplyBearerToken();
         var response = await _httpClient.PostAsJsonAsync("api/auth/change-password", request);
         if (response.IsSuccessStatusCode)
@@ -56,6 +148,12 @@ public class AuthApiClient(
     public async Task<UserProfileDto?> CreateUserAsync(CreateUserRequestDto request)
     {
         ConfigureBaseAddress();
+        var ensured = await EnsureAccessTokenAsync();
+        if (!ensured)
+        {
+            throw new InvalidOperationException("The session has expired.");
+        }
+
         ApplyBearerToken();
         var response = await _httpClient.PostAsJsonAsync("api/auth/users", request);
         if (response.IsSuccessStatusCode)
@@ -69,6 +167,12 @@ public class AuthApiClient(
     public async Task<List<UserManagementDto>> GetUsersAsync()
     {
         ConfigureBaseAddress();
+        var ensured = await EnsureAccessTokenAsync();
+        if (!ensured)
+        {
+            throw new InvalidOperationException("The session has expired.");
+        }
+
         ApplyBearerToken();
         var response = await _httpClient.GetAsync("api/auth/users");
         if (response.IsSuccessStatusCode)
@@ -82,6 +186,12 @@ public class AuthApiClient(
     public async Task<UserManagementDto?> UpdateUserAsync(Guid userId, UpdateUserRequestDto request)
     {
         ConfigureBaseAddress();
+        var ensured = await EnsureAccessTokenAsync();
+        if (!ensured)
+        {
+            throw new InvalidOperationException("The session has expired.");
+        }
+
         ApplyBearerToken();
         var response = await _httpClient.PutAsJsonAsync($"api/auth/users/{userId}", request);
         if (response.IsSuccessStatusCode)
@@ -95,6 +205,12 @@ public class AuthApiClient(
     public async Task<bool> ResetUserPasswordAsync(Guid userId, ResetUserPasswordRequestDto request)
     {
         ConfigureBaseAddress();
+        var ensured = await EnsureAccessTokenAsync();
+        if (!ensured)
+        {
+            throw new InvalidOperationException("The session has expired.");
+        }
+
         ApplyBearerToken();
         var response = await _httpClient.PostAsJsonAsync($"api/auth/users/{userId}/reset-password", request);
         if (response.IsSuccessStatusCode)
@@ -108,6 +224,12 @@ public class AuthApiClient(
     public async Task<AgentCredentialReadDto?> CreateAgentCredentialAsync(AgentCredentialCreateRequestDto request)
     {
         ConfigureBaseAddress();
+        var ensured = await EnsureAccessTokenAsync();
+        if (!ensured)
+        {
+            throw new InvalidOperationException("The session has expired.");
+        }
+
         ApplyBearerToken();
         var response = await _httpClient.PostAsJsonAsync("api/auth/agent-credentials", request);
         if (response.IsSuccessStatusCode)
@@ -121,6 +243,12 @@ public class AuthApiClient(
     public async Task<List<AgentCredentialReadDto>> GetAgentCredentialsAsync()
     {
         ConfigureBaseAddress();
+        var ensured = await EnsureAccessTokenAsync();
+        if (!ensured)
+        {
+            throw new InvalidOperationException("The session has expired.");
+        }
+
         ApplyBearerToken();
         var response = await _httpClient.GetAsync("api/auth/agent-credentials");
         if (response.IsSuccessStatusCode)
@@ -134,6 +262,12 @@ public class AuthApiClient(
     public async Task<AgentCredentialReadDto?> UpdateAgentCredentialAsync(Guid credentialId, AgentCredentialUpdateRequestDto request)
     {
         ConfigureBaseAddress();
+        var ensured = await EnsureAccessTokenAsync();
+        if (!ensured)
+        {
+            throw new InvalidOperationException("The session has expired.");
+        }
+
         ApplyBearerToken();
         var response = await _httpClient.PutAsJsonAsync($"api/auth/agent-credentials/{credentialId}", request);
         if (response.IsSuccessStatusCode)
@@ -155,6 +289,15 @@ public class AuthApiClient(
 
         _httpClient.DefaultRequestHeaders.Authorization = !string.IsNullOrWhiteSpace(bearerToken)
             ? new AuthenticationHeaderValue("Bearer", bearerToken)
+            : null;
+    }
+
+    private async Task<UserProfileDto?> GetOwnProfileCoreAsync(string? accessToken)
+    {
+        ApplyBearerToken(accessToken);
+        var response = await _httpClient.GetAsync("api/auth/me");
+        return response.IsSuccessStatusCode
+            ? await response.Content.ReadFromJsonAsync<UserProfileDto>()
             : null;
     }
 

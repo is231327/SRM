@@ -9,6 +9,8 @@ public interface ICurrentUserContext
     bool IsAuthenticated { get; }
     Guid? UserId { get; }
     Guid? CustomerId { get; }
+    string? TokenJti { get; }
+    DateTime? TokenExpiresAtUtc { get; }
     bool IsSystemAdmin { get; }
     bool IsEmployee { get; }
     bool IsCustomerAdmin { get; }
@@ -37,6 +39,22 @@ public class CurrentUserContext(IHttpContextAccessor httpContextAccessor) : ICur
         {
             var value = User?.FindFirstValue(AuthClaimTypes.CustomerId);
             return Guid.TryParse(value, out var id) ? id : null;
+        }
+    }
+
+    public string? TokenJti => User?.FindFirstValue(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Jti);
+
+    public DateTime? TokenExpiresAtUtc
+    {
+        get
+        {
+            var value = User?.FindFirstValue(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Exp);
+            if (!long.TryParse(value, out var seconds))
+            {
+                return null;
+            }
+
+            return DateTimeOffset.FromUnixTimeSeconds(seconds).UtcDateTime;
         }
     }
 

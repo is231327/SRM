@@ -40,21 +40,28 @@
     private async Task LoginAsync()
     {
         errorMessage = null;
-        var token = await AuthApiClient.LoginAsync(form);
-        if (token is null)
+        try
         {
-            errorMessage = "Login failed.";
-            return;
-        }
+            var token = await AuthApiClient.LoginAsync(form);
+            if (token is null)
+            {
+                errorMessage = "Login failed.";
+                return;
+            }
 
-        var profile = await AuthApiClient.GetOwnProfileAsync(token.AccessToken);
-        if (profile is null)
+            var profile = await AuthApiClient.GetOwnProfileAsync(token.AccessToken);
+            if (profile is null)
+            {
+                errorMessage = "Could not load the user profile.";
+                return;
+            }
+
+            await AuthSessionService.SetSessionAsync(token, profile);
+            NavigationManager.NavigateTo(profile.MustChangePassword ? "/profile" : "/");
+        }
+        catch (InvalidOperationException exception)
         {
-            errorMessage = "Could not load the user profile.";
-            return;
+            errorMessage = exception.Message;
         }
-
-        await AuthSessionService.SetSessionAsync(token.AccessToken, profile);
-        NavigationManager.NavigateTo(profile.MustChangePassword ? "/profile" : "/");
     }
 }

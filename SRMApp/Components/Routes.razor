@@ -45,7 +45,8 @@ else
 
         if (AuthSessionService.IsAuthenticated && !string.IsNullOrWhiteSpace(AuthSessionService.AccessToken))
         {
-            var profile = await AuthApiClient.GetOwnProfileAsync(AuthSessionService.AccessToken);
+            var ensured = await AuthApiClient.EnsureAccessTokenAsync();
+            var profile = ensured ? await AuthApiClient.GetOwnProfileAsync() : null;
             if (profile is null)
             {
                 await AuthSessionService.ClearAsync();

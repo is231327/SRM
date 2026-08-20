@@ -1,7 +1,6 @@
 using Microsoft.Data.SqlClient;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.Extensions.Options;
-using SRMAuth.Configuration;
+using Microsoft.Extensions.Configuration;
 using SRMAuth.Data;
 using SRMShared.Entities;
 
@@ -39,13 +38,23 @@ public class IntegrationDatabaseFixture
         authContext.Database.EnsureCreated();
 
         var passwordHasher = new PasswordHasher<AuthUser>();
-        var bootstrapOptions = Options.Create(new AuthBootstrapOptions
-        {
-            SystemAdminUsername = "systemadmin",
-            SystemAdminPassword = "YourTempAdminPassword123",
-            SystemAdminEmail = "systemadmin@example.local"
-        });
+        var configuration = new ConfigurationBuilder()
+            .SetBasePath(AppContext.BaseDirectory)
+            .AddJsonFile("appsettings.json", optional: false)
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["AuthSeedData:Users:0:Username"] = "systemadmin",
+                ["AuthSeedData:Users:0:Email"] = "systemadmin@example.local",
+                ["AuthSeedData:Users:0:Password"] = "YourTempAdminPassword123",
+                ["AuthSeedData:Users:0:FirstName"] = "System",
+                ["AuthSeedData:Users:0:LastName"] = "Administrator",
+                ["AuthSeedData:Users:0:PhoneNumber"] = string.Empty,
+                ["AuthSeedData:Users:0:IsActive"] = bool.TrueString,
+                ["AuthSeedData:Users:0:MustChangePassword"] = bool.TrueString,
+                ["AuthSeedData:Users:0:Roles:0"] = "SystemAdmin"
+            })
+            .Build();
 
-        AuthDbSeeder.SeedAsync(authContext, passwordHasher, bootstrapOptions).GetAwaiter().GetResult();
+        AuthDbSeeder.SeedAsync(authContext, passwordHasher, configuration).GetAwaiter().GetResult();
     }
 }

@@ -6,6 +6,8 @@ public interface IAuthService
 {
     Task<AuthTokenResponseDto?> LoginAsync(LoginRequestDto request, CancellationToken cancellationToken = default);
     Task<AuthTokenResponseDto?> LoginAgentAsync(AgentLoginRequestDto request, CancellationToken cancellationToken = default);
+    Task<AuthTokenResponseDto?> RefreshAsync(RefreshTokenRequestDto request, CancellationToken cancellationToken = default);
+    Task LogoutAsync(Guid userId, LogoutRequestDto request, string? currentTokenJti, DateTime? currentTokenExpiresAtUtc, CancellationToken cancellationToken = default);
     Task<UserProfileDto?> GetOwnProfileAsync(Guid userId, CancellationToken cancellationToken = default);
     Task<UserProfileDto?> UpdateOwnProfileAsync(Guid userId, UpdateOwnProfileRequestDto request, CancellationToken cancellationToken = default);
     Task ChangePasswordAsync(Guid userId, ChangePasswordRequestDto request, CancellationToken cancellationToken = default);

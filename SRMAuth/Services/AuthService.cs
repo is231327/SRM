@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using System.Security.Cryptography;
+using System.Text;
 using SRMAuth.Data;
 using SRMAuth.Security;
 using SRMAuth.Services.Interfaces;
@@ -13,7 +15,8 @@ public class AuthService(
     SrmAuthDbContext dbContext,
     IPasswordHasher<AuthUser> passwordHasher,
     IJwtTokenService jwtTokenService,
-    ICurrentUserContext currentUserContext) : IAuthService
+    ICurrentUserContext currentUserContext,
+    Microsoft.Extensions.Options.IOptions<SRMAuth.Configuration.JwtOptions> jwtOptions) : IAuthService
 {
     public async Task<AuthTokenResponseDto?> LoginAsync(LoginRequestDto request, CancellationToken cancellationToken = default)
     {
@@ -46,16 +49,7 @@ public class AuthService(
             .ToArray();
 
         var customerId = user.CustomerUsers.Select(x => (Guid?)x.CustomerId).FirstOrDefault();
-        var token = jwtTokenService.CreateUserAccessToken(user, roles, customerId);
-
-        return new AuthTokenResponseDto
-        {
-            AccessToken = token.AccessToken,
-            ExpiresAtUtc = token.ExpiresAtUtc,
-            Username = user.Username,
-            Roles = roles,
-            CustomerId = customerId
-        };
+        return await CreateUserAuthResponseAsync(user, roles, customerId, cancellationToken);
     }
 
     public async Task<AuthTokenResponseDto?> LoginAgentAsync(AgentLoginRequestDto request, CancellationToken cancellationToken = default)
@@ -87,10 +81,83 @@ public class AuthService(
         {
             AccessToken = token.AccessToken,
             ExpiresAtUtc = token.ExpiresAtUtc,
+            RefreshToken = string.Empty,
             Username = agentCredential.ClientIdentifier,
             Roles = new[] { "Agent" },
             AgentId = agentCredential.AgentId
         };
+    }
+
+    public async Task<AuthTokenResponseDto?> RefreshAsync(RefreshTokenRequestDto request, CancellationToken cancellationToken = default)
+    {
+        var refreshTokenHash = HashToken(request.RefreshToken);
+        var storedToken = await dbContext.RefreshTokens
+            .Include(x => x.User)
+                .ThenInclude(x => x!.UserRoles)
+                    .ThenInclude(x => x.Role)
+            .Include(x => x.User)
+                .ThenInclude(x => x!.CustomerUsers)
+            .FirstOrDefaultAsync(x => x.TokenHash == refreshTokenHash, cancellationToken);
+
+        if (storedToken is null
+            || storedToken.User is null
+            || storedToken.RevokedAtUtc.HasValue
+            || storedToken.ExpiresAtUtc <= DateTime.UtcNow
+            || !storedToken.User.IsActive)
+        {
+            return null;
+        }
+
+        storedToken.RevokedAtUtc = DateTime.UtcNow;
+        storedToken.UpdatedAtUtc = DateTime.UtcNow;
+
+        var user = storedToken.User;
+        var roles = user.UserRoles
+            .Select(x => x.Role?.Name)
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Cast<string>()
+            .Distinct()
+            .ToArray();
+        var customerId = user.CustomerUsers.Select(x => (Guid?)x.CustomerId).FirstOrDefault();
+
+        var response = await CreateUserAuthResponseAsync(user, roles, customerId, cancellationToken);
+        storedToken.ReplacedByTokenHash = HashToken(response.RefreshToken);
+        await dbContext.SaveChangesAsync(cancellationToken);
+        return response;
+    }
+
+    public async Task LogoutAsync(Guid userId, LogoutRequestDto request, string? currentTokenJti, DateTime? currentTokenExpiresAtUtc, CancellationToken cancellationToken = default)
+    {
+        if (!string.IsNullOrWhiteSpace(request.RefreshToken))
+        {
+            var refreshTokenHash = HashToken(request.RefreshToken);
+            var refreshToken = await dbContext.RefreshTokens.FirstOrDefaultAsync(
+                x => x.UserId == userId && x.TokenHash == refreshTokenHash,
+                cancellationToken);
+
+            if (refreshToken is not null && !refreshToken.RevokedAtUtc.HasValue)
+            {
+                refreshToken.RevokedAtUtc = DateTime.UtcNow;
+                refreshToken.UpdatedAtUtc = DateTime.UtcNow;
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(currentTokenJti) && currentTokenExpiresAtUtc.HasValue)
+        {
+            var exists = await dbContext.RevokedAccessTokens.AnyAsync(x => x.TokenJti == currentTokenJti, cancellationToken);
+            if (!exists)
+            {
+                dbContext.RevokedAccessTokens.Add(new RevokedAccessToken
+                {
+                    TokenJti = currentTokenJti,
+                    ExpiresAtUtc = currentTokenExpiresAtUtc.Value,
+                    UserId = userId,
+                    Reason = "Logout"
+                });
+            }
+        }
+
+        await dbContext.SaveChangesAsync(cancellationToken);
     }
 
     public async Task<UserProfileDto?> GetOwnProfileAsync(Guid userId, CancellationToken cancellationToken = default)
@@ -566,5 +633,48 @@ public class AuthService(
         {
             throw new InvalidOperationException(string.Join(" ", errors));
         }
+    }
+
+    private async Task<AuthTokenResponseDto> CreateUserAuthResponseAsync(AuthUser user, IReadOnlyCollection<string> roles, Guid? customerId, CancellationToken cancellationToken)
+    {
+        var token = jwtTokenService.CreateUserAccessToken(user, roles, customerId);
+        var refreshToken = GenerateRefreshToken();
+        var refreshTokenHash = HashToken(refreshToken);
+
+        dbContext.RefreshTokens.Add(new AuthRefreshToken
+        {
+            UserId = user.Id,
+            TokenHash = refreshTokenHash,
+            ExpiresAtUtc = DateTime.UtcNow.AddDays(jwtOptions.Value.RefreshTokenLifetimeDays)
+        });
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        return new AuthTokenResponseDto
+        {
+            AccessToken = token.AccessToken,
+            RefreshToken = refreshToken,
+            ExpiresAtUtc = token.ExpiresAtUtc,
+            Username = user.Username,
+            Roles = roles,
+            CustomerId = customerId
+        };
+    }
+
+    private static string GenerateRefreshToken()
+    {
+        Span<byte> bytes = stackalloc byte[32];
+        RandomNumberGenerator.Fill(bytes);
+        return Convert.ToBase64String(bytes);
+    }
+
+    private static string HashToken(string token)
+    {
+        if (string.IsNullOrWhiteSpace(token))
+        {
+            return string.Empty;
+        }
+
+        var hash = SHA256.HashData(Encoding.UTF8.GetBytes(token));
+        return Convert.ToHexString(hash);
     }
 }

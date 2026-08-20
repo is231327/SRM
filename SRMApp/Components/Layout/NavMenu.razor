@@ -1,5 +1,6 @@
 @inherits LocalizedComponentBase
 @inject AuthSessionService AuthSessionService
+@inject IAuthApiClient AuthApiClient
 @inject NavigationManager NavigationManager
 
 <div class="top-row ps-3 navbar navbar-dark">
@@ -63,7 +64,7 @@
 
     private async Task LogoutAsync()
     {
-        await AuthSessionService.ClearAsync();
+        await AuthApiClient.LogoutAsync();
         NavigationManager.NavigateTo("/login");
     }
 

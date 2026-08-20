@@ -5,6 +5,9 @@ namespace SRMApp.Services;
 public interface IAuthApiClient
 {
     Task<AuthTokenResponseDto?> LoginAsync(LoginRequestDto request);
+    Task<AuthTokenResponseDto?> RefreshAsync();
+    Task LogoutAsync();
+    Task<bool> EnsureAccessTokenAsync();
     Task<UserProfileDto?> GetOwnProfileAsync(string? accessToken = null);
     Task<UserProfileDto?> UpdateOwnProfileAsync(UpdateOwnProfileRequestDto request);
     Task ChangePasswordAsync(ChangePasswordRequestDto request);

@@ -1,4 +1,5 @@
 using System.Text;
+using System.IdentityModel.Tokens.Jwt;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -30,6 +31,9 @@ public class Program
         builder.Services.AddHttpContextAccessor();
         builder.Services.AddDbContext<SrmCoreDbContext>(options =>
             options.UseSqlServer(builder.Configuration.GetConnectionString("SrmCoreDatabase")));
+        builder.Services.AddDbContext<AuthTokenStateDbContext>(options =>
+            options.UseSqlServer(builder.Configuration.GetConnectionString("SrmAuthDatabase")
+                ?? throw new InvalidOperationException("Missing connection string 'SrmAuthDatabase'.")));
         builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             .AddJwtBearer(options =>
             {
@@ -43,6 +47,25 @@ public class Program
                     ValidAudience = builder.Configuration["Jwt:Audience"],
                     IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(builder.Configuration["Jwt:SigningKey"] ?? string.Empty)),
                     ClockSkew = TimeSpan.FromMinutes(1)
+                };
+                options.Events = new JwtBearerEvents
+                {
+                    OnTokenValidated = async context =>
+                    {
+                        var tokenJti = context.Principal?.FindFirst(JwtRegisteredClaimNames.Jti)?.Value;
+                        if (string.IsNullOrWhiteSpace(tokenJti))
+                        {
+                            context.Fail("Missing token jti claim.");
+                            return;
+                        }
+
+                        var authTokenStateContext = context.HttpContext.RequestServices.GetRequiredService<AuthTokenStateDbContext>();
+                        var revoked = await authTokenStateContext.RevokedAccessTokens.AnyAsync(x => x.TokenJti == tokenJti);
+                        if (revoked)
+                        {
+                            context.Fail("The access token has been revoked.");
+                        }
+                    }
                 };
             });
         builder.Services.AddAuthorization();

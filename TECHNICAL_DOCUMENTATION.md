@@ -72,11 +72,13 @@ The `SRMAuth` API returns explicit `400 Bad Request` responses for password-poli
 The current authentication implementation includes:
 
 - `SRMAuth` issues JWT bearer tokens for human users and agents
+- `SRMAuth` issues refresh tokens for human users
 - `SRMCore` validates JWT bearer tokens issued by `SRMAuth`
 - `SRMApp` performs login against `SRMAuth` and forwards bearer tokens to `SRMCore`
 - `SRMAgent` performs machine login against `SRMAuth` and calls dedicated agent endpoints in `SRMCore`
 - machine principals are represented by `AgentCredential` records instead of human user accounts
 - `AgentCredential.AgentId` is stored in `SRMAuth` as an external reference to the corresponding agent in `SRMCore`, without a database-level foreign key across service boundaries
+- access-token revocation is enforced in both `SRMAuth` and `SRMCore` through persisted revoked token JTIs
 
 The current dedicated agent reporting path is:
 
@@ -87,6 +89,22 @@ The current dedicated agent reporting path is:
 
 The runtime configuration endpoint returns the authenticated agent together with its active Shelly devices and monitored devices.
 The reporting service accepts only Shelly devices and monitored devices that belong to the authenticated agent claim.
+
+The current human-authentication flow also includes:
+
+- `POST /api/auth/refresh` in `SRMAuth`
+- `POST /api/auth/logout` in `SRMAuth`
+
+Refresh tokens are currently persisted in the auth SQL database.
+On logout, the active refresh token is revoked and the current JWT access token JTI is stored as revoked so it cannot be reused until expiry.
+
+This current implementation is operational, but it is still a transitional implementation.
+The required target architecture from the project specification is:
+
+- SQL Server for durable auth identity data
+- Redis for auth token state
+
+That means refresh tokens and access-token revocation state still need to be moved from SQL Server to Redis.
 
 ## Frontend Scope
 
@@ -121,7 +139,7 @@ The current navigation model is hierarchical:
 `SRMApp` accesses backend data through typed HTTP clients and DTO contracts from `SRMShared`.
 It does not access `SRMCore` controllers or services directly in-process.
 
-The current development-phase UI authentication uses a scoped in-memory auth session inside the Blazor Server application and forwards bearer tokens to `SRMAuth` and `SRMCore`.
+The current frontend authentication uses a scoped server-side auth session inside the Blazor Server application and forwards bearer tokens to `SRMAuth` and `SRMCore`.
 The UI supports:
 
 - direct login against `SRMAuth`
@@ -155,7 +173,6 @@ The current agent implementation does not yet perform:
 
 - advanced alert generation or ticket creation based on the persisted failure state
 - richer webhook hardening if the final Shelly delivery model requires it
-- refresh-token handling, because refresh tokens are not implemented yet
 
 ## Test Status
 
@@ -201,7 +218,8 @@ The frontend has been verified at build level through `dotnet build SRMApp\SRMAp
 - primary relational database: Microsoft SQL Server
 - SQL Server runs in a Docker container
 - `SRMCore` uses SQL Server through Entity Framework Core
-- `SRMAuth` currently also uses SQL Server for identity data
+- `SRMAuth` currently also uses SQL Server for identity data, refresh tokens, and token revocation data
+- Redis is part of the required target architecture for `SRMAuth`, but it is not yet used by the current implementation
 - the current implementation initializes the schema through `Database.EnsureCreated()`
 - database schema changes require the SQL Server Docker data volume or database to be recreated unless the project is later switched to EF Core migrations
 - no secrets must be stored directly in source code
@@ -369,7 +387,9 @@ This table intentionally keeps the door state together with the other Shelly dat
 
 - The authentication and authorization design is documented in `AUTHENTICATION_AUTHORIZATION_CONCEPT.md`.
 - Agents are authenticated through `AgentCredential` machine credentials instead of `AuthUser` human accounts.
-- Ticket integration is not yet modeled because the target on-premise system is not yet selected.
+- The implemented auth persistence currently differs from the target architecture because token state is still stored in SQL Server instead of Redis.
+- Ticket integration is specified in `TICKET_INTEGRATION_SPECIFICATION.md` but is not implemented yet.
+- Incident persistence is not yet modeled because the first ticket-integration slice has not been implemented yet.
 - The current model treats `ServerRoom` as the aggregate root for `Agent` and `MaintenanceWindow`.
 - The current model treats `Agent` as the technical parent for `ShellyDevice` and `MonitoredDevice`.
 - The current frontend pages provide CRUD-oriented management structure, but deeper UX polish, richer validation feedback, and production-grade navigation behavior still need further iteration.

@@ -15,6 +15,8 @@ internal class FakeAuthCurrentUserContext : ICurrentUserContext
     public bool IsAuthenticated { get; set; } = true;
     public Guid? UserId { get; set; }
     public Guid? CustomerId { get; set; }
+    public string? TokenJti { get; set; }
+    public DateTime? TokenExpiresAtUtc { get; set; }
     public bool IsSystemAdmin { get; set; } = true;
     public bool IsEmployee { get; set; }
     public bool IsCustomerAdmin { get; set; }

@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.Identity;
 using NUnit.Framework;
+using Microsoft.Extensions.Options;
+using SRMAuth.Configuration;
 using SRMAuth.Services;
 using SRMShared.Auth;
 using SRMShared.DTOs.Auth;
@@ -168,7 +170,8 @@ public class AuthServiceTests
             context,
             new PasswordHasher<AuthUser>(),
             new FakeJwtTokenService(),
-            currentUserContext ?? new FakeCurrentUserContext());
+            currentUserContext ?? new FakeCurrentUserContext(),
+            Options.Create(new JwtOptions()));
     }
 
     private static AuthUser CreateUser(IPasswordHasher<AuthUser> passwordHasher, string password)

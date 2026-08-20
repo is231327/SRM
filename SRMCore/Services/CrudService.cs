@@ -73,6 +73,7 @@ public class CrudService<TEntity>(SrmCoreDbContext dbContext, ICurrentUserContex
 
         return typeof(TEntity).Name switch
         {
+            nameof(Customer) => (IQueryable<TEntity>)DbContext.Customers.Where(x => x.Id == customerId),
             nameof(ServerRoom) => (IQueryable<TEntity>)DbContext.ServerRooms.Where(x => x.CustomerId == customerId),
             nameof(Agent) => (IQueryable<TEntity>)DbContext.Agents.Where(x => x.ServerRoom != null && x.ServerRoom.CustomerId == customerId),
             nameof(ShellyDevice) => (IQueryable<TEntity>)DbContext.ShellyDevices.Where(x => x.Agent != null && x.Agent.ServerRoom != null && x.Agent.ServerRoom.CustomerId == customerId),
@@ -96,6 +97,7 @@ public class CrudService<TEntity>(SrmCoreDbContext dbContext, ICurrentUserContex
 
         var isAllowed = entity switch
         {
+            Customer customer => customer.Id == Guid.Empty || customer.Id == customerId,
             ServerRoom serverRoom => serverRoom.CustomerId == customerId,
             Agent agent => await DbContext.ServerRooms.AnyAsync(x => x.Id == agent.ServerRoomId && x.CustomerId == customerId),
             ShellyDevice shellyDevice => await DbContext.Agents.AnyAsync(x => x.Id == shellyDevice.AgentId && x.ServerRoom != null && x.ServerRoom.CustomerId == customerId),

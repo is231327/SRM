@@ -17,7 +17,17 @@ public class SRMAuthController(IAuthService authService) : ControllerBase
         CancellationToken cancellationToken)
     {
         var result = await authService.LoginAsync(request, cancellationToken);
-        return result is null ? Unauthorized() : Ok(result);
+        if (result is null)
+        {
+            return Unauthorized(new ProblemDetails
+            {
+                Title = "Unauthorized",
+                Status = StatusCodes.Status401Unauthorized,
+                Detail = "Invalid username or password."
+            });
+        }
+
+        return Ok(result);
     }
 
     [HttpPost("agent/login")]
@@ -27,7 +37,46 @@ public class SRMAuthController(IAuthService authService) : ControllerBase
         CancellationToken cancellationToken)
     {
         var result = await authService.LoginAgentAsync(request, cancellationToken);
+        if (result is null)
+        {
+            return Unauthorized(new ProblemDetails
+            {
+                Title = "Unauthorized",
+                Status = StatusCodes.Status401Unauthorized,
+                Detail = "Invalid agent credential identifier or secret."
+            });
+        }
+
+        return Ok(result);
+    }
+
+    [HttpPost("refresh")]
+    [AllowAnonymous]
+    public async Task<ActionResult<AuthTokenResponseDto>> Refresh(
+        [FromBody] RefreshTokenRequestDto request,
+        CancellationToken cancellationToken)
+    {
+        var result = await authService.RefreshAsync(request, cancellationToken);
         return result is null ? Unauthorized() : Ok(result);
+    }
+
+    [HttpPost("logout")]
+    [Authorize]
+    public async Task<IActionResult> Logout(
+        [FromBody] LogoutRequestDto request,
+        CancellationToken cancellationToken)
+    {
+        var userId = GetCurrentUserId();
+        if (userId is null)
+        {
+            return Unauthorized();
+        }
+
+        var tokenJti = User.FindFirstValue(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Jti);
+        var tokenExpiresAtUtc = GetCurrentTokenExpiresAtUtc();
+
+        await authService.LogoutAsync(userId.Value, request, tokenJti, tokenExpiresAtUtc, cancellationToken);
+        return NoContent();
     }
 
     [HttpGet("me")]
@@ -148,5 +197,16 @@ public class SRMAuthController(IAuthService authService) : ControllerBase
     {
         var userIdValue = User.FindFirstValue(ClaimTypes.NameIdentifier);
         return Guid.TryParse(userIdValue, out var userId) ? userId : null;
+    }
+
+    private DateTime? GetCurrentTokenExpiresAtUtc()
+    {
+        var value = User.FindFirstValue(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Exp);
+        if (!long.TryParse(value, out var seconds))
+        {
+            return null;
+        }
+
+        return DateTimeOffset.FromUnixTimeSeconds(seconds).UtcDateTime;
     }
 }

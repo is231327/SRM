@@ -18,17 +18,41 @@ It covers:
 
 The current implementation is:
 
-- `SRMAuth` uses a SQL database for users and machine credentials
+- `SRMAuth` uses a SQL database for users, machine credentials, refresh tokens, and revoked access-token JTIs
 - `SRMCore` validates JWT access tokens issued by `SRMAuth`
 - `SRMApp` authenticates human users and calls `SRMCore` on their behalf with forwarded bearer tokens
 - `SRMAgent` authenticates as a machine principal and calls dedicated agent endpoints
 
-The remaining target-state items that are not implemented yet are:
+This is functionally working, but it does not yet match the required target architecture from the project specification because Redis is not yet used for token state.
 
-- Redis-backed refresh tokens, revocation, and session state
-- logout and refresh endpoints
-- a more robust server-side authenticated session model in `SRMApp`
-- full customer-ownership filtering across the complete `SRMCore` CRUD surface
+## Target Architecture
+
+The intended target architecture is:
+
+- SQL Server in `SRMAuth` for identity data
+- Redis in `SRMAuth` for refresh tokens
+- Redis in `SRMAuth` for access-token revocation state
+
+That means the long-term responsibility split should be:
+
+- SQL Server:
+  - users
+  - roles
+  - user-role assignments
+  - customer-user assignments
+  - agent credentials
+- Redis:
+  - refresh tokens
+  - refresh-token rotation state
+  - revoked access-token JTIs
+  - other short-lived auth session state if needed later
+
+The main target-state items that are still not implemented are:
+
+- Redis-backed token storage for refresh tokens and access-token revocation
+- broader policy-based authorization refinement beyond the current role and ownership model
+- additional auth and authorization integration coverage
+- environment-based secret management for non-local deployment
 
 ## Principal Types
 
@@ -89,6 +113,27 @@ Machine identity used by the on-site appliance or virtual agent. This principal 
 - intended use: API authorization for `SRMCore`
 - signed by: `SRMAuth`
 
+### Current Refresh Token
+
+- format: opaque random token
+- lifetime: currently configured in `SRMAuth`
+- intended use: session continuation for human users in `SRMApp`
+- persistence: SQL database in `SRMAuth`
+- rotation: yes
+- revocation: yes
+
+### Target Refresh Token Storage
+
+- format: opaque random token
+- intended persistence: Redis
+- intended lifecycle: short-lived, rotated, and revocable
+
+### Target Access-Token Revocation Storage
+
+- intended persistence: Redis
+- key content: JWT JTI plus expiry
+- intended lifecycle: retained only until the original token expiry time
+
 ### Suggested JWT Claims
 
 Common claims:
@@ -119,9 +164,18 @@ Agent claims:
 1. A user logs in through `SRMApp`.
 2. `SRMApp` sends credentials to `SRMAuth`.
 3. `SRMAuth` validates the password hash from its SQL database.
-4. `SRMAuth` issues a short-lived JWT access token.
-5. `SRMApp` stores the authenticated state in its current in-memory session service.
+4. `SRMAuth` issues a short-lived JWT access token and a refresh token.
+5. `SRMApp` stores the current authenticated state in its server-side session service.
 6. `SRMApp` calls `SRMCore` with the access token.
+7. If the access token is near expiry, `SRMApp` requests a rotated token pair from `SRMAuth`.
+
+### Human User Logout Flow
+
+1. A user triggers logout in `SRMApp`.
+2. `SRMApp` sends the current refresh token to `SRMAuth`.
+3. `SRMAuth` revokes the refresh token.
+4. `SRMAuth` records the current access-token JTI as revoked until the token expiry time.
+5. `SRMApp` clears the local authenticated session.
 
 ### Agent Login Flow
 
@@ -142,6 +196,8 @@ Agent claims:
 Current endpoint responsibilities:
 
 - `POST /api/auth/login`
+- `POST /api/auth/refresh`
+- `POST /api/auth/logout`
 - `POST /api/auth/agent/login`
 - `GET /api/auth/me`
 - `PUT /api/auth/me`
@@ -164,7 +220,7 @@ Current protected agent endpoint groups:
 ### `SRMApp`
 
 - authenticate human users against `SRMAuth`
-- maintain the current authenticated browser state through an in-memory auth session
+- maintain the current authenticated browser state through a scoped server-side auth session
 - call `SRMCore` on behalf of the authenticated user
 - expose profile management UI for password and contact changes
 
@@ -176,9 +232,9 @@ Current protected agent endpoint groups:
 
 ## Auth Data Model
 
-### SQL Database in `SRMAuth`
+### Current SQL Database in `SRMAuth`
 
-The SQL database holds identity and account data.
+The current SQL database holds both identity data and token-state data.
 
 Role definitions are represented in code through an enum-backed role model and are seeded into the `Roles` table during startup. This keeps role usage type-safe in code while still preserving roles as database records for authorization and administration workflows.
 
@@ -188,6 +244,8 @@ erDiagram
     ROLE ||--o{ USER_ROLE : assigned_by
     USER ||--o| CUSTOMER_USER : may_belong_to
     CUSTOMER ||--o{ CUSTOMER_USER : maps
+    USER ||--o{ AUTH_REFRESH_TOKEN : owns
+    USER ||--o{ REVOKED_ACCESS_TOKEN : invalidates
 
     USER {
         uuid Id PK
@@ -234,9 +292,35 @@ erDiagram
         datetime CreatedAtUtc
         datetime UpdatedAtUtc
     }
+
+    AUTH_REFRESH_TOKEN {
+        uuid Id PK
+        uuid UserId FK
+        string TokenHash
+        datetime ExpiresAtUtc
+        datetime RevokedAtUtc
+        datetime CreatedAtUtc
+    }
+
+    REVOKED_ACCESS_TOKEN {
+        uuid Id PK
+        uuid UserId FK
+        string JwtId
+        datetime ExpiresAtUtc
+        datetime CreatedAtUtc
+    }
 ```
 
 `AgentCredential.AgentId` is an external reference to the authoritative agent record in `SRMCore` and is intentionally not enforced as a foreign key inside the auth database.
+
+### Target Persistence Split in `SRMAuth`
+
+The intended final persistence split is:
+
+- SQL Server for durable identity records
+- Redis for short-lived token state
+
+When that change is implemented, `AUTH_REFRESH_TOKEN` and `REVOKED_ACCESS_TOKEN` should no longer be persisted in the SQL auth database.
 
 ## Security Requirements
 
@@ -245,23 +329,23 @@ erDiagram
 - signed JWTs with managed signing key material
 - TLS for all inter-service communication
 - strict separation between human principals and machine principals
+- access-token revocation checks in every protected service
 - auditability for login, password change, and user administration events
 
 ## Remaining Implementation Plan
 
 ### Next Auth Steps
 
-- add refresh token persistence in Redis if refresh tokens are introduced
-- add logout and revocation support
-- replace the interim `SRMApp` in-memory authenticated session model
-- add full customer-ownership filtering and policy-based authorization across `SRMCore`
+- move refresh tokens and access-token revocation state from SQL Server to Redis
+- extend policy-based authorization where the current role model is still coarse
 - extend auth and authorization integration tests
+- move non-local secrets fully out of tracked configuration
 
 ## Remaining Implementation TODOs
 
-- Add refresh token persistence in Redis.
-- Add logout and token revocation support.
-- Replace the current in-memory authenticated session flow in `SRMApp`.
-- Add customer ownership filtering in `SRMCore` services.
+- Migrate refresh-token storage from SQL Server to Redis.
+- Migrate revoked access-token JTI storage from SQL Server to Redis.
+- Update startup and configuration so `SRMAuth` requires a Redis connection for token-state handling.
+- Update tests to cover Redis-backed refresh-token rotation and logout revocation behavior.
 - Add broader policy-based authorization in `SRMCore`.
 - Add unit and integration tests for auth and authorization behavior.

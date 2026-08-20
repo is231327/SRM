@@ -11,7 +11,7 @@ using SRMShared.DTOs.ShellyDevice;
 
 namespace SRMApp.Services;
 
-public class CoreApiClient(HttpClient httpClient, AuthSessionService authSessionService) : ICoreApiClient
+public class CoreApiClient(HttpClient httpClient, AuthSessionService authSessionService, IAuthApiClient authApiClient) : ICoreApiClient
 {
     private readonly HttpClient _httpClient = httpClient;
 
@@ -59,6 +59,12 @@ public class CoreApiClient(HttpClient httpClient, AuthSessionService authSession
     private async Task<List<T>> GetListAsync<T>(string path)
     {
         ConfigureBaseAddress();
+        var ensured = await authApiClient.EnsureAccessTokenAsync();
+        if (!ensured)
+        {
+            return [];
+        }
+
         ApplyBearerToken();
         try
         {
@@ -73,6 +79,12 @@ public class CoreApiClient(HttpClient httpClient, AuthSessionService authSession
     private async Task<TResponse?> PostAsync<TRequest, TResponse>(string path, TRequest dto)
     {
         ConfigureBaseAddress();
+        var ensured = await authApiClient.EnsureAccessTokenAsync();
+        if (!ensured)
+        {
+            return default;
+        }
+
         ApplyBearerToken();
         try
         {
@@ -88,6 +100,12 @@ public class CoreApiClient(HttpClient httpClient, AuthSessionService authSession
     private async Task<TResponse?> PutAsync<TRequest, TResponse>(string path, TRequest dto)
     {
         ConfigureBaseAddress();
+        var ensured = await authApiClient.EnsureAccessTokenAsync();
+        if (!ensured)
+        {
+            return default;
+        }
+
         ApplyBearerToken();
         try
         {
@@ -103,6 +121,12 @@ public class CoreApiClient(HttpClient httpClient, AuthSessionService authSession
     private async Task<bool> DeleteAsync(string path)
     {
         ConfigureBaseAddress();
+        var ensured = await authApiClient.EnsureAccessTokenAsync();
+        if (!ensured)
+        {
+            return false;
+        }
+
         ApplyBearerToken();
         try
         {

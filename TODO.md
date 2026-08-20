@@ -2,10 +2,15 @@
 
 ## Deferred Features
 
-- Integrate an on-premise ticket system and define the ticket creation workflow.
+- Implement the ticket integration defined in `TICKET_INTEGRATION_SPECIFICATION.md`.
+- Move `SRMAuth` token state from SQL Server to Redis so the implementation matches the required target architecture.
+- Keep SQL Server for identity data only in `SRMAuth`, and use Redis for refresh tokens and access-token revocation.
 - Add optional brightness and battery monitoring in the UI and alerting logic.
 - Add alerting rules and escalation logic.
+- Add persisted incident management that sits between raw monitoring data and external tickets.
 - Add ticket creation rules derived from sensor readings, ping failures, and maintenance windows.
+- Add duplicate suppression and correlation for repeated incident conditions.
+- Add ticket resolution and closure behavior once incident lifecycle rules are defined.
 - Add audit logging for configuration changes and critical events.
 - Add soft delete or archival strategy for historical business data where required.
 - Add database migrations and a repeatable database recreation workflow for the SQL Server Docker container.
@@ -18,20 +23,19 @@
 - Add uniqueness constraints and matching API/database enforcement where business keys must be unique.
 - Add service-layer business validation beyond DTO annotations where required.
 - Review whether `AgentReadDto.ApiKeyReference` should remain exposed in API responses.
-- Replace the current `SRMAuth` implementation with the documented SQL + Redis based target that includes refresh tokens and revocation.
 - Keep auth role definitions aligned between enum-backed code roles and seeded database roles.
 - Move development-only auth seed passwords out of tracked JSON configuration before any non-local deployment.
 - Move development-only API credentials and endpoint values to environment-specific secret management before any non-local deployment.
-- Add refresh token issuance, rotation, logout, and revocation to `SRMAuth`.
+- Add Redis-backed integration tests for refresh-token rotation, logout, and token revocation once Redis is introduced.
 - Expand tests for customer-scoped authorization behavior in `SRMCore`.
 - Replace the temporary shared development JWT signing key configuration with environment-based secret management.
 - Add user deletion or deactivation strategy decision for administrative user management.
-- Add policy-based authorization and customer ownership filtering across the complete `SRMCore` CRUD surface.
+- Refine policy-based authorization where broader or more explicit policies are still useful.
 - Extend role-aware frontend behavior beyond the current navigation and user-management entry points.
 - Add a clearer user-facing distinction between deactivate, reactivate, and delete operations in the administrative UI.
 - Add broader automated tests for password-policy validation and password-change failure cases.
 - Add integration tests for `SRMAuth` authorization scope and password-management endpoints.
-- Replace the interim `SRMApp` in-memory auth session handling with a more robust server-side authenticated session model.
+- Further harden the current `SRMApp` server-side authenticated session model for production deployment.
 - Add regression tests for the forced password-change flow in `SRMApp` and `SRMAuth`.
 - Add end-to-end tests for password change, password reset, profile update, and agent monitoring flows.
 - Consider whether agent credential management should later support delete, revoke, or multiple credentials per agent.
@@ -56,6 +60,7 @@
 - CRUD pages exist for the current domain entities, including `MonitoredDevicePingResult`.
 - Authentication is active across `SRMAuth`, `SRMCore`, and the current `SRMApp` UI flow.
 - The authentication and authorization concept is documented in `AUTHENTICATION_AUTHORIZATION_CONCEPT.md`.
+- The current auth implementation still stores token state in SQL Server and therefore does not yet fully match the required SQL-plus-Redis target architecture.
 - A dedicated authenticated agent reporting path exists in `SRMCore`.
 - `SRMAgent` loads runtime configuration from `SRMCore`, polls configured virtual Shelly devices, and executes monitored-device ping checks in a background worker.
 - Monitored-device ping results are persisted in `SRMCore`, and the agent reports consecutive failure counts plus failure-threshold state.
@@ -63,6 +68,8 @@
 - Door state remains part of `SensorReading` instead of being modeled as a separate domain entity.
 - `SensorReading` references only `ShellyDevice`; `Agent` and `ServerRoom` are derived relations.
 - Human users can manage their own profile and password.
+- Access tokens can be refreshed and revoked through `SRMAuth`.
+- Logout revokes both refresh tokens and the active access-token JTI.
 - Administrative password resets force the target user to change the password on next login.
 - Ticket integration remains out of scope for the current iteration.
 
@@ -75,6 +82,7 @@
 - Because this version renamed the auth-side machine principal model to `AgentCredential`, the auth SQL Server data volume or database must be recreated before runtime testing if the old auth schema still exists.
 - Because this version removed the obsolete `AgentCredentials -> Agent` foreign key from `SRMAuth`, the auth SQL Server data volume or database must be recreated before runtime testing if the old auth schema still exists.
 - When you start the next manual test round, include authentication, forced password change after admin reset, self-service profile update, password-policy validation, and the agent monitoring flow in the test scope.
+- When the auth schema changes again, the SQL Server Docker database or volume must be recreated unless the project is moved to EF Core migrations.
 
 ## Frontend Scope
 
