@@ -2,6 +2,7 @@
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
@@ -23,6 +24,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Using Include="NUnit.Framework" />
     <ProjectReference Include="..\SRMCore\SRMCore.csproj" />
     <ProjectReference Include="..\SRMAuth\SRMAuth.csproj" />
     <ProjectReference Include="..\SRMShared\SRMShared.csproj" />
