@@ -1,6 +1,5 @@
 using System.Net.Http.Json;
-using Microsoft.Extensions.Options;
-using SRMAgent.Configuration;
+using Microsoft.Extensions.Configuration;
 using SRMAgent.Services.Interfaces;
 using SRMShared.DTOs.Auth;
 
@@ -8,7 +7,7 @@ namespace SRMAgent.Services;
 
 public class AgentAuthApiClient(
     HttpClient httpClient,
-    IOptions<AgentApiOptions> options) : IAgentAuthApiClient
+    IConfiguration configuration) : IAgentAuthApiClient
 {
     public async Task<string?> LoginAsync(CancellationToken cancellationToken = default)
     {
@@ -16,8 +15,8 @@ public class AgentAuthApiClient(
             "api/auth/agent/login",
             new AgentLoginRequestDto
             {
-                ClientIdentifier = options.Value.ClientIdentifier,
-                ClientSecret = options.Value.ClientSecret
+                ClientIdentifier = configuration["AgentApi:ClientIdentifier"] ?? string.Empty,
+                ClientSecret = configuration["AgentApi:ClientSecret"] ?? string.Empty
             },
             cancellationToken);
 

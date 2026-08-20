@@ -1,16 +1,17 @@
 using System.Net.Http.Json;
-using Microsoft.Extensions.Options;
+using System.Net.Http.Headers;
 using SRMShared.DTOs.Agent;
 using SRMShared.DTOs.Customer;
 using SRMShared.DTOs.MaintenanceWindow;
 using SRMShared.DTOs.MonitoredDevice;
+using SRMShared.DTOs.MonitoredDevicePingResult;
 using SRMShared.DTOs.SensorReading;
 using SRMShared.DTOs.ServerRoom;
 using SRMShared.DTOs.ShellyDevice;
 
 namespace SRMApp.Services;
 
-public class CoreApiClient(HttpClient httpClient, IOptions<CoreApiOptions> options) : ICoreApiClient
+public class CoreApiClient(HttpClient httpClient, AuthSessionService authSessionService) : ICoreApiClient
 {
     private readonly HttpClient _httpClient = httpClient;
 
@@ -40,6 +41,11 @@ public class CoreApiClient(HttpClient httpClient, IOptions<CoreApiOptions> optio
     public async Task<MonitoredDeviceReadDto?> UpdateMonitoredDeviceAsync(Guid id, MonitoredDeviceUpdateDto dto) => await PutAsync<MonitoredDeviceUpdateDto, MonitoredDeviceReadDto>($"api/monitoreddevices/{id}", dto);
     public async Task<bool> DeleteMonitoredDeviceAsync(Guid id) => await DeleteAsync($"api/monitoreddevices/{id}");
 
+    public async Task<List<MonitoredDevicePingResultReadDto>> GetMonitoredDevicePingResultsAsync() => await GetListAsync<MonitoredDevicePingResultReadDto>("api/monitoreddevicepingresults");
+    public async Task<MonitoredDevicePingResultReadDto?> CreateMonitoredDevicePingResultAsync(MonitoredDevicePingResultCreateDto dto) => await PostAsync<MonitoredDevicePingResultCreateDto, MonitoredDevicePingResultReadDto>("api/monitoreddevicepingresults", dto);
+    public async Task<MonitoredDevicePingResultReadDto?> UpdateMonitoredDevicePingResultAsync(Guid id, MonitoredDevicePingResultUpdateDto dto) => await PutAsync<MonitoredDevicePingResultUpdateDto, MonitoredDevicePingResultReadDto>($"api/monitoreddevicepingresults/{id}", dto);
+    public async Task<bool> DeleteMonitoredDevicePingResultAsync(Guid id) => await DeleteAsync($"api/monitoreddevicepingresults/{id}");
+
     public async Task<List<MaintenanceWindowReadDto>> GetMaintenanceWindowsAsync() => await GetListAsync<MaintenanceWindowReadDto>("api/maintenancewindows");
     public async Task<MaintenanceWindowReadDto?> CreateMaintenanceWindowAsync(MaintenanceWindowCreateDto dto) => await PostAsync<MaintenanceWindowCreateDto, MaintenanceWindowReadDto>("api/maintenancewindows", dto);
     public async Task<MaintenanceWindowReadDto?> UpdateMaintenanceWindowAsync(Guid id, MaintenanceWindowUpdateDto dto) => await PutAsync<MaintenanceWindowUpdateDto, MaintenanceWindowReadDto>($"api/maintenancewindows/{id}", dto);
@@ -53,6 +59,7 @@ public class CoreApiClient(HttpClient httpClient, IOptions<CoreApiOptions> optio
     private async Task<List<T>> GetListAsync<T>(string path)
     {
         ConfigureBaseAddress();
+        ApplyBearerToken();
         try
         {
             return await _httpClient.GetFromJsonAsync<List<T>>(path) ?? [];
@@ -66,6 +73,7 @@ public class CoreApiClient(HttpClient httpClient, IOptions<CoreApiOptions> optio
     private async Task<TResponse?> PostAsync<TRequest, TResponse>(string path, TRequest dto)
     {
         ConfigureBaseAddress();
+        ApplyBearerToken();
         try
         {
             var response = await _httpClient.PostAsJsonAsync(path, dto);
@@ -80,6 +88,7 @@ public class CoreApiClient(HttpClient httpClient, IOptions<CoreApiOptions> optio
     private async Task<TResponse?> PutAsync<TRequest, TResponse>(string path, TRequest dto)
     {
         ConfigureBaseAddress();
+        ApplyBearerToken();
         try
         {
             var response = await _httpClient.PutAsJsonAsync(path, dto);
@@ -94,6 +103,7 @@ public class CoreApiClient(HttpClient httpClient, IOptions<CoreApiOptions> optio
     private async Task<bool> DeleteAsync(string path)
     {
         ConfigureBaseAddress();
+        ApplyBearerToken();
         try
         {
             var response = await _httpClient.DeleteAsync(path);
@@ -117,9 +127,13 @@ public class CoreApiClient(HttpClient httpClient, IOptions<CoreApiOptions> optio
 
     private void ConfigureBaseAddress()
     {
-        if (_httpClient.BaseAddress is null)
-        {
-            _httpClient.BaseAddress = new Uri(options.Value.BaseUrl);
-        }
+        ArgumentNullException.ThrowIfNull(_httpClient.BaseAddress);
+    }
+
+    private void ApplyBearerToken()
+    {
+        _httpClient.DefaultRequestHeaders.Authorization = authSessionService.IsAuthenticated
+            ? new AuthenticationHeaderValue("Bearer", authSessionService.AccessToken)
+            : null;
     }
 }

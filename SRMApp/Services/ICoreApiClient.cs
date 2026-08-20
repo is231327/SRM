@@ -2,6 +2,7 @@ using SRMShared.DTOs.Agent;
 using SRMShared.DTOs.Customer;
 using SRMShared.DTOs.MaintenanceWindow;
 using SRMShared.DTOs.MonitoredDevice;
+using SRMShared.DTOs.MonitoredDevicePingResult;
 using SRMShared.DTOs.SensorReading;
 using SRMShared.DTOs.ServerRoom;
 using SRMShared.DTOs.ShellyDevice;
@@ -35,6 +36,11 @@ public interface ICoreApiClient
     Task<MonitoredDeviceReadDto?> CreateMonitoredDeviceAsync(MonitoredDeviceCreateDto dto);
     Task<MonitoredDeviceReadDto?> UpdateMonitoredDeviceAsync(Guid id, MonitoredDeviceUpdateDto dto);
     Task<bool> DeleteMonitoredDeviceAsync(Guid id);
+
+    Task<List<MonitoredDevicePingResultReadDto>> GetMonitoredDevicePingResultsAsync();
+    Task<MonitoredDevicePingResultReadDto?> CreateMonitoredDevicePingResultAsync(MonitoredDevicePingResultCreateDto dto);
+    Task<MonitoredDevicePingResultReadDto?> UpdateMonitoredDevicePingResultAsync(Guid id, MonitoredDevicePingResultUpdateDto dto);
+    Task<bool> DeleteMonitoredDevicePingResultAsync(Guid id);
 
     Task<List<MaintenanceWindowReadDto>> GetMaintenanceWindowsAsync();
     Task<MaintenanceWindowReadDto?> CreateMaintenanceWindowAsync(MaintenanceWindowCreateDto dto);

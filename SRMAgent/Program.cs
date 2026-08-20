@@ -10,33 +10,23 @@ public class Program
     public static void Main(string[] args)
     {
         var builder = WebApplication.CreateBuilder(args);
-        builder.Services.Configure<AgentApiOptions>(builder.Configuration.GetSection(AgentApiOptions.SectionName));
         builder.Services.Configure<AgentRuntimeOptions>(builder.Configuration.GetSection(AgentRuntimeOptions.SectionName));
         builder.Services.AddControllers();
         builder.Services.AddOpenApi();
         builder.Services.AddHttpClient<IAgentAuthApiClient, AgentAuthApiClient>((serviceProvider, client) =>
         {
-            var options = serviceProvider.GetRequiredService<IConfiguration>()
-                .GetSection(AgentApiOptions.SectionName)
-                .Get<AgentApiOptions>() ?? new AgentApiOptions();
-
-            client.BaseAddress = new Uri(options.AuthBaseUrl);
+            var configuration = serviceProvider.GetRequiredService<IConfiguration>();
+            client.BaseAddress = new Uri(configuration["AgentApi:AuthBaseUrl"] ?? throw new InvalidOperationException("Missing configuration value 'AgentApi:AuthBaseUrl'."));
         });
         builder.Services.AddHttpClient<IAgentCoreApiClient, AgentCoreApiClient>((serviceProvider, client) =>
         {
-            var options = serviceProvider.GetRequiredService<IConfiguration>()
-                .GetSection(AgentApiOptions.SectionName)
-                .Get<AgentApiOptions>() ?? new AgentApiOptions();
-
-            client.BaseAddress = new Uri(options.CoreBaseUrl);
+            var configuration = serviceProvider.GetRequiredService<IConfiguration>();
+            client.BaseAddress = new Uri(configuration["AgentApi:CoreBaseUrl"] ?? throw new InvalidOperationException("Missing configuration value 'AgentApi:CoreBaseUrl'."));
         });
         builder.Services.AddHttpClient<IAgentRuntimeApiClient, AgentRuntimeApiClient>((serviceProvider, client) =>
         {
-            var options = serviceProvider.GetRequiredService<IConfiguration>()
-                .GetSection(AgentApiOptions.SectionName)
-                .Get<AgentApiOptions>() ?? new AgentApiOptions();
-
-            client.BaseAddress = new Uri(options.CoreBaseUrl);
+            var configuration = serviceProvider.GetRequiredService<IConfiguration>();
+            client.BaseAddress = new Uri(configuration["AgentApi:CoreBaseUrl"] ?? throw new InvalidOperationException("Missing configuration value 'AgentApi:CoreBaseUrl'."));
         });
         builder.Services.AddHttpClient<IVirtualShellyClient, VirtualShellyClient>();
         builder.Services.AddSingleton<AgentRuntimeCache>();

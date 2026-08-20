@@ -1,0 +1,160 @@
+@page "/profile"
+@inherits LocalizedComponentBase
+@inject IAuthApiClient AuthApiClient
+@inject AuthSessionService AuthSessionService
+@inject NavigationManager NavigationManager
+@using SRMShared.Auth
+
+<PageTitle>@LanguageService.T("Profile")</PageTitle>
+
+@if (!AuthSessionService.IsAuthenticated)
+{
+    <div class="alert alert-warning">@LanguageService.T("UsersLoginRequired")</div>
+}
+else
+{
+    <div class="page-header">
+        <div>
+            <h1>@LanguageService.T("Profile")</h1>
+            <p>@LanguageService.T("ProfileDescription")</p>
+        </div>
+    </div>
+
+    @if (AuthSessionService.MustChangePassword)
+    {
+        <div class="alert alert-warning">@LanguageService.T("MustChangePasswordNotice")</div>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(statusMessage))
+    {
+        <div class="alert @(isErrorMessage ? "alert-danger" : "alert-info")">@statusMessage</div>
+    }
+
+    <div class="entity-grid">
+        <section class="form-card">
+            <h3>@LanguageService.T("ProfileDetails")</h3>
+            <EditForm Model="profileForm" OnValidSubmit="SaveProfileAsync">
+                <DataAnnotationsValidator />
+                <ValidationSummary />
+                <div class="form-grid">
+                    <div><label class="form-label">@LanguageService.T("Username")</label><input class="form-control" value="@AuthSessionService.CurrentUser?.Username" disabled /></div>
+                    <div><label class="form-label">@LanguageService.T("Email")</label><InputText class="form-control" @bind-Value="profileForm.Email" /></div>
+                    <div><label class="form-label">@LanguageService.T("FirstName")</label><InputText class="form-control" @bind-Value="profileForm.FirstName" /></div>
+                    <div><label class="form-label">@LanguageService.T("LastName")</label><InputText class="form-control" @bind-Value="profileForm.LastName" /></div>
+                    <div><label class="form-label">@LanguageService.T("Phone")</label><InputText class="form-control" @bind-Value="profileForm.PhoneNumber" /></div>
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary">@LanguageService.T("SaveProfile")</button>
+                </div>
+            </EditForm>
+        </section>
+
+        <section class="form-card">
+            <h3>@LanguageService.T("ChangePassword")</h3>
+            <p class="subtle">@LanguageService.T("PasswordPolicyHint")</p>
+            <EditForm Model="passwordForm" OnValidSubmit="ChangePasswordAsync">
+                <DataAnnotationsValidator />
+                <ValidationSummary />
+                <div class="form-grid">
+                    <div><label class="form-label">@LanguageService.T("CurrentPassword")</label><InputText class="form-control" type="password" @bind-Value="passwordForm.CurrentPassword" /></div>
+                    <div><label class="form-label">@LanguageService.T("NewPassword")</label><InputText class="form-control" type="password" @bind-Value="passwordForm.NewPassword" /></div>
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary">@LanguageService.T("ChangePassword")</button>
+                </div>
+            </EditForm>
+        </section>
+    </div>
+}
+
+@code {
+    private UpdateOwnProfileRequestDto profileForm = new();
+    private ChangePasswordRequestDto passwordForm = new();
+    private string? statusMessage;
+    private bool isErrorMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!AuthSessionService.IsAuthenticated)
+        {
+            NavigationManager.NavigateTo("/login");
+            return;
+        }
+
+        var profile = await AuthApiClient.GetOwnProfileAsync();
+        if (profile is null)
+        {
+            isErrorMessage = true;
+            statusMessage = LanguageService.T("ProfileLoadFailed");
+            return;
+        }
+
+        await AuthSessionService.UpdateCurrentUserAsync(profile);
+        profileForm = new UpdateOwnProfileRequestDto
+        {
+            Email = profile.Email,
+            FirstName = profile.FirstName,
+            LastName = profile.LastName,
+            PhoneNumber = profile.PhoneNumber
+        };
+    }
+
+    private async Task SaveProfileAsync()
+    {
+        statusMessage = null;
+        isErrorMessage = false;
+
+        var profile = await AuthApiClient.UpdateOwnProfileAsync(profileForm);
+        if (profile is null)
+        {
+            isErrorMessage = true;
+            statusMessage = LanguageService.T("ProfileSaveFailed");
+            return;
+        }
+
+        await AuthSessionService.UpdateCurrentUserAsync(profile);
+        statusMessage = LanguageService.T("ProfileSaved");
+    }
+
+    private async Task ChangePasswordAsync()
+    {
+        statusMessage = null;
+        isErrorMessage = false;
+
+        var errors = PasswordPolicy.Validate(passwordForm.NewPassword);
+        if (errors.Count > 0)
+        {
+            isErrorMessage = true;
+            statusMessage = string.Join(" ", errors);
+            return;
+        }
+
+        try
+        {
+            await AuthApiClient.ChangePasswordAsync(passwordForm);
+            passwordForm = new ChangePasswordRequestDto();
+            if (AuthSessionService.CurrentUser is not null)
+            {
+                var updatedProfile = new UserProfileDto
+                {
+                    Id = AuthSessionService.CurrentUser.Id,
+                    Username = AuthSessionService.CurrentUser.Username,
+                    Email = AuthSessionService.CurrentUser.Email,
+                    FirstName = AuthSessionService.CurrentUser.FirstName,
+                    LastName = AuthSessionService.CurrentUser.LastName,
+                    PhoneNumber = AuthSessionService.CurrentUser.PhoneNumber,
+                    Roles = AuthSessionService.CurrentUser.Roles,
+                    CustomerId = AuthSessionService.CurrentUser.CustomerId,
+                    MustChangePassword = false
+                };
+                await AuthSessionService.UpdateCurrentUserAsync(updatedProfile);
+            }
+            statusMessage = LanguageService.T("PasswordChanged");
+        }
+        catch (InvalidOperationException ex)
+        {
+            isErrorMessage = true;
+            statusMessage = ex.Message;
+        }
+    }
+}

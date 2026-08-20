@@ -1,13 +1,114 @@
 @rendermode InteractiveServer
+@inject AuthSessionService AuthSessionService
+@inject IAuthApiClient AuthApiClient
+@inject NavigationManager NavigationManager
 
-<Router AppAssembly="typeof(Program).Assembly">
-    <Found Context="routeData">
-        <RouteView RouteData="routeData" DefaultLayout="typeof(Layout.MainLayout)" />
-        <FocusOnNavigate RouteData="routeData" Selector="h1" />
-    </Found>
-    <NotFound>
-        <LayoutView Layout="typeof(Layout.MainLayout)">
-            <p>Page not found.</p>
-        </LayoutView>
-    </NotFound>
-</Router>
+@if (!isReady)
+{
+    <LayoutView Layout="typeof(Layout.MainLayout)">
+        <p>Loading...</p>
+    </LayoutView>
+}
+else
+{
+    <Router AppAssembly="typeof(Program).Assembly">
+        <Found Context="routeData">
+            @if (HandleRouteGuard(routeData.PageType))
+            {
+                <RouteView RouteData="routeData" DefaultLayout="typeof(Layout.MainLayout)" />
+                <FocusOnNavigate RouteData="routeData" Selector="h1" />
+            }
+        </Found>
+        <NotFound>
+            <LayoutView Layout="typeof(Layout.MainLayout)">
+                <p>Page not found.</p>
+            </LayoutView>
+        </NotFound>
+    </Router>
+}
+
+@code {
+    private static readonly HashSet<string> PublicPageNames =
+    [
+        "Home",
+        "Login",
+        "Help",
+        "Contact",
+        "Error"
+    ];
+
+    private bool isReady;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await AuthSessionService.InitializeAsync();
+
+        if (AuthSessionService.IsAuthenticated && !string.IsNullOrWhiteSpace(AuthSessionService.AccessToken))
+        {
+            var profile = await AuthApiClient.GetOwnProfileAsync(AuthSessionService.AccessToken);
+            if (profile is null)
+            {
+                await AuthSessionService.ClearAsync();
+            }
+            else
+            {
+                await AuthSessionService.UpdateCurrentUserAsync(profile);
+            }
+        }
+
+        AuthSessionService.AuthenticationChanged += OnAuthenticationChanged;
+        isReady = true;
+    }
+
+    private bool HandleRouteGuard(Type pageType)
+    {
+        var pageName = pageType.Name;
+        var relativePath = NavigationManager.ToBaseRelativePath(NavigationManager.Uri).Split('?', '#')[0];
+
+        if (!AuthSessionService.IsAuthenticated)
+        {
+            if (PublicPageNames.Contains(pageName))
+            {
+                return true;
+            }
+
+            NavigateTo("/login", relativePath);
+            return false;
+        }
+
+        if (AuthSessionService.MustChangePassword && pageName is not "Profile" and not "Login" and not "Error")
+        {
+            NavigateTo("/profile", relativePath);
+            return false;
+        }
+
+        if (pageName == "Login")
+        {
+            NavigateTo(AuthSessionService.MustChangePassword ? "/profile" : "/", relativePath);
+            return false;
+        }
+
+        return true;
+    }
+
+    private void NavigateTo(string target, string currentRelativePath)
+    {
+        var targetRelativePath = target.TrimStart('/');
+        if (string.Equals(currentRelativePath, targetRelativePath, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        _ = InvokeAsync(() => NavigationManager.NavigateTo(target));
+    }
+
+    private void OnAuthenticationChanged()
+    {
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        AuthSessionService.AuthenticationChanged -= OnAuthenticationChanged;
+    }
+}

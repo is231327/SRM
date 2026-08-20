@@ -1,0 +1,379 @@
+@page "/users"
+@inherits LocalizedComponentBase
+@inject IAuthApiClient AuthApiClient
+@inject ICoreApiClient CoreApiClient
+@inject AuthSessionService AuthSessionService
+@inject NavigationManager NavigationManager
+@using SRMShared.Auth
+
+<PageTitle>@LanguageService.T("Users")</PageTitle>
+
+@if (!AuthSessionService.IsAuthenticated)
+{
+    <div class="alert alert-warning">@LanguageService.T("UsersLoginRequired")</div>
+}
+else if (!AuthSessionService.CanManageUsers)
+{
+    <div class="alert alert-danger">@LanguageService.T("UsersAdminOnly")</div>
+}
+else
+{
+    <div class="page-header">
+        <div>
+            <h1>@LanguageService.T("Users")</h1>
+            <p>@LanguageService.T("UsersPageDescription")</p>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(statusMessage))
+    {
+        <div class="alert @(isErrorMessage ? "alert-danger" : "alert-info")">@statusMessage</div>
+    }
+
+    <div class="entity-grid">
+        <section class="entity-list">
+            @if (isLoading)
+            {
+                <p>@LanguageService.T("Loading")</p>
+            }
+            else if (users.Count == 0)
+            {
+                <p>@LanguageService.T("NoData")</p>
+            }
+            else
+            {
+                @foreach (var user in users)
+                {
+                    <article class="entity-card">
+                        <div class="entity-card-header">
+                            <div>
+                                <h3>@user.Username</h3>
+                                <div class="subtle">@user.FirstName @user.LastName</div>
+                                <div class="subtle">@user.Email</div>
+                                <div class="subtle">@FormatCustomer(user.CustomerId)</div>
+                                <div class="subtle">@LanguageService.T("UserRoles"): @string.Join(", ", user.Roles)</div>
+                                <div class="subtle">@LanguageService.T("LastLogin"): @FormatDate(user.LastLoginAtUtc)</div>
+                            </div>
+                            <span class="badge-soft">@(user.IsActive ? LanguageService.T("Active") : LanguageService.T("Inactive"))</span>
+                        </div>
+                        <div class="child-links">
+                            <button class="btn btn-outline-primary btn-sm" @onclick="() => BeginEdit(user)">@LanguageService.T("Edit")</button>
+                        </div>
+                    </article>
+                }
+            }
+        </section>
+
+        <section class="form-card">
+            <h3>@(editingId is null ? $"{LanguageService.T("Create")} {LanguageService.T("Users")}" : $"{LanguageService.T("Update")} {LanguageService.T("Users")}")</h3>
+            <EditForm Model="form" OnValidSubmit="SaveAsync">
+                <DataAnnotationsValidator />
+                <ValidationSummary />
+                <div class="form-grid">
+                    <div><label class="form-label">@LanguageService.T("Username")</label><InputText class="form-control" @bind-Value="form.Username" /></div>
+                    <div><label class="form-label">@LanguageService.T("Email")</label><InputText class="form-control" @bind-Value="form.Email" /></div>
+                    <div><label class="form-label">@LanguageService.T("FirstName")</label><InputText class="form-control" @bind-Value="form.FirstName" /></div>
+                    <div><label class="form-label">@LanguageService.T("LastName")</label><InputText class="form-control" @bind-Value="form.LastName" /></div>
+                    <div><label class="form-label">@LanguageService.T("Phone")</label><InputText class="form-control" @bind-Value="form.PhoneNumber" /></div>
+                    @if (editingId is null)
+                    {
+                        <div><label class="form-label">@LanguageService.T("Password")</label><InputText class="form-control" type="password" @bind-Value="createPassword" /></div>
+                    }
+                    <div>
+                        <label class="form-label">@LanguageService.T("Role")</label>
+                        <InputSelect class="form-select" @bind-Value="selectedRole" @bind-Value:after="SyncSelectedRole">
+                            @foreach (var role in GetAvailableRoles())
+                            {
+                                <option value="@role">@role</option>
+                            }
+                        </InputSelect>
+                    </div>
+                    <div>
+                        <label class="form-label">@LanguageService.T("Customer")</label>
+                        <InputSelect class="form-select" @bind-Value="selectedCustomerId" disabled="@AuthSessionService.IsCustomerAdmin">
+                            <option value="">@LanguageService.T("NoCustomer")</option>
+                            @foreach (var customer in customers)
+                            {
+                                <option value="@customer.Id.ToString()">@customer.Name</option>
+                            }
+                        </InputSelect>
+                    </div>
+                    <div class="form-check mt-4">
+                        <InputCheckbox class="form-check-input" @bind-Value="form.IsActive" />
+                        <label class="form-check-label">@LanguageService.T("Active")</label>
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary">@LanguageService.T("Save")</button>
+                    <button type="button" class="btn btn-outline-secondary" @onclick="ResetForm">@LanguageService.T("Cancel")</button>
+                </div>
+            </EditForm>
+            <p class="subtle">@LanguageService.T("PasswordPolicyHint")</p>
+
+            @if (editingId is not null)
+            {
+                <hr />
+                <h3>@LanguageService.T("AdminPasswordReset")</h3>
+                <p class="subtle">@LanguageService.T("PasswordPolicyHint")</p>
+                <EditForm Model="resetPasswordForm" OnValidSubmit="ResetManagedPasswordAsync">
+                    <DataAnnotationsValidator />
+                    <ValidationSummary />
+                    <div class="form-grid">
+                        <div><label class="form-label">@LanguageService.T("NewPassword")</label><InputText class="form-control" type="password" @bind-Value="resetPasswordForm.NewPassword" /></div>
+                    </div>
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-outline-primary">@LanguageService.T("ResetPassword")</button>
+                    </div>
+                </EditForm>
+            }
+        </section>
+    </div>
+}
+
+@code {
+    private readonly List<string> systemAdminRoles =
+    [
+        AuthRoles.ToName(AuthRoleType.SystemAdmin),
+        AuthRoles.ToName(AuthRoleType.Employee),
+        AuthRoles.ToName(AuthRoleType.CustomerAdmin),
+        AuthRoles.ToName(AuthRoleType.Customer)
+    ];
+
+    private readonly List<string> delegatedManagementRoles =
+    [
+        AuthRoles.ToName(AuthRoleType.CustomerAdmin),
+        AuthRoles.ToName(AuthRoleType.Customer)
+    ];
+
+    private bool isLoading = true;
+    private bool isErrorMessage;
+    private List<UserManagementDto> users = [];
+    private List<CustomerReadDto> customers = [];
+    private UpdateUserRequestDto form = new();
+    private string createPassword = string.Empty;
+    private ResetUserPasswordRequestDto resetPasswordForm = new();
+    private string selectedRole = AuthRoles.ToName(AuthRoleType.Employee);
+    private string? selectedCustomerId;
+    private Guid? editingId;
+    private string? statusMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!AuthSessionService.IsAuthenticated)
+        {
+            NavigationManager.NavigateTo("/login");
+            return;
+        }
+
+        if (AuthSessionService.CanManageCustomers)
+        {
+            customers = await CoreApiClient.GetCustomersAsync();
+        }
+        else if (AuthSessionService.IsCustomerAdmin && AuthSessionService.CustomerId.HasValue)
+        {
+            selectedCustomerId = AuthSessionService.CustomerId.Value.ToString();
+        }
+
+        ResetForm();
+        await LoadUsersAsync();
+    }
+
+    private async Task LoadUsersAsync()
+    {
+        isLoading = true;
+        try
+        {
+            users = await AuthApiClient.GetUsersAsync();
+        }
+        catch (InvalidOperationException ex)
+        {
+            isErrorMessage = true;
+            statusMessage = ex.Message;
+            users = [];
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        form.CustomerId = Guid.TryParse(selectedCustomerId, out var customerId) ? customerId : null;
+        if (AuthSessionService.IsCustomerAdmin && AuthSessionService.CustomerId.HasValue)
+        {
+            form.CustomerId = AuthSessionService.CustomerId.Value;
+        }
+
+        statusMessage = null;
+        isErrorMessage = false;
+
+        try
+        {
+            if (editingId is null)
+            {
+                if (string.IsNullOrWhiteSpace(createPassword))
+                {
+                    isErrorMessage = true;
+                    statusMessage = LanguageService.T("PasswordRequired");
+                    return;
+                }
+
+                var createPasswordErrors = PasswordPolicy.Validate(createPassword);
+                if (createPasswordErrors.Count > 0)
+                {
+                    isErrorMessage = true;
+                    statusMessage = string.Join(" ", createPasswordErrors);
+                    return;
+                }
+
+                var createRequest = new CreateUserRequestDto
+                {
+                    Username = form.Username,
+                    Email = form.Email,
+                    FirstName = form.FirstName,
+                    LastName = form.LastName,
+                    PhoneNumber = form.PhoneNumber,
+                    Password = createPassword,
+                    Roles = [selectedRole],
+                    CustomerId = form.CustomerId
+                };
+
+                var createdUser = await AuthApiClient.CreateUserAsync(createRequest);
+                statusMessage = string.Format(LanguageService.T("UserCreated"), createdUser?.Username);
+            }
+            else
+            {
+                var updatedUser = await AuthApiClient.UpdateUserAsync(editingId.Value, form);
+                statusMessage = string.Format(LanguageService.T("UserUpdated"), updatedUser?.Username);
+            }
+
+            ResetForm();
+            await LoadUsersAsync();
+        }
+        catch (InvalidOperationException ex)
+        {
+            isErrorMessage = true;
+            statusMessage = ex.Message;
+        }
+    }
+
+    private void BeginEdit(UserManagementDto user)
+    {
+        editingId = user.Id;
+        selectedRole = user.Roles.FirstOrDefault() ?? AuthRoles.ToName(AuthRoleType.Employee);
+        selectedCustomerId = AuthSessionService.IsCustomerAdmin
+            ? AuthSessionService.CustomerId?.ToString()
+            : user.CustomerId?.ToString();
+        createPassword = string.Empty;
+        resetPasswordForm = new ResetUserPasswordRequestDto();
+        form = new UpdateUserRequestDto
+        {
+            Username = user.Username,
+            Email = user.Email,
+            FirstName = user.FirstName,
+            LastName = user.LastName,
+            PhoneNumber = user.PhoneNumber,
+            Roles = [selectedRole],
+            CustomerId = user.CustomerId,
+            IsActive = user.IsActive
+        };
+    }
+
+    private void ResetForm()
+    {
+        editingId = null;
+        createPassword = string.Empty;
+        resetPasswordForm = new ResetUserPasswordRequestDto();
+        selectedRole = GetDefaultRole();
+        selectedCustomerId = AuthSessionService.IsCustomerAdmin
+            ? AuthSessionService.CustomerId?.ToString()
+            : null;
+        form = CreateForm();
+        isErrorMessage = false;
+    }
+
+    private void SyncSelectedRole()
+    {
+        form.Roles = [selectedRole];
+    }
+
+    private string FormatCustomer(Guid? customerId)
+    {
+        if (!customerId.HasValue)
+        {
+            return LanguageService.T("NoCustomer");
+        }
+
+        var customer = customers.FirstOrDefault(x => x.Id == customerId.Value);
+        if (customer is not null)
+        {
+            return customer.Name;
+        }
+
+        return AuthSessionService.CustomerId == customerId.Value
+            ? LanguageService.T("OwnCustomer")
+            : LanguageService.T("UnknownCustomer");
+    }
+
+    private string FormatDate(DateTime? value)
+    {
+        return value.HasValue
+            ? value.Value.ToLocalTime().ToString("g")
+            : LanguageService.T("Never");
+    }
+
+    private UpdateUserRequestDto CreateForm()
+    {
+        return new UpdateUserRequestDto
+        {
+            Roles = [GetDefaultRole()],
+            IsActive = true
+        };
+    }
+
+    private IReadOnlyCollection<string> GetAvailableRoles()
+    {
+        return AuthSessionService.IsSystemAdmin
+            ? systemAdminRoles
+            : delegatedManagementRoles;
+    }
+
+    private string GetDefaultRole()
+    {
+        return AuthSessionService.IsSystemAdmin
+            ? AuthRoles.ToName(AuthRoleType.Employee)
+            : AuthRoles.ToName(AuthRoleType.Customer);
+    }
+
+    private async Task ResetManagedPasswordAsync()
+    {
+        if (editingId is null)
+        {
+            return;
+        }
+
+        statusMessage = null;
+        isErrorMessage = false;
+
+        try
+        {
+            var resetPasswordErrors = PasswordPolicy.Validate(resetPasswordForm.NewPassword);
+            if (resetPasswordErrors.Count > 0)
+            {
+                isErrorMessage = true;
+                statusMessage = string.Join(" ", resetPasswordErrors);
+                return;
+            }
+
+            await AuthApiClient.ResetUserPasswordAsync(editingId.Value, resetPasswordForm);
+            resetPasswordForm = new ResetUserPasswordRequestDto();
+            statusMessage = LanguageService.T("ManagedPasswordResetSuccess");
+        }
+        catch (InvalidOperationException ex)
+        {
+            isErrorMessage = true;
+            statusMessage = ex.Message;
+        }
+    }
+}

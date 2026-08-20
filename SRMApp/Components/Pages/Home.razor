@@ -1,5 +1,6 @@
 @page "/"
 @inherits LocalizedComponentBase
+@inject AuthSessionService AuthSessionService
 
 <PageTitle>@LanguageService.T("AppTitle")</PageTitle>
 
@@ -8,9 +9,16 @@
     <h1>@LanguageService.T("WelcomeHeadline")</h1>
     <p>@LanguageService.T("WelcomeText")</p>
     <div class="hero-actions">
-        <a class="btn btn-light" href="/dashboard">@LanguageService.T("Dashboard")</a>
-        <a class="btn btn-outline-light" href="/customers">@LanguageService.T("Customers")</a>
-        <a class="btn btn-outline-light" href="/help">@LanguageService.T("Help")</a>
+        @if (AuthSessionService.IsAuthenticated)
+        {
+            <a class="btn btn-light" href="/dashboard">@LanguageService.T("Dashboard")</a>
+            <a class="btn btn-outline-light" href="/customers">@LanguageService.T("Customers")</a>
+            <a class="btn btn-outline-light" href="/help">@LanguageService.T("Help")</a>
+        }
+        else
+        {
+            <a class="btn btn-light" href="/login">@LanguageService.T("Login")</a>
+        }
     </div>
 </section>
 
@@ -22,8 +30,35 @@
     <div class="panel-card">
         <h3>@LanguageService.T("QuickActions")</h3>
         <div class="child-links">
-            <a class="btn btn-primary" href="/customers">@LanguageService.T("Customers")</a>
-            <a class="btn btn-outline-primary" href="/contact">@LanguageService.T("Contact")</a>
+            @if (AuthSessionService.IsAuthenticated)
+            {
+                <a class="btn btn-primary" href="/customers">@LanguageService.T("Customers")</a>
+                <a class="btn btn-outline-primary" href="/contact">@LanguageService.T("Contact")</a>
+            }
+            else
+            {
+                <a class="btn btn-primary" href="/login">@LanguageService.T("Login")</a>
+                <a class="btn btn-outline-primary" href="/help">@LanguageService.T("Help")</a>
+            }
         </div>
     </div>
 </div>
+
+@code {
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+        AuthSessionService.AuthenticationChanged += OnAuthenticationChanged;
+    }
+
+    private void OnAuthenticationChanged()
+    {
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    public override void Dispose()
+    {
+        AuthSessionService.AuthenticationChanged -= OnAuthenticationChanged;
+        base.Dispose();
+    }
+}

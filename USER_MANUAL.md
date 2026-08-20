@@ -2,49 +2,237 @@
 
 ## Purpose
 
-This manual describes the currently planned backend usage for the Server Room Monitoring project.
+This manual explains how to use the Server Room Monitoring application from a user perspective.
 
-At this stage, the backend is the main focus. The Core API will later be tested through Scalar.
+The system helps you:
 
-The shared domain model currently exists in `SRMShared` and is the basis for the upcoming backend implementation.
-The API payload contracts are defined through DTO classes in `SRMShared/DTOs`.
-These DTO contracts now also enforce input validation rules for required fields, formats, and value ranges.
+- manage customers
+- manage server rooms
+- manage monitoring devices
+- review collected monitoring data
+- manage your own profile and password
 
-The backend solution also contains an automated unit test project named `SRMUnitTests`.
-The solution also contains `SRMIntegrationTests` for tests that require a running SQL Server Docker container.
+## What You Can Do
 
-## Planned Backend Usage
+Depending on your role, you can use the application to:
 
-The Core API will allow a user or tester to:
+- sign in
+- switch between English and German
+- open the home page and dashboard
+- manage customers
+- manage server rooms
+- manage agents
+- manage Shelly devices
+- manage monitored devices
+- review ping results
+- review sensor readings
+- manage maintenance windows
+- manage users
+- manage agent credentials
+- update your own contact details
+- change your own password
 
-- Create and manage customers.
-- Create and manage server rooms.
-- Register and manage deployed agents.
-- Register and manage Shelly devices.
-- Create and manage monitored devices for network monitoring.
-- Create and manage maintenance windows.
-- View and manage stored sensor readings.
+## Navigation
 
-## Planned API Access
+The application uses a hierarchical structure.
 
-Once implemented, the Core API can be tested through the Scalar UI exposed by the `SRMCore` service in development mode.
+The usual path is:
 
-The current implementation uses SQL Server in a Docker container. Created data is persisted in the Docker volume until that volume is removed.
+1. Open `Customers`
+2. Choose a customer
+3. Open the related server rooms
+4. Open the related agents
+5. Open the related Shelly devices or monitored devices
+6. Review the collected monitoring data
 
-Internally, the API controllers delegate data access and business operations to backend service classes.
+You can usually move from the business context to the technical details step by step.
 
-The API scope for each domain entity is standard CRUD:
+## Login
 
-- Create
-- Read
-- Update
-- Delete
+To sign in:
+
+1. Open the login page.
+2. Enter your username and password.
+3. Confirm the login.
+
+After login, you will see only the areas that are allowed for your role.
+
+## Language Switching
+
+You can switch the application language between:
+
+- English
+- German
+
+The language switch affects the visible page texts in the frontend.
+
+## Dashboard
+
+The dashboard gives you a quick overview of the current system.
+
+It is intended as a starting point for navigation and a quick status check.
+
+## Managing Customers
+
+On the customer page, you can:
+
+- create customers
+- edit customers
+- delete customers
+
+From a customer entry, you can continue to the related server rooms.
+
+## Managing Server Rooms
+
+On the server room page, you can:
+
+- create server rooms
+- edit server rooms
+- delete server rooms
+
+From a server room entry, you can continue to:
+
+- agents
+- maintenance windows
+
+## Managing Agents
+
+On the agent page, you can:
+
+- create agents
+- edit agents
+- delete agents
+
+From an agent entry, you can continue to:
+
+- Shelly devices
+- monitored devices
+
+## Managing Shelly Devices
+
+On the Shelly device page, you can:
+
+- create Shelly devices
+- edit Shelly devices
+- delete Shelly devices
+
+From a Shelly device entry, you can open the related sensor readings.
+
+## Managing Monitored Devices
+
+On the monitored device page, you can:
+
+- create monitored devices
+- edit monitored devices
+- delete monitored devices
+
+From a monitored device entry, you can open the related ping results.
+
+## Reviewing Sensor Readings
+
+Sensor readings show the monitoring values reported from a Shelly device.
+
+Typical values include:
+
+- temperature
+- battery value
+- brightness
+- door status
+- recording time
+
+## Reviewing Ping Results
+
+Ping results show whether a monitored device was reachable.
+
+Typical values include:
+
+- reachable or not reachable
+- response time
+- failure count
+- time of the check
+- possible error message
+
+## Maintenance Windows
+
+Maintenance windows are used to record planned work periods.
+
+You can:
+
+- create maintenance windows
+- edit maintenance windows
+- delete maintenance windows
+
+These entries help distinguish planned work from unexpected events.
+
+## User Management
+
+If your role allows it, you can manage users.
+
+Typical actions are:
+
+- create users
+- edit users
+- reset passwords
+- activate or deactivate users
+
+Customer-related user management depends on your role.
+
+## Agent Credentials
+
+If your role allows it, you can manage agent credentials.
+
+These credentials are used by monitoring agents to connect to the system.
+
+Typical actions are:
+
+- create agent credentials
+- review existing agent credentials
+- update existing agent credentials
+
+## Profile and Password
+
+On the profile page, you can:
+
+- update your contact details
+- change your password
+
+If an administrator resets your password, you must set a new password after your next login before you can continue normal work.
+
+## Password Rules
+
+Passwords currently must contain:
+
+- at least 12 characters
+- at least one uppercase letter
+- at least one lowercase letter
+- at least one digit
+- at least one special character
+
+## Help and Contact
+
+The application contains:
+
+- a help page
+- a contact page
+
+These pages provide orientation and project-related contact information.
 
 ## Current Limitations
 
-- Authentication is not implemented yet.
-- Ticket system integration is not implemented yet.
-- The frontend is not part of the current implementation phase.
-- The SQL Server schema is currently initialized through application startup.
-- Door incidents are currently represented through sensor readings and are not stored in a separate table.
-- The SQL Server Docker data volume must be recreated after entity model changes with the current setup.
+At the current stage:
+
+- ticket system integration is not available yet
+- the application is still being expanded and improved
+- some advanced security and session features are planned for a later step
+
+## Test Reminder
+
+When testing the application, also check:
+
+- login
+- language switching
+- password change
+- password reset
+- profile update
+- sensor readings
+- ping results

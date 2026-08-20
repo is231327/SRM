@@ -1,0 +1,60 @@
+@page "/login"
+@inherits LocalizedComponentBase
+@inject IAuthApiClient AuthApiClient
+@inject AuthSessionService AuthSessionService
+@inject NavigationManager NavigationManager
+
+<PageTitle>@LanguageService.T("Login")</PageTitle>
+
+<div class="entity-grid">
+    <section class="form-card" style="max-width: 32rem; margin: 3rem auto;">
+        <h3>@LanguageService.T("Login")</h3>
+        @if (!string.IsNullOrWhiteSpace(errorMessage))
+        {
+            <div class="alert alert-danger">@errorMessage</div>
+        }
+        <EditForm Model="form" OnValidSubmit="LoginAsync">
+            <DataAnnotationsValidator />
+            <ValidationSummary />
+            <div class="form-grid">
+                <div>
+                    <label class="form-label">@LanguageService.T("Username")</label>
+                    <InputText class="form-control" @bind-Value="form.Username" />
+                </div>
+                <div>
+                    <label class="form-label">@LanguageService.T("Password")</label>
+                    <InputText class="form-control" type="password" @bind-Value="form.Password" />
+                </div>
+            </div>
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary">@LanguageService.T("Login")</button>
+            </div>
+        </EditForm>
+    </section>
+</div>
+
+@code {
+    private LoginRequestDto form = new();
+    private string? errorMessage;
+
+    private async Task LoginAsync()
+    {
+        errorMessage = null;
+        var token = await AuthApiClient.LoginAsync(form);
+        if (token is null)
+        {
+            errorMessage = "Login failed.";
+            return;
+        }
+
+        var profile = await AuthApiClient.GetOwnProfileAsync(token.AccessToken);
+        if (profile is null)
+        {
+            errorMessage = "Could not load the user profile.";
+            return;
+        }
+
+        await AuthSessionService.SetSessionAsync(token.AccessToken, profile);
+        NavigationManager.NavigateTo(profile.MustChangePassword ? "/profile" : "/");
+    }
+}

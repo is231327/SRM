@@ -36,6 +36,7 @@
                         <span class="badge-soft">@(item.IsActive ? LanguageService.T("Active") : "Inactive")</span>
                     </div>
                     <div class="child-links">
+                        <a class="btn btn-primary btn-sm" href="/monitored-device-ping-results?monitoredDeviceId=@item.Id">@LanguageService.T("MonitoredDevicePingResults")</a>
                         <button class="btn btn-outline-primary btn-sm" @onclick="() => BeginEdit(item)">@LanguageService.T("Edit")</button>
                         <button class="btn btn-outline-danger btn-sm" @onclick="() => DeleteAsync(item.Id)">@LanguageService.T("Delete")</button>
                     </div>

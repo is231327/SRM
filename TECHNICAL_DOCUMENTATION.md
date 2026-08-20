@@ -4,36 +4,48 @@
 
 This document describes the current backend target architecture for the Server Room Monitoring project.
 
-The current implementation phase focuses on the backend only. The first deliverable is the database design for the Core API. Authentication and ticket system integration are intentionally deferred to a later phase.
+As of Saturday, July 18, 2026, the project contains:
+
+- `SRMCore` as the main backend API
+- `SRMAuth` as the authentication and user-management API
+- `SRMApp` as the Blazor frontend
+- `SRMAgent` as the customer-side monitoring agent
+
+Ticket system integration is still intentionally deferred to a later phase.
 
 ## Backend Scope
 
 The Core API is responsible for:
 
-- Managing customers.
-- Managing server rooms and deployed agents.
-- Managing Shelly device registration data.
-- Managing monitored devices configured per agent.
-- Managing maintenance windows.
-- Storing sensor readings reported from Shelly devices.
+- managing customers
+- managing server rooms and deployed agents
+- managing Shelly device registration data
+- managing monitored devices configured per agent
+- storing monitored-device ping result history reported by agents
+- managing maintenance windows
+- storing sensor readings reported from Shelly devices
 
-The Core API will expose RESTful CRUD endpoints for each domain entity and will be documented through OpenAPI and Scalar.
+The Core API exposes RESTful CRUD endpoints for each current domain entity and is documented through OpenAPI and Scalar.
 
-The shared domain entities are implemented in `SRMShared` and are intended to be reused by the backend services.
+The shared domain entities are implemented in `SRMShared` and reused by the backend services.
 DTOs are implemented in `SRMShared/DTOs` with one folder per entity and a `BaseDto`, `CreateDto`, `UpdateDto`, and `ReadDto` structure.
 
-At the current stage, `SRMCore` exposes CRUD controllers for all domain entities using Entity Framework Core with SQL Server persistence.
+`SRMCore` exposes CRUD controllers for all current domain entities using Entity Framework Core with SQL Server persistence.
 
 The internal backend flow is structured as follows:
 
-- Controllers expose the REST API.
-- Controllers expose DTO-based request and response contracts.
-- Controllers share common CRUD flow through a DTO-aware generic `CrudControllerBase`.
-- DTO conversion is delegated to typed mapper services implementing `ICrudDtoMapper<TEntity, TCreateDto, TUpdateDto, TReadDto>`.
-- Service classes contain the application-facing CRUD logic.
-- Entity Framework Core handles database access through `SrmCoreDbContext`.
+- controllers expose the REST API
+- controllers expose DTO-based request and response contracts
+- controllers share common CRUD flow through a DTO-aware generic `CrudControllerBase`
+- DTO conversion is delegated to typed mapper services implementing `ICrudDtoMapper<TEntity, TCreateDto, TUpdateDto, TReadDto>`
+- service classes contain the application-facing CRUD logic
+- Entity Framework Core handles database access through `SrmCoreDbContext`
 
-DTO validation is defined on the DTO contracts through data annotations and small custom validation attributes. The current validation scope includes:
+## Validation
+
+DTO validation is defined on the DTO contracts through data annotations and small custom validation attributes.
+
+The current validation scope includes:
 
 - required fields
 - email format
@@ -45,6 +57,106 @@ DTO validation is defined on the DTO contracts through data annotations and smal
 - cross-field checks for server room temperature thresholds
 - cross-field checks for maintenance window start and end times
 
+For authentication-related password operations, the backend enforces a shared password policy in application logic:
+
+- minimum length: 12 characters
+- at least one uppercase letter
+- at least one lowercase letter
+- at least one digit
+- at least one special character
+
+The `SRMAuth` API returns explicit `400 Bad Request` responses for password-policy violations and invalid password-change attempts such as an incorrect current password or reusing the current password as the new password.
+
+## Authentication and Authorization
+
+The current authentication implementation includes:
+
+- `SRMAuth` issues JWT bearer tokens for human users and agents
+- `SRMCore` validates JWT bearer tokens issued by `SRMAuth`
+- `SRMApp` performs login against `SRMAuth` and forwards bearer tokens to `SRMCore`
+- `SRMAgent` performs machine login against `SRMAuth` and calls dedicated agent endpoints in `SRMCore`
+- machine principals are represented by `AgentCredential` records instead of human user accounts
+- `AgentCredential.AgentId` is stored in `SRMAuth` as an external reference to the corresponding agent in `SRMCore`, without a database-level foreign key across service boundaries
+
+The current dedicated agent reporting path is:
+
+- `POST /api/auth/agent/login` in `SRMAuth`
+- `GET /api/agent-runtime/configuration` in `SRMCore`
+- `POST /api/agent-reporting/sensor-readings` in `SRMCore`
+- `POST /api/agent-reporting/ping-results` in `SRMCore`
+
+The runtime configuration endpoint returns the authenticated agent together with its active Shelly devices and monitored devices.
+The reporting service accepts only Shelly devices and monitored devices that belong to the authenticated agent claim.
+
+## Frontend Scope
+
+`SRMApp` is a Blazor web application that provides the current management UI over the Core API.
+
+The current frontend structure includes:
+
+- a home page
+- a dashboard page
+- a login page
+- a role-aware user management page with create, list, and edit capabilities
+- a dedicated agent credential management page for machine credentials
+- a self-service profile page for human users
+- a customer management page
+- a server room management page
+- a server room detail page for hierarchical navigation
+- dedicated pages for agents, Shelly devices, monitored devices, monitored-device ping results, maintenance windows, and sensor readings
+- a help page
+- a contact page
+- a client-side language switch between English and German
+
+The current navigation model is hierarchical:
+
+- customers are the entry point
+- server rooms can be managed from the customer context
+- agents can be managed from the server room context
+- Shelly devices and monitored devices can be managed from the agent context
+- monitored-device ping results can be managed from the monitored device context
+- maintenance windows remain managed from the server room context
+- sensor readings can be managed from the Shelly device context
+
+`SRMApp` accesses backend data through typed HTTP clients and DTO contracts from `SRMShared`.
+It does not access `SRMCore` controllers or services directly in-process.
+
+The current development-phase UI authentication uses a scoped in-memory auth session inside the Blazor Server application and forwards bearer tokens to `SRMAuth` and `SRMCore`.
+The UI supports:
+
+- direct login against `SRMAuth`
+- self-service profile update and password change
+- user creation, listing, editing, deactivation, and administrative password reset for authorized user managers
+- agent credential creation, listing, editing, and secret rotation for authorized administrators and employees
+
+After an administrative password reset, the affected user is forced to change the password on the next login before normal navigation is available again.
+
+## Agent Scope
+
+`SRMAgent` contains the current authenticated monitoring flow for backend communication.
+
+The implementation includes:
+
+- typed HTTP clients for `SRMAuth` and `SRMCore`
+- agent login through `POST /api/auth/agent/login`
+- runtime configuration loading through `GET /api/agent-runtime/configuration`
+- a monitoring orchestrator that exchanges agent credentials for a bearer token
+- polling of configured virtual Shelly devices through the configured Shelly status endpoint
+- sensor reading submission to `SRMCore`
+- ICMP ping execution for configured monitored devices
+- ping result submission to `SRMCore`
+- exponential retry/backoff for transient auth, Core API, and Shelly communication failures
+- local tracking of consecutive ping failures with failure-threshold evaluation per monitored device
+- a hosted background worker that runs the monitoring cycle repeatedly
+- a local trigger endpoint in `SRMAgent` for manually running a monitoring cycle
+- a local Shelly webhook endpoint for immediate status ingestion
+
+The current agent implementation does not yet perform:
+
+- advanced alert generation or ticket creation based on the persisted failure state
+- richer webhook hardening if the final Shelly delivery model requires it
+- refresh-token handling, because refresh tokens are not implemented yet
+
 ## Test Status
 
 `SRMUnitTests` currently contains NUnit-based unit tests for:
@@ -54,28 +166,47 @@ DTO validation is defined on the DTO contracts through data annotations and smal
 - `AgentService`
 - `ShellyDeviceService`
 - `MonitoredDeviceService`
+- `MonitoredDevicePingResultService`
 - `MaintenanceWindowService`
 - `SensorReadingService`
+- `AgentReportingService`
+- `AgentRuntimeService`
 - `CustomersController`
 - `ServerRoomsController`
 - `AgentsController`
 - `ShellyDevicesController`
 - `MonitoredDevicesController`
+- `MonitoredDevicePingResultsController`
 - `MaintenanceWindowsController`
 - `SensorReadingsController`
+- `AgentReportingController`
+- `AgentRuntimeController`
 
 The service tests use the Entity Framework Core in-memory provider to verify CRUD behavior and audit timestamp handling.
 DTO validation rules are verified through dedicated unit tests in `SRMUnitTests`.
+`SRMUnitTests` also contain auth-focused unit coverage for password-policy validation, password-change failure behavior, and user-management authorization scope in `SRMAuth`.
+`SRMUnitTests` also verify that authenticated agents:
 
-`SRMIntegrationTests` is a separate NUnit project for real SQL Server-backed integration tests. These tests require the Docker SQL Server container to be running and use a dedicated integration test database.
+- may submit sensor readings only for Shelly devices that belong to their own agent identity
+- may retrieve only their own runtime configuration from `SRMCore`
+- may submit persisted ping-result reports only for their own monitored devices
+
+`SRMIntegrationTests` is a separate NUnit project for real SQL Server-backed integration tests.
+These tests require the Docker SQL Server container to be running and use dedicated integration test databases for `SRMCore` and `SRMAuth`.
+
+The frontend has been verified at build level through `dotnet build SRMApp\SRMApp.csproj`.
 
 ## Persistence Strategy
 
-- Primary relational database: Microsoft SQL Server.
-- SQL Server must run in a Docker container.
-- Database schema changes will require the database container or database instance to be recreated or migrated, depending on the chosen implementation approach.
-- No secrets must be stored directly in source code.
-- The current implementation uses Entity Framework Core and initializes the schema through `Database.EnsureCreated()`.
+- primary relational database: Microsoft SQL Server
+- SQL Server runs in a Docker container
+- `SRMCore` uses SQL Server through Entity Framework Core
+- `SRMAuth` currently also uses SQL Server for identity data
+- the current implementation initializes the schema through `Database.EnsureCreated()`
+- database schema changes require the SQL Server Docker data volume or database to be recreated unless the project is later switched to EF Core migrations
+- no secrets must be stored directly in source code
+- the initial auth seed users are read from the `AuthSeedData` section in the `SRMAuth` JSON configuration files
+- API endpoint base URLs for `SRMApp` and `SRMAgent` are read directly from their JSON configuration files
 
 ## Initial Data Model
 
@@ -88,6 +219,7 @@ erDiagram
     SERVER_ROOM ||--o{ MAINTENANCE_WINDOW : defines
     AGENT ||--o{ SHELLY_DEVICE : monitors_with
     AGENT ||--o{ MONITORED_DEVICE : monitors
+    MONITORED_DEVICE ||--o{ MONITORED_DEVICE_PING_RESULT : produces
     SHELLY_DEVICE ||--o{ SENSOR_READING : sources
 
     CUSTOMER {
@@ -153,6 +285,19 @@ erDiagram
         datetime UpdatedAtUtc
     }
 
+    MONITORED_DEVICE_PING_RESULT {
+        uuid Id PK
+        uuid MonitoredDeviceId FK
+        bool IsReachable
+        long RoundtripTimeMilliseconds
+        int ConsecutiveFailureCount
+        bool FailureThresholdReached
+        string ErrorMessage
+        datetime RecordedAtUtc
+        datetime CreatedAtUtc
+        datetime UpdatedAtUtc
+    }
+
     MAINTENANCE_WINDOW {
         uuid Id PK
         uuid ServerRoomId FK
@@ -196,13 +341,17 @@ The agent is the technical parent for both Shelly devices and other monitored de
 
 ### `ShellyDevice`
 
-Represents the Shelly sensor device assigned to a server room. It stores connection and identification data needed to integrate with either a physical or virtual Shelly device.
-
-The Shelly device is linked directly to the agent. This reflects that the agent is the component that actively communicates with the Shelly and forwards the collected data to the Core API.
+Represents the Shelly sensor device assigned to an agent. It stores connection and identification data needed to integrate with either a physical or virtual Shelly device.
 
 ### `MonitoredDevice`
 
 Represents one network endpoint that the agent must monitor by ICMP ping. It includes the configuration required to control the monitoring interval, timeout, and failure threshold.
+
+### `MonitoredDevicePingResult`
+
+Represents one persisted ICMP check result reported by the agent for a configured monitored device.
+
+It stores reachability, response time, consecutive failure count, and whether the configured failure threshold has been reached at the time of reporting.
 
 ### `MaintenanceWindow`
 
@@ -218,10 +367,9 @@ This table intentionally keeps the door state together with the other Shelly dat
 
 ## Notes and Open Design Decisions
 
-- Authentication is not yet modeled in the relational database because it is currently out of scope.
+- The authentication and authorization design is documented in `AUTHENTICATION_AUTHORIZATION_CONCEPT.md`.
+- Agents are authenticated through `AgentCredential` machine credentials instead of `AuthUser` human accounts.
 - Ticket integration is not yet modeled because the target on-premise system is not yet selected.
-- Ping result history is not yet included as a dedicated table. It can be added later if historical network availability reporting is required.
 - The current model treats `ServerRoom` as the aggregate root for `Agent` and `MaintenanceWindow`.
 - The current model treats `Agent` as the technical parent for `ShellyDevice` and `MonitoredDevice`.
-- Database changes will need coordinated updates to the SQL Server Docker setup once the actual persistence layer is implemented.
-- Because the current startup path uses `EnsureCreated`, schema changes require the SQL Server Docker data volume to be recreated unless the project is later switched to EF Core migrations.
+- The current frontend pages provide CRUD-oriented management structure, but deeper UX polish, richer validation feedback, and production-grade navigation behavior still need further iteration.

@@ -1,0 +1,167 @@
+@page "/monitored-device-ping-results"
+@rendermode InteractiveServer
+@inherits LocalizedComponentBase
+@inject ICoreApiClient ApiClient
+@using SRMShared.DTOs.MonitoredDevice
+@using SRMShared.DTOs.MonitoredDevicePingResult
+
+<PageTitle>@LanguageService.T("MonitoredDevicePingResults")</PageTitle>
+
+<div class="page-header">
+    <div>
+        <h1>@LanguageService.T("MonitoredDevicePingResults")</h1>
+        <p>@LanguageService.T("AgentChildren")</p>
+    </div>
+</div>
+
+<div class="entity-grid">
+    <section class="entity-list">
+        @if (isLoading)
+        {
+            <p>@LanguageService.T("Loading")</p>
+        }
+        else if (items.Count == 0)
+        {
+            <p>@LanguageService.T("NoData")</p>
+        }
+        else
+        {
+            @foreach (var item in items.OrderByDescending(x => x.RecordedAtUtc))
+            {
+                <article class="entity-card">
+                    <div class="entity-card-header">
+                        <div>
+                            <h3>@(item.IsReachable ? LanguageService.T("Reachable") : LanguageService.T("Inactive"))</h3>
+                            <div class="subtle">@LanguageService.T("RecordedAt"): @item.RecordedAtUtc.ToLocalTime()</div>
+                            <div class="subtle">@LanguageService.T("Roundtrip"): @item.RoundtripTimeMilliseconds ms</div>
+                            <div class="subtle">@LanguageService.T("FailureCount"): @item.ConsecutiveFailureCount | @LanguageService.T("ThresholdReached"): @(item.FailureThresholdReached ? "Yes" : "No")</div>
+                            @if (!string.IsNullOrWhiteSpace(item.ErrorMessage))
+                            {
+                                <div class="subtle">@LanguageService.T("ErrorMessage"): @item.ErrorMessage</div>
+                            }
+                        </div>
+                    </div>
+                    <div class="child-links">
+                        <button class="btn btn-outline-primary btn-sm" @onclick="() => BeginEdit(item)">@LanguageService.T("Edit")</button>
+                        <button class="btn btn-outline-danger btn-sm" @onclick="() => DeleteAsync(item.Id)">@LanguageService.T("Delete")</button>
+                    </div>
+                </article>
+            }
+        }
+    </section>
+
+    <section class="form-card">
+        <h3>@(editingId is null ? $"{LanguageService.T("Create")} {LanguageService.T("MonitoredDevicePingResults")}" : $"{LanguageService.T("Update")} {LanguageService.T("MonitoredDevicePingResults")}")</h3>
+        <EditForm Model="form" OnValidSubmit="SaveAsync">
+            <DataAnnotationsValidator />
+            <ValidationSummary />
+            <div class="form-grid">
+                <div>
+                    <label class="form-label">@LanguageService.T("MonitoredDevices")</label>
+                    <InputSelect class="form-select" @bind-Value="form.MonitoredDeviceId" disabled="@(monitoredDeviceId is not null)">
+                        <option value="@Guid.Empty">Select monitored device</option>
+                        @foreach (var device in monitoredDevicesForSelection)
+                        {
+                            <option value="@device.Id">@device.DisplayName</option>
+                        }
+                    </InputSelect>
+                </div>
+                <div><label class="form-label">@LanguageService.T("Roundtrip") (ms)</label><InputNumber class="form-control" @bind-Value="form.RoundtripTimeMilliseconds" /></div>
+                <div><label class="form-label">@LanguageService.T("FailureCount")</label><InputNumber class="form-control" @bind-Value="form.ConsecutiveFailureCount" /></div>
+                <div><label class="form-label">@LanguageService.T("RecordedAt")</label><InputDate class="form-control" @bind-Value="form.RecordedAtUtc" /></div>
+                <div><label class="form-label">@LanguageService.T("ErrorMessage")</label><InputText class="form-control" @bind-Value="form.ErrorMessage" /></div>
+                <div class="form-check mt-4"><InputCheckbox class="form-check-input" @bind-Value="form.IsReachable" /><label class="form-check-label">@LanguageService.T("Reachable")</label></div>
+                <div class="form-check mt-4"><InputCheckbox class="form-check-input" @bind-Value="form.FailureThresholdReached" /><label class="form-check-label">@LanguageService.T("ThresholdReached")</label></div>
+            </div>
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary">@LanguageService.T("Save")</button>
+                <button type="button" class="btn btn-outline-secondary" @onclick="ResetForm">@LanguageService.T("Cancel")</button>
+            </div>
+        </EditForm>
+    </section>
+</div>
+
+@code {
+    [SupplyParameterFromQuery] public Guid? monitoredDeviceId { get; set; }
+
+    private bool isLoading = true;
+    private List<MonitoredDevicePingResultReadDto> items = [];
+    private List<MonitoredDeviceReadDto> monitoredDevicesForSelection = [];
+    private MonitoredDevicePingResultCreateDto form = new() { RecordedAtUtc = DateTime.UtcNow };
+    private Guid? editingId;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (monitoredDeviceId is not null)
+        {
+            form.MonitoredDeviceId = monitoredDeviceId.Value;
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        isLoading = true;
+        var all = await ApiClient.GetMonitoredDevicePingResultsAsync();
+        monitoredDevicesForSelection = await ApiClient.GetMonitoredDevicesAsync();
+        items = monitoredDeviceId is null ? all : all.Where(x => x.MonitoredDeviceId == monitoredDeviceId).ToList();
+        isLoading = false;
+    }
+
+    private void BeginEdit(MonitoredDevicePingResultReadDto item)
+    {
+        editingId = item.Id;
+        form = new MonitoredDevicePingResultCreateDto
+        {
+            MonitoredDeviceId = item.MonitoredDeviceId,
+            IsReachable = item.IsReachable,
+            RoundtripTimeMilliseconds = item.RoundtripTimeMilliseconds,
+            ConsecutiveFailureCount = item.ConsecutiveFailureCount,
+            FailureThresholdReached = item.FailureThresholdReached,
+            ErrorMessage = item.ErrorMessage,
+            RecordedAtUtc = item.RecordedAtUtc
+        };
+    }
+
+    private async Task SaveAsync()
+    {
+        if (editingId is null)
+        {
+            await ApiClient.CreateMonitoredDevicePingResultAsync(form);
+        }
+        else
+        {
+            await ApiClient.UpdateMonitoredDevicePingResultAsync(editingId.Value, new MonitoredDevicePingResultUpdateDto
+            {
+                MonitoredDeviceId = form.MonitoredDeviceId,
+                IsReachable = form.IsReachable,
+                RoundtripTimeMilliseconds = form.RoundtripTimeMilliseconds,
+                ConsecutiveFailureCount = form.ConsecutiveFailureCount,
+                FailureThresholdReached = form.FailureThresholdReached,
+                ErrorMessage = form.ErrorMessage,
+                RecordedAtUtc = form.RecordedAtUtc
+            });
+        }
+
+        ResetForm();
+        await LoadAsync();
+    }
+
+    private async Task DeleteAsync(Guid id)
+    {
+        await ApiClient.DeleteMonitoredDevicePingResultAsync(id);
+        if (editingId == id)
+        {
+            ResetForm();
+        }
+
+        await LoadAsync();
+    }
+
+    private void ResetForm()
+    {
+        editingId = null;
+        form = new MonitoredDevicePingResultCreateDto { MonitoredDeviceId = monitoredDeviceId ?? Guid.Empty, RecordedAtUtc = DateTime.UtcNow };
+    }
+}

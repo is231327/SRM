@@ -1,6 +1,7 @@
 using SRMApp.Components;
 using SRMApp.Localization;
 using SRMApp.Services;
+using Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage;
 
 namespace SRMApp;
 
@@ -13,8 +14,18 @@ public class Program
         // Add services to the container.
         builder.Services.AddRazorComponents()
             .AddInteractiveServerComponents();
-        builder.Services.Configure<CoreApiOptions>(builder.Configuration.GetSection(CoreApiOptions.SectionName));
-        builder.Services.AddHttpClient<ICoreApiClient, CoreApiClient>();
+        builder.Services.AddHttpClient<ICoreApiClient, CoreApiClient>((serviceProvider, client) =>
+        {
+            var configuration = serviceProvider.GetRequiredService<IConfiguration>();
+            client.BaseAddress = new Uri(configuration["CoreApi:BaseUrl"] ?? throw new InvalidOperationException("Missing configuration value 'CoreApi:BaseUrl'."));
+        });
+        builder.Services.AddHttpClient<IAuthApiClient, AuthApiClient>((serviceProvider, client) =>
+        {
+            var configuration = serviceProvider.GetRequiredService<IConfiguration>();
+            client.BaseAddress = new Uri(configuration["AuthApi:BaseUrl"] ?? throw new InvalidOperationException("Missing configuration value 'AuthApi:BaseUrl'."));
+        });
+        builder.Services.AddScoped<ProtectedSessionStorage>();
+        builder.Services.AddScoped<AuthSessionService>();
         builder.Services.AddScoped<LanguageService>();
 
         var app = builder.Build();
