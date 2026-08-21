@@ -1,89 +1,74 @@
 @page "/customers"
 @rendermode InteractiveServer
 @inherits LocalizedComponentBase
+@inject IOverviewDataService OverviewDataService
 @inject ICoreApiClient ApiClient
 
 <PageTitle>@LanguageService.T("Customers")</PageTitle>
 
-<div class="page-header">
-    <div>
-        <h1>@LanguageService.T("Customers")</h1>
-        <p>@LanguageService.T("CustomersPageDescription")</p>
+<PageHeader Title="@LanguageService.T("Customers")" Description="@LanguageService.T("CustomersOverviewDescription")">
+    <Actions>
+        <a class="btn btn-primary" href="/customers/create">@LanguageService.T("CreateCustomer")</a>
+    </Actions>
+</PageHeader>
+
+@if (isLoading)
+{
+    <p>@LanguageService.T("Loading")</p>
+}
+else if (!customers.Any())
+{
+    <div class="empty-state">
+        <h3>@LanguageService.T("NoData")</h3>
+        <p class="subtle">@LanguageService.T("CustomersOverviewDescription")</p>
+        <a class="btn btn-primary" href="/customers/create">@LanguageService.T("CreateCustomer")</a>
     </div>
-</div>
-
-<div class="entity-grid">
-    <section class="entity-list">
-        @if (isLoading)
+}
+else
+{
+    <div class="stats-grid">
+        @foreach (var customer in customers)
         {
-            <p>@LanguageService.T("Loading")</p>
+            <SummaryStatCard CardClass="@GetCustomerCardClass(customer.Id)"
+                             IconClass="stat-icon-customers"
+                             Title="@customer.Name"
+                             Value="@GetIncidentCount(customer.Id).ToString()"
+                             SummaryText="@GetCustomerSummaryText(customer)"
+                             SummaryTextClass="@OverviewUiHelper.GetStatusTextClass(GetCustomerCardClass(customer.Id))"
+                             SecondaryText="@GetCustomerSecondaryText(customer)"
+                             ViewAllHref="@($"/customers/{customer.Id}/details")"
+                             ViewAllText="@LanguageService.T("Overview")">
+                <Details>
+                    <div>@LanguageService.Tf("CustomerContactInfo", GetContactLine(customer))</div>
+                </Details>
+                <Actions>
+                    <a class="btn btn-outline-primary btn-sm" href="/customers/@customer.Id/details">@LanguageService.T("Overview")</a>
+                    <a class="btn btn-outline-primary btn-sm" href="/customers/@customer.Id/edit">@LanguageService.T("Edit")</a>
+                    <button class="btn btn-outline-danger btn-sm" @onclick="() => DeleteAsync(customer.Id)">@LanguageService.T("Delete")</button>
+                </Actions>
+            </SummaryStatCard>
         }
-        else if (customers.Count == 0)
-        {
-            <p>@LanguageService.T("NoData")</p>
-        }
-        else
-        {
-            @foreach (var customer in customers)
-            {
-                <article class="entity-card">
-                    <div class="entity-card-header">
-                        <div>
-                            <h3>@customer.Name</h3>
-                            <div class="subtle">@customer.ContactEmail</div>
-                            <div class="subtle">@customer.ContactPhone</div>
-                        </div>
-                        <span class="badge-soft">@(customer.IsActive ? LanguageService.T("Active") : "Inactive")</span>
-                    </div>
-                    <div class="child-links">
-                        <a class="btn btn-primary btn-sm" href="/customers/@customer.Id/details">@LanguageService.T("Overview")</a>
-                        <a class="btn btn-outline-primary btn-sm" href="/customers/@customer.Id/edit">@LanguageService.T("Edit")</a>
-                        <button class="btn btn-outline-danger btn-sm" @onclick="() => DeleteAsync(customer.Id)">@LanguageService.T("Delete")</button>
-                    </div>
-                </article>
-            }
-        }
-    </section>
-
-    <section class="form-card">
-        <h3>@($"{LanguageService.T("Create")} {LanguageService.T("Customers")}")</h3>
-        <EditForm Model="form" OnValidSubmit="SaveAsync">
-            <DataAnnotationsValidator />
-            <ValidationSummary />
-            <div class="form-grid">
-                <div><label class="form-label">@LanguageService.T("Name")</label><InputText class="form-control" @bind-Value="form.Name" /></div>
-                <div><label class="form-label">@LanguageService.T("ExternalReference")</label><InputText class="form-control" @bind-Value="form.ExternalReference" /></div>
-                <div><label class="form-label">@LanguageService.T("Email")</label><InputText class="form-control" @bind-Value="form.ContactEmail" /></div>
-                <div><label class="form-label">@LanguageService.T("Phone")</label><InputText class="form-control" @bind-Value="form.ContactPhone" /></div>
-                <div class="form-check mt-4"><InputCheckbox class="form-check-input" @bind-Value="form.IsActive" /><label class="form-check-label">@LanguageService.T("Active")</label></div>
-            </div>
-            <div class="form-actions">
-                <button type="submit" class="btn btn-primary">@LanguageService.T("Save")</button>
-                <button type="button" class="btn btn-outline-secondary" @onclick="ResetForm">@LanguageService.T("Cancel")</button>
-            </div>
-        </EditForm>
-    </section>
-</div>
+    </div>
+}
 
 @code {
     private bool isLoading = true;
-    private List<CustomerReadDto> customers = [];
-    private CustomerCreateDto form = new() { IsActive = true };
+    private DashboardOverviewData? overview;
+    private IReadOnlyList<CustomerReadDto> customers => overview?.Customers ?? [];
+    private IReadOnlyList<ServerRoomReadDto> serverRooms => overview?.ServerRooms ?? [];
+    private IReadOnlyList<AgentReadDto> agents => overview?.Agents ?? [];
+    private IReadOnlyList<IncidentReadDto> incidents => overview?.Incidents ?? [];
+    private IReadOnlyDictionary<Guid, int> incidentCountByCustomerId => overview?.IncidentCountByCustomerId ?? new Dictionary<Guid, int>();
+    private IReadOnlyDictionary<Guid, DateTime?> lastActivityByCustomerId => overview?.LastActivityByCustomerId ?? new Dictionary<Guid, DateTime?>();
+    private IReadOnlyDictionary<Guid, string> cardClassByCustomerId => overview?.CardClassByCustomerId ?? new Dictionary<Guid, string>();
 
     protected override async Task OnInitializedAsync() => await LoadAsync();
 
     private async Task LoadAsync()
     {
         isLoading = true;
-        customers = await ApiClient.GetCustomersAsync();
+        overview = await OverviewDataService.GetDashboardOverviewAsync();
         isLoading = false;
-    }
-
-    private async Task SaveAsync()
-    {
-        await ApiClient.CreateCustomerAsync(form);
-        ResetForm();
-        await LoadAsync();
     }
 
     private async Task DeleteAsync(Guid id)
@@ -92,8 +77,51 @@
         await LoadAsync();
     }
 
-    private void ResetForm()
+    private string GetCustomerCardClass(Guid customerId)
+        => cardClassByCustomerId.GetValueOrDefault(customerId, "alert-ok");
+
+    private int GetIncidentCount(Guid customerId)
+        => incidentCountByCustomerId.GetValueOrDefault(customerId);
+
+    private string GetCustomerSummaryText(CustomerReadDto customer)
     {
-        form = new CustomerCreateDto { IsActive = true };
+        var openCount = incidentCountByCustomerId.GetValueOrDefault(customer.Id);
+        var cardClass = GetCustomerCardClass(customer.Id);
+
+        return cardClass switch
+        {
+            "alert-critical" => LanguageService.T("CriticalIncidentsImmediateReview"),
+            "alert-warning" => openCount > 0
+                ? LanguageService.Tf("CustomerOpenIncidentsCount", openCount)
+                : LanguageService.T("OpenIncidentsTracked"),
+            _ => customer.IsActive
+                ? LanguageService.T("CustomerPortfolioStable")
+                : LanguageService.T("Inactive")
+        };
     }
+
+    private string GetCustomerSecondaryText(CustomerReadDto customer)
+        => lastActivityByCustomerId.TryGetValue(customer.Id, out var value) && value.HasValue
+            ? LanguageService.Tf("LastActivityAt", OverviewUiHelper.FormatLocalDateTime(value.Value))
+            : LanguageService.T("NoActivityRecordedYet");
+
+    private string GetContactLine(CustomerReadDto customer)
+    {
+        var parts = new List<string>();
+
+        if (!string.IsNullOrWhiteSpace(customer.ContactEmail))
+        {
+            parts.Add(customer.ContactEmail);
+        }
+
+        if (!string.IsNullOrWhiteSpace(customer.ContactPhone))
+        {
+            parts.Add(customer.ContactPhone);
+        }
+
+        return parts.Count > 0
+            ? string.Join(" | ", parts)
+            : LanguageService.T("NoContactInformation");
+    }
+
 }

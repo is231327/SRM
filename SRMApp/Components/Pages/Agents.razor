@@ -2,96 +2,114 @@
 @rendermode InteractiveServer
 @inherits LocalizedComponentBase
 @inject ICoreApiClient ApiClient
+@inject ICrudPageDataService CrudPageDataService
 
 <PageTitle>@LanguageService.T("Agents")</PageTitle>
+
+<PageHeader Title="@LanguageService.T("Agents")" Description="@LanguageService.T("AgentsOverviewDescription")">
+    <Actions>
+        <a class="btn btn-primary" href="@GetCreateHref()">@LanguageService.T("CreateAgent")</a>
+        @if (serverRoomId is not null)
+        {
+            <a class="btn btn-outline-primary" href="/serverrooms/@serverRoomId/details">@LanguageService.T("BackToServerRooms")</a>
+        }
+        else if (customerId is not null)
+        {
+            <a class="btn btn-outline-primary" href="/customers/@customerId/details">@LanguageService.T("BackToCustomerOverview")</a>
+        }
+    </Actions>
+</PageHeader>
+
+@if (isLoading)
+{
+    <p>@LanguageService.T("Loading")</p>
+}
+else if (agents.Count == 0)
+{
+    <div class="empty-state">
+        <h3>@LanguageService.T("NoData")</h3>
+        <p class="subtle">@LanguageService.T("AgentsOverviewDescription")</p>
+        <a class="btn btn-primary" href="@GetCreateHref()">@LanguageService.T("CreateAgent")</a>
+    </div>
+}
+else
+{
+    <div class="stats-grid">
+        @foreach (var item in agents)
+        {
+            <SummaryStatCard CardClass="@GetAgentCardClass(item)"
+                             IconClass="stat-icon-agents"
+                             Title="@item.Name"
+                             Value="@GetAgentValue(item)"
+                             SummaryText="@GetAgentSummaryText(item)"
+                             SummaryTextClass="@OverviewUiHelper.GetStatusTextClass(GetAgentCardClass(item))"
+                             SecondaryText="@GetAgentSecondaryText(item)">
+                <Details>
+                    <div>@item.Version</div>
+                    <div>@item.LastKnownIpAddress</div>
+                </Details>
+                <Actions>
+                    <a class="btn btn-outline-primary btn-sm" href="@GetEditHref(item.Id)">@LanguageService.T("Edit")</a>
+                    <button class="btn btn-outline-danger btn-sm" @onclick="() => DeleteAsync(item.Id)">@LanguageService.T("Delete")</button>
+                    <a class="btn btn-primary btn-sm" href="/shelly-devices?agentId=@item.Id">@LanguageService.T("ShellyDevices")</a>
+                    <a class="btn btn-outline-primary btn-sm" href="/monitored-devices?agentId=@item.Id">@LanguageService.T("MonitoredDevices")</a>
+                </Actions>
+            </SummaryStatCard>
+        }
+    </div>
+}
+
 @code {
     [SupplyParameterFromQuery] public Guid? serverRoomId { get; set; }
     [SupplyParameterFromQuery] public Guid? customerId { get; set; }
 
     private bool isLoading = true;
     private List<AgentReadDto> agents = [];
-    private List<ServerRoomReadDto> serverRoomsForSelection = [];
-    private AgentCreateDto form = new() { IsActive = true };
-    private Guid? editingId;
 
     protected override async Task OnParametersSetAsync()
-    {
-        if (serverRoomId is not null)
-        {
-            form.ServerRoomId = serverRoomId.Value;
-        }
-
-        await LoadAsync();
-    }
+        => await LoadAsync();
 
     private async Task LoadAsync()
     {
         isLoading = true;
-        var all = await ApiClient.GetAgentsAsync();
-        serverRoomsForSelection = await ApiClient.GetServerRoomsAsync();
-        if (customerId is not null)
-        {
-            var customerRoomIds = serverRoomsForSelection.Where(x => x.CustomerId == customerId.Value).Select(x => x.Id).ToHashSet();
-            agents = all.Where(x => customerRoomIds.Contains(x.ServerRoomId)).ToList();
-            serverRoomsForSelection = serverRoomsForSelection.Where(x => customerRoomIds.Contains(x.Id)).ToList();
-        }
-        else
-        {
-            agents = serverRoomId is null ? all : all.Where(x => x.ServerRoomId == serverRoomId).ToList();
-        }
+        var pageData = await CrudPageDataService.GetAgentPageDataAsync(serverRoomId, customerId);
+        agents = pageData.Agents.ToList();
         isLoading = false;
-    }
-
-    private void BeginEdit(AgentReadDto item)
-    {
-        editingId = item.Id;
-        form = new AgentCreateDto
-        {
-            ServerRoomId = item.ServerRoomId,
-            Name = item.Name,
-            ApiKeyReference = item.ApiKeyReference,
-            Version = item.Version,
-            LastKnownIpAddress = item.LastKnownIpAddress,
-            LastSeenAtUtc = item.LastSeenAtUtc,
-            IsActive = item.IsActive
-        };
-    }
-
-    private async Task SaveAsync()
-    {
-        if (editingId is null)
-            await ApiClient.CreateAgentAsync(form);
-        else
-            await ApiClient.UpdateAgentAsync(editingId.Value, new AgentUpdateDto
-            {
-                ServerRoomId = form.ServerRoomId,
-                Name = form.Name,
-                ApiKeyReference = form.ApiKeyReference,
-                Version = form.Version,
-                LastKnownIpAddress = form.LastKnownIpAddress,
-                LastSeenAtUtc = form.LastSeenAtUtc,
-                IsActive = form.IsActive
-            });
-
-        ResetForm();
-        await LoadAsync();
     }
 
     private async Task DeleteAsync(Guid id)
     {
         await ApiClient.DeleteAgentAsync(id);
-        if (editingId == id) ResetForm();
         await LoadAsync();
     }
 
-    private void ResetForm()
-    {
-        editingId = null;
-        form = new AgentCreateDto { ServerRoomId = serverRoomId ?? Guid.Empty, IsActive = true };
-    }
+    private string GetCreateHref()
+        => serverRoomId is not null
+            ? $"/agents/create?serverRoomId={serverRoomId}"
+            : customerId is not null
+                ? $"/agents/create?customerId={customerId}"
+                : "/agents/create";
+
+    private string GetEditHref(Guid id)
+        => serverRoomId is not null
+            ? $"/agents/{id}/edit?serverRoomId={serverRoomId}"
+            : customerId is not null
+                ? $"/agents/{id}/edit?customerId={customerId}"
+                : $"/agents/{id}/edit";
+
+    private string GetAgentCardClass(AgentReadDto item)
+        => !item.IsActive ? "alert-warning" : !item.LastSeenAtUtc.HasValue ? "alert-info" : "alert-ok";
+
+    private string GetAgentValue(AgentReadDto item)
+        => item.IsActive ? LanguageService.T("Active") : LanguageService.T("Inactive");
+
+    private string GetAgentSummaryText(AgentReadDto item)
+        => !item.IsActive
+            ? LanguageService.T("InactiveAgentsPresent")
+            : !item.LastSeenAtUtc.HasValue
+                ? LanguageService.T("AgentsNotReportedYet")
+                : LanguageService.T("AllAgentsActive");
+
+    private string GetAgentSecondaryText(AgentReadDto item)
+        => OverviewUiHelper.FormatLastLogLabel(item.LastSeenAtUtc, LanguageService.T);
 }
-<div class="page-header"><div><h1>@LanguageService.T("Agents")</h1><p>@LanguageService.T("AgentChildren")</p></div>@if(serverRoomId is not null){<a class="btn btn-outline-primary" href="/serverrooms/@serverRoomId/details">@LanguageService.T("BackToServerRooms")</a>} else if (customerId is not null){<a class="btn btn-outline-primary" href="/customers/@customerId/details">@LanguageService.T("BackToCustomerOverview")</a>}</div>
-<div class="entity-grid">
-<section class="entity-list">@if(isLoading){<p>@LanguageService.T("Loading")</p>} else if(agents.Count==0){<p>@LanguageService.T("NoData")</p>} else { @foreach(var item in agents){<article class="entity-card"><div class="entity-card-header"><div><h3>@item.Name</h3><div class="subtle">@item.Version</div><div class="subtle">@item.LastKnownIpAddress</div></div><span class="badge-soft">@(item.IsActive ? LanguageService.T("Active") : "Inactive")</span></div><div class="child-links"><button class="btn btn-outline-primary btn-sm" @onclick="()=>BeginEdit(item)">@LanguageService.T("Edit")</button><button class="btn btn-outline-danger btn-sm" @onclick="()=>DeleteAsync(item.Id)">@LanguageService.T("Delete")</button><a class="btn btn-primary btn-sm" href="/shelly-devices?agentId=@item.Id">@LanguageService.T("ShellyDevices")</a><a class="btn btn-outline-primary btn-sm" href="/monitored-devices?agentId=@item.Id">@LanguageService.T("MonitoredDevices")</a></div></article>}} </section>
-<section class="form-card"><h3>@(editingId is null ? $"{LanguageService.T("Create")} {LanguageService.T("Agents")}" : $"{LanguageService.T("Update")} {LanguageService.T("Agents")}")</h3><EditForm Model="form" OnValidSubmit="SaveAsync"><DataAnnotationsValidator /><ValidationSummary /><div class="form-grid"><div><label class="form-label">Server Room</label><InputSelect class="form-select" @bind-Value="form.ServerRoomId" disabled="@(serverRoomId is not null)"><option value="@Guid.Empty">Select server room</option>@foreach(var room in serverRoomsForSelection){<option value="@room.Id">@room.Name</option>}</InputSelect></div><div><label class="form-label">@LanguageService.T("Name")</label><InputText class="form-control" @bind-Value="form.Name" /></div><div><label class="form-label">API Key Reference</label><InputText class="form-control" @bind-Value="form.ApiKeyReference" /></div><div><label class="form-label">Version</label><InputText class="form-control" @bind-Value="form.Version" /></div><div><label class="form-label">IP</label><InputText class="form-control" @bind-Value="form.LastKnownIpAddress" /></div><div><label class="form-label">Last Seen</label><InputDate class="form-control" @bind-Value="form.LastSeenAtUtc" /></div><div class="form-check mt-4"><InputCheckbox class="form-check-input" @bind-Value="form.IsActive" /><label class="form-check-label">@LanguageService.T("Active")</label></div></div><div class="form-actions"><button type="submit" class="btn btn-primary">@LanguageService.T("Save")</button><button type="button" class="btn btn-outline-secondary" @onclick="ResetForm">@LanguageService.T("Cancel")</button></div></EditForm></section>
-</div>

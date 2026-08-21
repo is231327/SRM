@@ -2,15 +2,11 @@
 @rendermode InteractiveServer
 @inherits LocalizedComponentBase
 @inject ICoreApiClient ApiClient
+@inject ICrudPageDataService CrudPageDataService
 
 <PageTitle>@LanguageService.T("SensorReadings")</PageTitle>
 
-<div class="page-header">
-    <div>
-        <h1>@LanguageService.T("SensorReadings")</h1>
-        <p>@LanguageService.T("AgentChildren")</p>
-    </div>
-</div>
+<PageHeader Title="@LanguageService.T("SensorReadings")" Description="@LanguageService.T("AgentChildren")" />
 
 <div class="entity-grid">
     <section class="entity-list">
@@ -29,9 +25,9 @@
                 <article class="entity-card">
                     <div class="entity-card-header">
                         <div>
-                            <h3>@item.TemperatureCelsius C</h3>
-                            <div class="subtle">@LanguageService.T("RecordedAt"): @item.RecordedAtUtc.ToLocalTime()</div>
-                            <div class="subtle">Battery: @item.BatteryPercent | Brightness: @item.Brightness | Door: @(item.DoorOpen ? "Open" : "Closed")</div>
+                            <h3>@OverviewUiHelper.FormatTemperatureCelsius(item.TemperatureCelsius)</h3>
+                            <div class="subtle">@LanguageService.T("RecordedAt"): @OverviewUiHelper.FormatLocalDateTime(item.RecordedAtUtc)</div>
+                            <div class="subtle">@LanguageService.T("Battery"): @OverviewUiHelper.FormatPercentage(item.BatteryPercent) | @LanguageService.T("Brightness"): @item.Brightness | @LanguageService.T("Door"): @(item.DoorOpen ? LanguageService.T("Open") : LanguageService.T("Closed"))</div>
                         </div>
                     </div>
                     <div class="child-links">
@@ -50,20 +46,20 @@
             <ValidationSummary />
             <div class="form-grid">
                 <div>
-                    <label class="form-label">Shelly Device</label>
+                    <label class="form-label">@LanguageService.T("ShellyDevice")</label>
                     <InputSelect class="form-select" @bind-Value="form.ShellyDeviceId" disabled="@(shellyDeviceId is not null)">
-                        <option value="@Guid.Empty">Select Shelly device</option>
+                        <option value="@Guid.Empty">@LanguageService.T("SelectShellyDevice")</option>
                         @foreach (var device in shellyDevicesForSelection)
                         {
                             <option value="@device.Id">@device.Name</option>
                         }
                     </InputSelect>
                 </div>
-                <div><label class="form-label">Temperature C</label><InputNumber class="form-control" @bind-Value="form.TemperatureCelsius" /></div>
-                <div><label class="form-label">Battery %</label><InputNumber class="form-control" @bind-Value="form.BatteryPercent" /></div>
-                <div><label class="form-label">Brightness</label><InputNumber class="form-control" @bind-Value="form.Brightness" /></div>
+                <div><label class="form-label">@LanguageService.T("Temperature")</label><InputNumber class="form-control" @bind-Value="form.TemperatureCelsius" /></div>
+                <div><label class="form-label">@LanguageService.T("Battery") (%)</label><InputNumber class="form-control" @bind-Value="form.BatteryPercent" /></div>
+                <div><label class="form-label">@LanguageService.T("Brightness")</label><InputNumber class="form-control" @bind-Value="form.Brightness" /></div>
                 <div><label class="form-label">@LanguageService.T("RecordedAt")</label><InputDate class="form-control" @bind-Value="form.RecordedAtUtc" /></div>
-                <div class="form-check mt-4"><InputCheckbox class="form-check-input" @bind-Value="form.DoorOpen" /><label class="form-check-label">Door Open</label></div>
+                <div class="form-check mt-4"><InputCheckbox class="form-check-input" @bind-Value="form.DoorOpen" /><label class="form-check-label">@LanguageService.T("DoorOpenLabel")</label></div>
             </div>
             <div class="form-actions">
                 <button type="submit" class="btn btn-primary">@LanguageService.T("Save")</button>
@@ -95,9 +91,9 @@
     private async Task LoadAsync()
     {
         isLoading = true;
-        var all = await ApiClient.GetSensorReadingsAsync();
-        shellyDevicesForSelection = await ApiClient.GetShellyDevicesAsync();
-        items = shellyDeviceId is null ? all : all.Where(x => x.ShellyDeviceId == shellyDeviceId).ToList();
+        var pageData = await CrudPageDataService.GetSensorReadingPageDataAsync(shellyDeviceId);
+        items = pageData.Items.ToList();
+        shellyDevicesForSelection = pageData.ShellyDevicesForSelection.ToList();
         isLoading = false;
     }
 

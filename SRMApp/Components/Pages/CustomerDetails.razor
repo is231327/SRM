@@ -2,22 +2,11 @@
 @rendermode InteractiveServer
 @inherits LocalizedComponentBase
 @inject ICoreApiClient ApiClient
+@inject IOverviewDataService OverviewDataService
 @inject NavigationManager NavigationManager
 @using SRMShared.DTOs.MonitoredDevicePingResult
 
 <PageTitle>@LanguageService.T("CustomerOverview")</PageTitle>
-
-<div class="page-header">
-    <div>
-        <h1>@(customer?.Name ?? LanguageService.T("Customers"))</h1>
-        <p>@LanguageService.T("CustomerOverviewDescription")</p>
-    </div>
-    <div class="child-links">
-        <a class="btn btn-outline-primary" href="/customers">@LanguageService.T("BackToCustomers")</a>
-        <a class="btn btn-outline-primary" href="/customers/@CustomerId/edit">@LanguageService.T("Edit")</a>
-        <button type="button" class="btn btn-outline-danger" @onclick="DeleteCustomerAsync">@LanguageService.T("Delete")</button>
-    </div>
-</div>
 
 @if (isLoading)
 {
@@ -29,280 +18,48 @@ else if (customer is null)
 }
 else
 {
+    <section class="hero hero-customer-overview">
+        <div class="hero-copy">
+            <span class="eyebrow">@LanguageService.T("CustomerOverview")</span>
+            <h1>@customer.Name</h1>
+            <p>@BuildCustomerLead()</p>
+        </div>
+        <div class="hero-actions">
+            <a class="btn btn-light" href="/customers">@LanguageService.T("BackToCustomers")</a>
+            <a class="btn btn-outline-light" href="/customers/@CustomerId/edit">@LanguageService.T("Edit")</a>
+            <button type="button" class="btn btn-outline-light" @onclick="DeleteCustomerAsync">@LanguageService.T("Delete")</button>
+        </div>
+    </section>
+
     <div class="stats-grid">
-        <div class="stat-card">
-            <h3>@LanguageService.T("ServerRooms")</h3>
-            <div class="stat-value">@serverRooms.Count</div>
-            <div class="child-links">
-                <a class="btn btn-outline-primary btn-sm" href="/customers/@CustomerId/serverrooms">@LanguageService.T("ViewAll")</a>
-            </div>
-        </div>
-        <div class="stat-card">
-            <h3>@LanguageService.T("Agents")</h3>
-            <div class="stat-value">@agents.Count</div>
-            <div class="child-links">
-                <a class="btn btn-outline-primary btn-sm" href="/agents?customerId=@CustomerId">@LanguageService.T("ViewAll")</a>
-            </div>
-        </div>
-        <div class="stat-card">
-            <h3>@LanguageService.T("ShellyDevices")</h3>
-            <div class="stat-value">@shellyDevices.Count</div>
-            <div class="child-links">
-                <a class="btn btn-outline-primary btn-sm" href="/shelly-devices?customerId=@CustomerId">@LanguageService.T("ViewAll")</a>
-            </div>
-        </div>
-        <div class="stat-card">
-            <h3>@LanguageService.T("MonitoredDevices")</h3>
-            <div class="stat-value">@monitoredDevices.Count</div>
-            <div class="child-links">
-                <a class="btn btn-outline-primary btn-sm" href="/monitored-devices?customerId=@CustomerId">@LanguageService.T("ViewAll")</a>
-            </div>
-        </div>
-        <div class="stat-card">
-            <h3>@LanguageService.T("Incidents")</h3>
-            <div class="stat-value">@incidents.Count</div>
-            <div class="child-links">
-                <a class="btn btn-outline-primary btn-sm" href="/incidents?customerId=@CustomerId">@LanguageService.T("ViewAll")</a>
-            </div>
-        </div>
-        <div class="stat-card">
-            <h3>@LanguageService.T("MaintenanceWindows")</h3>
-            <div class="stat-value">@maintenanceWindows.Count</div>
-            <div class="child-links">
-                <a class="btn btn-outline-primary btn-sm" href="/maintenance-windows?customerId=@CustomerId">@LanguageService.T("ViewAll")</a>
-            </div>
-        </div>
-    </div>
-
-    <div class="panel-grid">
-        <section class="panel-card">
-            <div class="section-heading">
-                <div>
-                    <h3>@LanguageService.T("ServerRooms")</h3>
-                    <p class="subtle">@LanguageService.T("CustomerRoomsSectionDescription")</p>
-                </div>
-                <div class="child-links">
-                    <a class="btn btn-outline-primary btn-sm" href="/customers/@CustomerId/serverrooms">@LanguageService.T("ViewAll")</a>
-                </div>
-            </div>
-            @foreach (var room in previewServerRooms)
-            {
-                <article class="entity-card compact-card">
-                    <div class="entity-card-header">
-                        <div>
-                            <h3>@room.Name</h3>
-                            <div class="subtle">@room.LocationDescription</div>
-                            <div class="subtle">
-                                @LanguageService.T("Agents"): @GetAgentCount(room.Id)
-                                |
-                                @LanguageService.T("ShellyDevices"): @GetShellyCount(room.Id)
-                                |
-                                @LanguageService.T("MonitoredDevices"): @GetMonitoredDeviceCount(room.Id)
-                            </div>
-                            <div class="subtle">@FormatLastLogLabel(GetLatestRoomActivity(room.Id))</div>
-                        </div>
-                        <span class="badge-soft">@(room.MonitoringEnabled ? LanguageService.T("Active") : LanguageService.T("Inactive"))</span>
-                    </div>
-                    <div class="child-links">
-                        <a class="btn btn-primary btn-sm" href="/serverrooms/@room.Id/details">@LanguageService.T("Overview")</a>
-                        <a class="btn btn-outline-primary btn-sm" href="/customers/@CustomerId/serverrooms?editId=@room.Id">@LanguageService.T("Edit")</a>
-                        <a class="btn btn-outline-primary btn-sm" href="/agents?serverRoomId=@room.Id">@LanguageService.T("Agents")</a>
-                    </div>
-                </article>
-            }
-            @if (serverRooms.Count == 0)
-            {
-                <p>@LanguageService.T("NoData")</p>
-            }
-        </section>
-
-        <section class="panel-card">
-            <div class="section-heading">
-                <div>
-                    <h3>@LanguageService.T("RecentIncidents")</h3>
-                    <p class="subtle">@LanguageService.T("CustomerIncidentsSectionDescription")</p>
-                </div>
-                <div class="child-links">
-                    <a class="btn btn-outline-primary btn-sm" href="/incidents">@LanguageService.T("ViewAll")</a>
-                </div>
-            </div>
-            @foreach (var incident in previewIncidents)
-            {
-                <article class="entity-card compact-card">
-                    <div class="entity-card-header">
-                        <div>
-                            <h3>@incident.Summary</h3>
-                            <div class="subtle">@LanguageService.T("ServerRoom"): @incident.ServerRoomName</div>
-                            <div class="subtle">@LanguageService.T("Severity"): @LanguageService.T(incident.Severity.ToString()) | @LanguageService.T("Status"): @LanguageService.T(incident.Status.ToString())</div>
-                            <div class="subtle">@FormatLastLogLabel(incident.LastOccurredAtUtc ?? incident.OpenedAtUtc)</div>
-                        </div>
-                        <span class="badge-soft">@LanguageService.T(incident.Type.ToString())</span>
-                    </div>
-                    <div class="child-links">
-                        <a class="btn btn-primary btn-sm" href="/incidents/@incident.Id">@LanguageService.T("Details")</a>
-                    </div>
-                </article>
-            }
-            @if (incidents.Count == 0)
-            {
-                <p>@LanguageService.T("NoData")</p>
-            }
-        </section>
-    </div>
-
-    <div class="panel-grid">
-        <section class="panel-card">
-            <div class="section-heading">
-                <div>
-                    <h3>@LanguageService.T("Agents")</h3>
-                    <p class="subtle">@LanguageService.T("CustomerAgentsSectionDescription")</p>
-                </div>
-            </div>
-            @foreach (var agent in previewAgents)
-            {
-                <article class="entity-card compact-card">
-                    <div class="entity-card-header">
-                        <div>
-                            <h3>@agent.Name</h3>
-                            <div class="subtle">@FindServerRoomName(agent.ServerRoomId)</div>
-                            <div class="subtle">@agent.LastKnownIpAddress</div>
-                            <div class="subtle">@FormatLastLogLabel(agent.LastSeenAtUtc)</div>
-                        </div>
-                        <span class="badge-soft">@(agent.IsActive ? LanguageService.T("Active") : LanguageService.T("Inactive"))</span>
-                    </div>
-                    <div class="child-links">
-                        <a class="btn btn-outline-primary btn-sm" href="/agents?serverRoomId=@agent.ServerRoomId">@LanguageService.T("ViewAll")</a>
-                        <a class="btn btn-outline-primary btn-sm" href="/shelly-devices?agentId=@agent.Id">@LanguageService.T("ShellyDevices")</a>
-                        <a class="btn btn-outline-primary btn-sm" href="/monitored-devices?agentId=@agent.Id">@LanguageService.T("MonitoredDevices")</a>
-                    </div>
-                </article>
-            }
-            @if (agents.Count == 0)
-            {
-                <p>@LanguageService.T("NoData")</p>
-            }
-        </section>
-
-        <section class="panel-card">
-            <div class="section-heading">
-                <div>
-                    <h3>@LanguageService.T("ShellyDevices")</h3>
-                    <p class="subtle">@LanguageService.T("CustomerShellySectionDescription")</p>
-                </div>
-            </div>
-            @foreach (var device in previewShellyDevices)
-            {
-                <article class="entity-card compact-card">
-                    <div class="entity-card-header">
-                        <div>
-                            <h3>@device.Name</h3>
-                            <div class="subtle">@FindAgentName(device.AgentId)</div>
-                            <div class="subtle">@device.BaseUrl</div>
-                            <div class="subtle">@FormatSensorSummary(device.Id)</div>
-                        </div>
-                        <span class="badge-soft">@(device.IsActive ? LanguageService.T("Active") : LanguageService.T("Inactive"))</span>
-                    </div>
-                    <div class="child-links">
-                        <a class="btn btn-outline-primary btn-sm" href="/shelly-devices?agentId=@device.AgentId">@LanguageService.T("ViewAll")</a>
-                        <a class="btn btn-outline-primary btn-sm" href="/sensor-readings?shellyDeviceId=@device.Id">@LanguageService.T("SensorReadings")</a>
-                    </div>
-                </article>
-            }
-            @if (shellyDevices.Count == 0)
-            {
-                <p>@LanguageService.T("NoData")</p>
-            }
-        </section>
-    </div>
-
-    <div class="panel-grid">
-        <section class="panel-card">
-            <div class="section-heading">
-                <div>
-                    <h3>@LanguageService.T("MonitoredDevices")</h3>
-                    <p class="subtle">@LanguageService.T("CustomerMonitoredDevicesSectionDescription")</p>
-                </div>
-            </div>
-            @foreach (var device in previewMonitoredDevices)
-            {
-                <article class="entity-card compact-card">
-                    <div class="entity-card-header">
-                        <div>
-                            <h3>@device.DisplayName</h3>
-                            <div class="subtle">@FindAgentName(device.AgentId)</div>
-                            <div class="subtle">@device.IpAddress</div>
-                            <div class="subtle">@FormatPingSummary(device.Id)</div>
-                        </div>
-                        <span class="badge-soft">@(device.IsActive ? LanguageService.T("Active") : LanguageService.T("Inactive"))</span>
-                    </div>
-                    <div class="child-links">
-                        <a class="btn btn-outline-primary btn-sm" href="/monitored-devices?agentId=@device.AgentId">@LanguageService.T("ViewAll")</a>
-                        <a class="btn btn-outline-primary btn-sm" href="/monitored-device-ping-results?monitoredDeviceId=@device.Id">@LanguageService.T("PingHistory")</a>
-                    </div>
-                </article>
-            }
-            @if (monitoredDevices.Count == 0)
-            {
-                <p>@LanguageService.T("NoData")</p>
-            }
-        </section>
-
-        <section class="panel-card">
-            <div class="section-heading">
-                <div>
-                    <h3>@LanguageService.T("MaintenanceWindows")</h3>
-                    <p class="subtle">@LanguageService.T("CustomerMaintenanceSectionDescription")</p>
-                </div>
-            </div>
-            @foreach (var window in previewMaintenanceWindows)
-            {
-                <article class="entity-card compact-card">
-                    <div class="entity-card-header">
-                        <div>
-                            <h3>@window.Title</h3>
-                            <div class="subtle">@FindServerRoomName(window.ServerRoomId)</div>
-                            <div class="subtle">@window.StartUtc.ToLocalTime():g - @window.EndUtc.ToLocalTime():g</div>
-                            <div class="subtle">@window.Description</div>
-                        </div>
-                    </div>
-                </article>
-            }
-            @if (maintenanceWindows.Count == 0)
-            {
-                <p>@LanguageService.T("NoData")</p>
-            }
-        </section>
+        <SummaryStatCard CardClass="@GetServerRoomsSummaryClass()" IconClass="stat-icon-rooms" Title="@LanguageService.T("ServerRooms")" Value="@serverRooms.Count.ToString()" SummaryText="@GetServerRoomSummaryText()" SummaryTextClass="@OverviewUiHelper.GetStatusTextClass(GetServerRoomsSummaryClass())" ViewAllHref="@($"/customers/{CustomerId}/serverrooms")" ViewAllText="@LanguageService.T("ViewAll")" />
+        <SummaryStatCard CardClass="@GetAgentsSummaryClass()" IconClass="stat-icon-agents" Title="@LanguageService.T("Agents")" Value="@agents.Count.ToString()" SummaryText="@GetAgentSummaryText()" SummaryTextClass="@OverviewUiHelper.GetStatusTextClass(GetAgentsSummaryClass())" ViewAllHref="@($"/agents?customerId={CustomerId}")" ViewAllText="@LanguageService.T("ViewAll")" />
+        <SummaryStatCard CardClass="@GetShellySummaryClass()" IconClass="stat-icon-sensors" Title="@LanguageService.T("ShellyDevices")" Value="@shellyDevices.Count.ToString()" SummaryText="@GetShellySummaryText()" SummaryTextClass="@OverviewUiHelper.GetStatusTextClass(GetShellySummaryClass())" ViewAllHref="@($"/shelly-devices?customerId={CustomerId}")" ViewAllText="@LanguageService.T("ViewAll")" />
+        <SummaryStatCard CardClass="@GetMonitoredDevicesSummaryClass()" IconClass="stat-icon-network-card" Title="@LanguageService.T("MonitoredDevices")" Value="@monitoredDevices.Count.ToString()" SummaryText="@GetMonitoredSummaryText()" SummaryTextClass="@OverviewUiHelper.GetStatusTextClass(GetMonitoredDevicesSummaryClass())" ViewAllHref="@($"/monitored-devices?customerId={CustomerId}")" ViewAllText="@LanguageService.T("ViewAll")" />
+        <SummaryStatCard CardClass="@GetIncidentsSummaryClass()" IconClass="stat-icon-alert" Title="@LanguageService.T("Incidents")" Value="@incidents.Count.ToString()" SummaryText="@GetIncidentSummaryText()" SummaryTextClass="@OverviewUiHelper.GetStatusTextClass(GetIncidentsSummaryClass())" ViewAllHref="@($"/incidents?customerId={CustomerId}")" ViewAllText="@LanguageService.T("ViewAll")" />
+        <SummaryStatCard CardClass="@GetMaintenanceSummaryClass()" IconClass="stat-icon-maintenance" Title="@LanguageService.T("MaintenanceWindows")" Value="@maintenanceWindows.Count.ToString()" SummaryText="@GetMaintenanceSummaryText()" SummaryTextClass="@OverviewUiHelper.GetStatusTextClass(GetMaintenanceSummaryClass())" ViewAllHref="@($"/maintenance-windows?customerId={CustomerId}")" ViewAllText="@LanguageService.T("ViewAll")" />
     </div>
 }
 
 @code {
     [Parameter] public Guid CustomerId { get; set; }
 
-    private const int PreviewLimit = 5;
-
     private bool isLoading = true;
-    private CustomerReadDto? customer;
-    private List<ServerRoomReadDto> serverRooms = [];
-    private List<AgentReadDto> agents = [];
-    private List<ShellyDeviceReadDto> shellyDevices = [];
-    private List<MonitoredDeviceReadDto> monitoredDevices = [];
-    private List<MaintenanceWindowReadDto> maintenanceWindows = [];
-    private List<IncidentReadDto> incidents = [];
-    private List<SensorReadingReadDto> sensorReadings = [];
-    private List<MonitoredDevicePingResultReadDto> pingResults = [];
-
-    private Dictionary<Guid, List<AgentReadDto>> agentsByRoomId = [];
-    private Dictionary<Guid, List<ShellyDeviceReadDto>> shellyDevicesByAgentId = [];
-    private Dictionary<Guid, List<MonitoredDeviceReadDto>> monitoredDevicesByAgentId = [];
-    private Dictionary<Guid, SensorReadingReadDto> latestSensorReadingByShellyId = [];
-    private Dictionary<Guid, MonitoredDevicePingResultReadDto> latestPingResultByMonitoredDeviceId = [];
-
-    private IEnumerable<ServerRoomReadDto> previewServerRooms => serverRooms.OrderBy(x => x.Name).Take(PreviewLimit);
-    private IEnumerable<AgentReadDto> previewAgents => agents.OrderBy(x => x.Name).Take(PreviewLimit);
-    private IEnumerable<ShellyDeviceReadDto> previewShellyDevices => shellyDevices.OrderBy(x => x.Name).Take(PreviewLimit);
-    private IEnumerable<MonitoredDeviceReadDto> previewMonitoredDevices => monitoredDevices.OrderBy(x => x.DisplayName).Take(PreviewLimit);
-    private IEnumerable<MaintenanceWindowReadDto> previewMaintenanceWindows => maintenanceWindows.OrderByDescending(x => x.StartUtc).Take(PreviewLimit);
-    private IEnumerable<IncidentReadDto> previewIncidents => incidents.OrderByDescending(x => x.OpenedAtUtc).Take(PreviewLimit);
+    private CustomerOverviewData? overview;
+    private CustomerReadDto? customer => overview?.Customer;
+    private IReadOnlyList<ServerRoomReadDto> serverRooms => overview?.ServerRooms ?? [];
+    private IReadOnlyList<AgentReadDto> agents => overview?.Agents ?? [];
+    private IReadOnlyList<ShellyDeviceReadDto> shellyDevices => overview?.ShellyDevices ?? [];
+    private IReadOnlyList<MonitoredDeviceReadDto> monitoredDevices => overview?.MonitoredDevices ?? [];
+    private IReadOnlyList<MaintenanceWindowReadDto> maintenanceWindows => overview?.MaintenanceWindows ?? [];
+    private IReadOnlyList<IncidentReadDto> incidents => overview?.Incidents ?? [];
+    private IReadOnlyList<SensorReadingReadDto> sensorReadings => overview?.SensorReadings ?? [];
+    private IReadOnlyList<MonitoredDevicePingResultReadDto> pingResults => overview?.PingResults ?? [];
+    private IReadOnlyDictionary<Guid, IReadOnlyList<AgentReadDto>> agentsByRoomId => overview?.AgentsByRoomId ?? new Dictionary<Guid, IReadOnlyList<AgentReadDto>>();
+    private IReadOnlyDictionary<Guid, IReadOnlyList<ShellyDeviceReadDto>> shellyDevicesByAgentId => overview?.ShellyDevicesByAgentId ?? new Dictionary<Guid, IReadOnlyList<ShellyDeviceReadDto>>();
+    private IReadOnlyDictionary<Guid, IReadOnlyList<MonitoredDeviceReadDto>> monitoredDevicesByAgentId => overview?.MonitoredDevicesByAgentId ?? new Dictionary<Guid, IReadOnlyList<MonitoredDeviceReadDto>>();
+    private IReadOnlyDictionary<Guid, SensorReadingReadDto> latestSensorReadingByShellyId => overview?.LatestSensorReadingByShellyId ?? new Dictionary<Guid, SensorReadingReadDto>();
+    private IReadOnlyDictionary<Guid, MonitoredDevicePingResultReadDto> latestPingResultByMonitoredDeviceId => overview?.LatestPingResultByMonitoredDeviceId ?? new Dictionary<Guid, MonitoredDevicePingResultReadDto>();
 
     protected override async Task OnParametersSetAsync()
     {
@@ -312,56 +69,7 @@ else
     private async Task LoadAsync()
     {
         isLoading = true;
-
-        var customers = await ApiClient.GetCustomersAsync();
-        customer = customers.FirstOrDefault(x => x.Id == CustomerId);
-        if (customer is null)
-        {
-            ResetState();
-            isLoading = false;
-            return;
-        }
-
-        var allServerRooms = await ApiClient.GetServerRoomsAsync();
-        serverRooms = allServerRooms.Where(x => x.CustomerId == CustomerId).ToList();
-        var roomIds = serverRooms.Select(x => x.Id).ToHashSet();
-
-        var allAgents = await ApiClient.GetAgentsAsync();
-        agents = allAgents.Where(x => roomIds.Contains(x.ServerRoomId)).ToList();
-        var agentIds = agents.Select(x => x.Id).ToHashSet();
-
-        var allShellyDevices = await ApiClient.GetShellyDevicesAsync();
-        shellyDevices = allShellyDevices.Where(x => agentIds.Contains(x.AgentId)).ToList();
-        var shellyIds = shellyDevices.Select(x => x.Id).ToHashSet();
-
-        var allMonitoredDevices = await ApiClient.GetMonitoredDevicesAsync();
-        monitoredDevices = allMonitoredDevices.Where(x => agentIds.Contains(x.AgentId)).ToList();
-        var monitoredDeviceIds = monitoredDevices.Select(x => x.Id).ToHashSet();
-
-        var allMaintenanceWindows = await ApiClient.GetMaintenanceWindowsAsync();
-        maintenanceWindows = allMaintenanceWindows.Where(x => roomIds.Contains(x.ServerRoomId)).ToList();
-
-        var allIncidents = await ApiClient.GetIncidentsAsync();
-        incidents = allIncidents.Where(x => roomIds.Contains(x.ServerRoomId)).ToList();
-
-        var allSensorReadings = await ApiClient.GetSensorReadingsAsync();
-        sensorReadings = allSensorReadings.Where(x => shellyIds.Contains(x.ShellyDeviceId)).ToList();
-
-        var allPingResults = await ApiClient.GetMonitoredDevicePingResultsAsync();
-        pingResults = allPingResults.Where(x => monitoredDeviceIds.Contains(x.MonitoredDeviceId)).ToList();
-
-        agentsByRoomId = agents.GroupBy(x => x.ServerRoomId).ToDictionary(x => x.Key, x => x.ToList());
-        shellyDevicesByAgentId = shellyDevices.GroupBy(x => x.AgentId).ToDictionary(x => x.Key, x => x.ToList());
-        monitoredDevicesByAgentId = monitoredDevices.GroupBy(x => x.AgentId).ToDictionary(x => x.Key, x => x.ToList());
-
-        latestSensorReadingByShellyId = sensorReadings
-            .GroupBy(x => x.ShellyDeviceId)
-            .ToDictionary(group => group.Key, group => group.OrderByDescending(x => x.RecordedAtUtc).First());
-
-        latestPingResultByMonitoredDeviceId = pingResults
-            .GroupBy(x => x.MonitoredDeviceId)
-            .ToDictionary(group => group.Key, group => group.OrderByDescending(x => x.RecordedAtUtc).First());
-
+        overview = await OverviewDataService.GetCustomerOverviewAsync(CustomerId);
         isLoading = false;
     }
 
@@ -376,77 +84,252 @@ else
         NavigationManager.NavigateTo("/customers");
     }
 
-    private void ResetState()
+    private int GetOpenIncidentCount()
+        => incidents.Count(x => x.Status.ToString() == "Open");
+
+    private int GetOpenCriticalIncidentCount()
+        => incidents.Count(x => x.Status.ToString() == "Open" && x.Severity.ToString() == "Critical");
+
+    private string GetServerRoomsSummaryClass()
     {
-        serverRooms = [];
-        agents = [];
-        shellyDevices = [];
-        monitoredDevices = [];
-        maintenanceWindows = [];
-        incidents = [];
-        sensorReadings = [];
-        pingResults = [];
-        agentsByRoomId = [];
-        shellyDevicesByAgentId = [];
-        monitoredDevicesByAgentId = [];
-        latestSensorReadingByShellyId = [];
-        latestPingResultByMonitoredDeviceId = [];
+        if (serverRooms.Count == 0)
+        {
+            return string.Empty;
+        }
+
+        if (serverRooms.Any(x => GetServerRoomCardClass(x.Id) == "alert-critical"))
+        {
+            return "alert-critical";
+        }
+
+        if (serverRooms.Any(x => GetServerRoomCardClass(x.Id) == "alert-warning"))
+        {
+            return "alert-warning";
+        }
+
+        return "alert-ok";
     }
 
-    private int GetAgentCount(Guid serverRoomId)
-        => agentsByRoomId.GetValueOrDefault(serverRoomId)?.Count ?? 0;
-
-    private int GetShellyCount(Guid serverRoomId)
+    private string GetAgentsSummaryClass()
     {
-        var roomAgents = agentsByRoomId.GetValueOrDefault(serverRoomId) ?? [];
-        return roomAgents.Sum(agent => shellyDevicesByAgentId.GetValueOrDefault(agent.Id)?.Count ?? 0);
+        if (agents.Count == 0)
+        {
+            return string.Empty;
+        }
+
+        if (agents.Any(x => GetAgentCardClass(x) == "alert-warning"))
+        {
+            return "alert-warning";
+        }
+
+        if (agents.Any(x => GetAgentCardClass(x) == "alert-info"))
+        {
+            return "alert-info";
+        }
+
+        return "alert-ok";
     }
 
-    private int GetMonitoredDeviceCount(Guid serverRoomId)
+    private string GetShellySummaryClass()
     {
-        var roomAgents = agentsByRoomId.GetValueOrDefault(serverRoomId) ?? [];
-        return roomAgents.Sum(agent => monitoredDevicesByAgentId.GetValueOrDefault(agent.Id)?.Count ?? 0);
+        if (shellyDevices.Count == 0)
+        {
+            return string.Empty;
+        }
+
+        if (shellyDevices.Any(x => GetShellyCardClass(x.Id) == "alert-critical"))
+        {
+            return "alert-critical";
+        }
+
+        if (shellyDevices.Any(x => GetShellyCardClass(x.Id) == "alert-warning"))
+        {
+            return "alert-warning";
+        }
+
+        if (shellyDevices.Any(x => GetShellyCardClass(x.Id) == "alert-info"))
+        {
+            return "alert-info";
+        }
+
+        return "alert-ok";
     }
 
-    private string FindServerRoomName(Guid serverRoomId)
-        => serverRooms.FirstOrDefault(x => x.Id == serverRoomId)?.Name ?? LanguageService.T("UnknownServerRoom");
-
-    private string FindAgentName(Guid agentId)
-        => agents.FirstOrDefault(x => x.Id == agentId)?.Name ?? LanguageService.T("UnknownAgent");
-
-    private DateTime? GetLatestRoomActivity(Guid serverRoomId)
+    private string GetMonitoredDevicesSummaryClass()
     {
-        var roomAgentIds = (agentsByRoomId.GetValueOrDefault(serverRoomId) ?? []).Select(x => x.Id).ToHashSet();
-        var roomShellyIds = shellyDevices.Where(x => roomAgentIds.Contains(x.AgentId)).Select(x => x.Id).ToHashSet();
-        var roomIncidentTimes = incidents.Where(x => x.ServerRoomId == serverRoomId).Select(x => x.LastOccurredAtUtc ?? x.OpenedAtUtc);
-        var roomReadingTimes = sensorReadings.Where(x => roomShellyIds.Contains(x.ShellyDeviceId)).Select(x => x.RecordedAtUtc);
-        var values = roomIncidentTimes.Concat(roomReadingTimes).ToList();
-        return values.Count == 0 ? null : values.Max();
+        if (monitoredDevices.Count == 0)
+        {
+            return string.Empty;
+        }
+
+        if (monitoredDevices.Any(x => GetMonitoredDeviceCardClass(x.Id) == "alert-critical"))
+        {
+            return "alert-critical";
+        }
+
+        if (monitoredDevices.Any(x => GetMonitoredDeviceCardClass(x.Id) == "alert-warning"))
+        {
+            return "alert-warning";
+        }
+
+        if (monitoredDevices.Any(x => GetMonitoredDeviceCardClass(x.Id) == "alert-info"))
+        {
+            return "alert-info";
+        }
+
+        return "alert-ok";
     }
 
-    private string FormatSensorSummary(Guid shellyDeviceId)
+    private string GetIncidentsSummaryClass()
+    {
+        if (incidents.Count == 0)
+        {
+            return string.Empty;
+        }
+
+        if (GetOpenCriticalIncidentCount() > 0)
+        {
+            return "alert-critical";
+        }
+
+        if (GetOpenIncidentCount() > 0)
+        {
+            return "alert-warning";
+        }
+
+        return "alert-ok";
+    }
+
+    private string GetMaintenanceSummaryClass()
+        => maintenanceWindows.Count > 0 ? "alert-ok" : string.Empty;
+
+    private string GetServerRoomCardClass(Guid serverRoomId)
+    {
+        var roomIncidents = incidents.Where(x => x.ServerRoomId == serverRoomId).ToList();
+        if (roomIncidents.Any(x => x.Status.ToString() == "Open" && x.Severity.ToString() == "Critical"))
+        {
+            return "alert-critical";
+        }
+
+        if (roomIncidents.Any(x => x.Status.ToString() == "Open"))
+        {
+            return "alert-warning";
+        }
+
+        return "alert-ok";
+    }
+
+    private string GetAgentCardClass(AgentReadDto agent)
+        => !agent.IsActive ? "alert-warning" : !agent.LastSeenAtUtc.HasValue ? "alert-info" : "alert-ok";
+
+    private string GetShellyCardClass(Guid shellyDeviceId)
     {
         if (!latestSensorReadingByShellyId.TryGetValue(shellyDeviceId, out var reading))
         {
-            return LanguageService.T("NoReadingYet");
+            return "alert-info";
         }
 
-        return $"{reading.TemperatureCelsius} C | {FormatLastLogLabel(reading.RecordedAtUtc)}";
+        if (reading.DoorOpen)
+        {
+            return "alert-warning";
+        }
+
+        var criticalIncident = incidents.Any(x => x.ShellyDeviceId == shellyDeviceId && x.Status.ToString() == "Open" && x.Severity.ToString() == "Critical");
+        if (criticalIncident)
+        {
+            return "alert-critical";
+        }
+
+        return "alert-ok";
     }
 
-    private string FormatPingSummary(Guid monitoredDeviceId)
+    private string GetMonitoredDeviceCardClass(Guid monitoredDeviceId)
     {
         if (!latestPingResultByMonitoredDeviceId.TryGetValue(monitoredDeviceId, out var result))
         {
-            return LanguageService.T("NoPingYet");
+            return "alert-info";
         }
 
-        var state = result.IsReachable ? LanguageService.T("Reachable") : LanguageService.T("Unavailable");
-        return $"{state} | {FormatLastLogLabel(result.RecordedAtUtc)}";
+        if (result.FailureThresholdReached)
+        {
+            return "alert-critical";
+        }
+
+        if (!result.IsReachable)
+        {
+            return "alert-warning";
+        }
+
+        return "alert-ok";
     }
 
-    private string FormatLastLogLabel(DateTime? value)
-        => value.HasValue
-            ? $"{LanguageService.T("LastLog")}: {value.Value.ToLocalTime():g}"
-            : $"{LanguageService.T("LastLog")}: {LanguageService.T("NoData")}";
+    private string BuildCustomerLead()
+    {
+        var openIncidents = GetOpenIncidentCount();
+        var criticalIncidents = GetOpenCriticalIncidentCount();
+
+        if (criticalIncidents > 0)
+        {
+            return LanguageService.Tf("CustomerLeadCritical", criticalIncidents, serverRooms.Count);
+        }
+
+        if (openIncidents > 0)
+        {
+            return LanguageService.Tf("CustomerLeadOpen", openIncidents);
+        }
+
+        return LanguageService.Tf("CustomerLeadStable", serverRooms.Count, agents.Count, shellyDevices.Count);
+    }
+
+    private string GetServerRoomSummaryText()
+        => serverRooms.Count == 0
+            ? LanguageService.T("NoData")
+            : serverRooms.Any(x => GetServerRoomCardClass(x.Id) == "alert-critical")
+                ? LanguageService.T("ServerRoomCriticalIssue")
+                : serverRooms.Any(x => GetServerRoomCardClass(x.Id) == "alert-warning")
+                    ? LanguageService.T("ServerRoomOpenIssue")
+                    : LanguageService.T("ServerRoomsStable");
+
+    private string GetAgentSummaryText()
+        => agents.Count == 0
+            ? LanguageService.T("NoData")
+            : agents.Any(x => GetAgentCardClass(x) == "alert-warning")
+                ? LanguageService.T("InactiveAgentsPresent")
+                : agents.Any(x => GetAgentCardClass(x) == "alert-info")
+                    ? LanguageService.T("AgentsNotReportedYet")
+                    : LanguageService.T("AllAgentsActive");
+
+    private string GetShellySummaryText()
+        => shellyDevices.Count == 0
+            ? LanguageService.T("NoData")
+            : shellyDevices.Any(x => GetShellyCardClass(x.Id) == "alert-critical")
+                ? LanguageService.T("ShellyCriticalIncidentOpen")
+                : shellyDevices.Any(x => GetShellyCardClass(x.Id) == "alert-warning")
+                    ? LanguageService.T("ShellyDoorOpen")
+                    : shellyDevices.Any(x => GetShellyCardClass(x.Id) == "alert-info")
+                        ? LanguageService.T("ShellyNoReadingsYet")
+                        : LanguageService.T("ShellyReportingNormally");
+
+    private string GetMonitoredSummaryText()
+        => monitoredDevices.Count == 0
+            ? LanguageService.T("NoData")
+            : monitoredDevices.Any(x => GetMonitoredDeviceCardClass(x.Id) == "alert-critical")
+                ? LanguageService.T("MonitoredDeviceThresholdDown")
+                : monitoredDevices.Any(x => GetMonitoredDeviceCardClass(x.Id) == "alert-warning")
+                    ? LanguageService.T("MonitoredDeviceUnreachable")
+                    : monitoredDevices.Any(x => GetMonitoredDeviceCardClass(x.Id) == "alert-info")
+                        ? LanguageService.T("MonitoredDeviceNoHistory")
+                        : LanguageService.T("MonitoredDevicesReachable");
+
+    private string GetIncidentSummaryText()
+        => incidents.Count == 0
+            ? LanguageService.T("NoData")
+            : GetOpenCriticalIncidentCount() > 0
+                ? LanguageService.T("CriticalIncidentsImmediateReview")
+                : GetOpenIncidentCount() > 0
+                    ? LanguageService.T("OpenIncidentsTracked")
+                    : LanguageService.T("NoOpenIncidentsRemain");
+
+    private string GetMaintenanceSummaryText()
+        => maintenanceWindows.Count == 0 ? LanguageService.T("NoData") : LanguageService.T("MaintenanceConfigured");
 }

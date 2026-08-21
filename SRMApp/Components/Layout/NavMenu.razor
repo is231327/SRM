@@ -16,37 +16,37 @@
     <nav class="flex-column">
         @if (!AuthSessionService.IsAuthenticated)
         {
-            <div class="nav-item px-3"><NavLink class="nav-link" href="login"><span class="bi bi-list-nested-nav-menu"></span>@LanguageService.T("Login")</NavLink></div>
+            <div class="nav-item px-3"><NavLink class="nav-link" href="login"><span class="bi bi-box-arrow-in-right-nav-menu"></span>@LanguageService.T("Login")</NavLink></div>
         }
         else
         {
-            <div class="nav-item px-3"><button type="button" class="nav-link btn btn-link text-start w-100" @onclick="LogoutAsync">@LanguageService.T("Logout") (@AuthSessionService.CurrentUser?.Username)</button></div>
-            <div class="nav-item px-3"><NavLink class="nav-link" href="profile"><span class="bi bi-list-nested-nav-menu"></span>@LanguageService.T("Profile")</NavLink></div>
+            <div class="nav-item px-3"><button type="button" class="nav-link btn btn-link text-start w-100" @onclick="LogoutAsync"><span class="bi bi-box-arrow-left-nav-menu"></span>@LanguageService.T("Logout")</button></div>
+            <div class="nav-item px-3"><NavLink class="nav-link" href="profile"><span class="bi bi-person-circle-nav-menu"></span>@LanguageService.T("Profile")</NavLink></div>
         }
         @if (!AuthSessionService.IsAuthenticated)
         {
             <div class="nav-item px-3"><NavLink class="nav-link" href="" Match="NavLinkMatch.All"><span class="bi bi-house-door-fill-nav-menu"></span>@LanguageService.T("Home")</NavLink></div>
-            <div class="nav-item px-3"><NavLink class="nav-link" href="help"><span class="bi bi-list-nested-nav-menu"></span>@LanguageService.T("Help")</NavLink></div>
-            <div class="nav-item px-3"><NavLink class="nav-link" href="contact"><span class="bi bi-list-nested-nav-menu"></span>@LanguageService.T("Contact")</NavLink></div>
+            <div class="nav-item px-3"><NavLink class="nav-link" href="help"><span class="bi bi-life-preserver-nav-menu"></span>@LanguageService.T("Help")</NavLink></div>
+            <div class="nav-item px-3"><NavLink class="nav-link" href="contact"><span class="bi bi-envelope-paper-nav-menu"></span>@LanguageService.T("Contact")</NavLink></div>
         }
         else if (!AuthSessionService.MustChangePassword)
         {
             <div class="nav-item px-3"><NavLink class="nav-link" href="" Match="NavLinkMatch.All"><span class="bi bi-house-door-fill-nav-menu"></span>@LanguageService.T("Home")</NavLink></div>
-            <div class="nav-item px-3"><NavLink class="nav-link" href="dashboard"><span class="bi bi-plus-square-fill-nav-menu"></span>@LanguageService.T("Dashboard")</NavLink></div>
+            <div class="nav-item px-3"><NavLink class="nav-link" href="dashboard"><span class="bi bi-speedometer2-nav-menu"></span>@LanguageService.T("Dashboard")</NavLink></div>
             <div class="nav-group-title px-3">@LanguageService.T("Operations")</div>
             @if (AuthSessionService.CanManageUsers)
             {
-                <div class="nav-item px-3"><NavLink class="nav-link" href="users"><span class="bi bi-list-nested-nav-menu"></span>@LanguageService.T("Users")</NavLink></div>
-                <div class="nav-item px-3"><NavLink class="nav-link" href="agent-credentials"><span class="bi bi-list-nested-nav-menu"></span>@LanguageService.T("AgentCredentials")</NavLink></div>
+                <div class="nav-item px-3"><NavLink class="nav-link" href="users"><span class="bi bi-people-nav-menu"></span>@LanguageService.T("Users")</NavLink></div>
+                <div class="nav-item px-3"><NavLink class="nav-link" href="agent-credentials"><span class="bi bi-key-nav-menu"></span>@LanguageService.T("AgentCredentials")</NavLink></div>
             }
             @if (AuthSessionService.CanManageCustomers)
             {
-                <div class="nav-item px-3"><NavLink class="nav-link" href="customers"><span class="bi bi-list-nested-nav-menu"></span>@LanguageService.T("Customers")</NavLink></div>
+                <div class="nav-item px-3"><NavLink class="nav-link" href="customers"><span class="bi bi-buildings-nav-menu"></span>@LanguageService.T("Customers")</NavLink></div>
             }
-            <div class="nav-item px-3"><NavLink class="nav-link" href="incidents"><span class="bi bi-list-nested-nav-menu"></span>@LanguageService.T("Incidents")</NavLink></div>
+            <div class="nav-item px-3"><NavLink class="nav-link" href="incidents"><span class="bi bi-exclamation-triangle-nav-menu"></span>@LanguageService.T("Incidents")</NavLink></div>
             <div class="nav-group-title px-3">@LanguageService.T("Support")</div>
-            <div class="nav-item px-3"><NavLink class="nav-link" href="help"><span class="bi bi-list-nested-nav-menu"></span>@LanguageService.T("Help")</NavLink></div>
-            <div class="nav-item px-3"><NavLink class="nav-link" href="contact"><span class="bi bi-list-nested-nav-menu"></span>@LanguageService.T("Contact")</NavLink></div>
+            <div class="nav-item px-3"><NavLink class="nav-link" href="help"><span class="bi bi-life-preserver-nav-menu"></span>@LanguageService.T("Help")</NavLink></div>
+            <div class="nav-item px-3"><NavLink class="nav-link" href="contact"><span class="bi bi-envelope-paper-nav-menu"></span>@LanguageService.T("Contact")</NavLink></div>
         }
     </nav>
 </div>

@@ -1,6 +1,7 @@
 @inherits LayoutComponentBase
 @implements IDisposable
 @inject LanguageService LanguageService
+@inject AuthSessionService AuthSessionService
 
 <div class="page">
     <div class="sidebar">
@@ -10,14 +11,20 @@
     <main>
         <div class="top-row px-4 app-topbar">
             <div class="topbar-title">SRM</div>
-            <div class="language-switch">
-                <label>@LanguageService.T("Language")</label>
-                <button class="lang-btn @(LanguageService.CurrentLanguage == "en" ? "active" : string.Empty)" @onclick='() => LanguageService.SetLanguage("en")'>
-                    @LanguageService.T("English")
-                </button>
-                <button class="lang-btn @(LanguageService.CurrentLanguage == "de" ? "active" : string.Empty)" @onclick='() => LanguageService.SetLanguage("de")'>
-                    @LanguageService.T("German")
-                </button>
+            <div class="topbar-actions">
+                @if (AuthSessionService.IsAuthenticated)
+                {
+                    <div class="login-status">@LanguageService.T("LoggedInAs") @AuthSessionService.CurrentUser?.Username</div>
+                }
+                <div class="language-switch">
+                    <label>@LanguageService.T("Language")</label>
+                    <button class="lang-btn @(LanguageService.CurrentLanguage == "en" ? "active" : string.Empty)" @onclick='() => LanguageService.SetLanguage("en")'>
+                        @LanguageService.T("English")
+                    </button>
+                    <button class="lang-btn @(LanguageService.CurrentLanguage == "de" ? "active" : string.Empty)" @onclick='() => LanguageService.SetLanguage("de")'>
+                        @LanguageService.T("German")
+                    </button>
+                </div>
             </div>
         </div>
 
@@ -37,12 +44,15 @@
     protected override void OnInitialized()
     {
         LanguageService.LanguageChanged += OnLanguageChanged;
+        AuthSessionService.AuthenticationChanged += OnAuthenticationChanged;
     }
 
     private void OnLanguageChanged() => InvokeAsync(StateHasChanged);
+    private void OnAuthenticationChanged() => InvokeAsync(StateHasChanged);
 
     public void Dispose()
     {
         LanguageService.LanguageChanged -= OnLanguageChanged;
+        AuthSessionService.AuthenticationChanged -= OnAuthenticationChanged;
     }
 }

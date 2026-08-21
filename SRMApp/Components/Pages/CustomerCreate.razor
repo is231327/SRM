@@ -1,0 +1,77 @@
+@page "/customers/create"
+@rendermode InteractiveServer
+@inherits LocalizedComponentBase
+@inject ICoreApiClient ApiClient
+@inject NavigationManager NavigationManager
+
+<PageTitle>@LanguageService.T("CreateCustomer")</PageTitle>
+
+<PageHeader Title="@LanguageService.T("CreateCustomer")" Description="@LanguageService.T("CreateCustomerDescription")">
+    <Actions>
+        <a class="btn btn-outline-secondary" href="/customers">@LanguageService.T("BackToCustomers")</a>
+    </Actions>
+</PageHeader>
+
+@if (!string.IsNullOrWhiteSpace(statusMessage))
+{
+    <div class="alert @(isError ? "alert-danger" : "alert-info")">@statusMessage</div>
+}
+
+<section class="form-card">
+    <EditForm Model="form" OnValidSubmit="SaveAsync">
+        <DataAnnotationsValidator />
+        <ValidationSummary />
+        <div class="form-grid">
+            <div>
+                <label class="form-label">@LanguageService.T("Name")</label>
+                <InputText class="form-control" @bind-Value="form.Name" />
+                <ValidationMessage For="() => form.Name" />
+            </div>
+            <div>
+                <label class="form-label">@LanguageService.T("ExternalReference")</label>
+                <InputText class="form-control" @bind-Value="form.ExternalReference" />
+                <ValidationMessage For="() => form.ExternalReference" />
+            </div>
+            <div>
+                <label class="form-label">@LanguageService.T("Email")</label>
+                <InputText class="form-control" @bind-Value="form.ContactEmail" />
+                <ValidationMessage For="() => form.ContactEmail" />
+            </div>
+            <div>
+                <label class="form-label">@LanguageService.T("Phone")</label>
+                <InputText class="form-control" @bind-Value="form.ContactPhone" />
+                <ValidationMessage For="() => form.ContactPhone" />
+            </div>
+            <div class="form-check mt-4">
+                <InputCheckbox class="form-check-input" @bind-Value="form.IsActive" />
+                <label class="form-check-label">@LanguageService.T("Active")</label>
+            </div>
+        </div>
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary">@LanguageService.T("Save")</button>
+            <a class="btn btn-outline-secondary" href="/customers">@LanguageService.T("Cancel")</a>
+        </div>
+    </EditForm>
+</section>
+
+@code {
+    private readonly CustomerCreateDto form = new() { IsActive = true };
+    private bool isError;
+    private string? statusMessage;
+
+    private async Task SaveAsync()
+    {
+        statusMessage = null;
+        isError = false;
+
+        var created = await ApiClient.CreateCustomerAsync(form);
+        if (created is null)
+        {
+            isError = true;
+            statusMessage = LanguageService.T("CustomerCreateFailed");
+            return;
+        }
+
+        NavigationManager.NavigateTo($"/customers/{created.Id}/details");
+    }
+}

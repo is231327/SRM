@@ -1,0 +1,99 @@
+@page "/maintenance-windows/create"
+@page "/maintenance-windows/{MaintenanceWindowId:guid}/edit"
+@rendermode InteractiveServer
+@inherits LocalizedComponentBase
+@inject ICoreApiClient ApiClient
+@inject ICrudPageDataService CrudPageDataService
+@inject NavigationManager NavigationManager
+
+<PageTitle>@(IsEditMode ? LanguageService.T("EditMaintenanceWindow") : LanguageService.T("CreateMaintenanceWindow"))</PageTitle>
+<PageHeader Title="@(IsEditMode ? LanguageService.T("EditMaintenanceWindow") : LanguageService.T("CreateMaintenanceWindow"))" Description="@(IsEditMode ? LanguageService.T("EditMaintenanceWindowDescription") : LanguageService.T("CreateMaintenanceWindowDescription"))">
+    <Actions><a class="btn btn-outline-secondary" href="@GetBackHref()">@GetBackText()</a></Actions>
+</PageHeader>
+
+@if (isLoading)
+{
+    <p>@LanguageService.T("Loading")</p>
+}
+else
+{
+    <section class="form-card">
+        <EditForm Model="form" OnValidSubmit="SaveAsync">
+            <DataAnnotationsValidator />
+            <ValidationSummary />
+            <div class="form-grid">
+                <div>
+                    <label class="form-label">@LanguageService.T("ServerRoom")</label>
+                    <InputSelect class="form-select" @bind-Value="form.ServerRoomId" disabled="@(serverRoomId is not null)">
+                        <option value="@Guid.Empty">@LanguageService.T("SelectServerRoom")</option>
+                        @foreach (var room in serverRoomsForSelection)
+                        {
+                            <option value="@room.Id">@room.Name</option>
+                        }
+                    </InputSelect>
+                </div>
+                <div><label class="form-label">@LanguageService.T("MaintenanceTitle")</label><InputText class="form-control" @bind-Value="form.Title" /></div>
+                <div><label class="form-label">@LanguageService.T("Start")</label><InputDate class="form-control" @bind-Value="form.StartUtc" /></div>
+                <div><label class="form-label">@LanguageService.T("End")</label><InputDate class="form-control" @bind-Value="form.EndUtc" /></div>
+                <div><label class="form-label">@LanguageService.T("Description")</label><InputText class="form-control" @bind-Value="form.Description" /></div>
+            </div>
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary">@LanguageService.T("Save")</button>
+                <a class="btn btn-outline-secondary" href="@GetBackHref()">@LanguageService.T("Cancel")</a>
+            </div>
+        </EditForm>
+    </section>
+}
+
+@code {
+    [Parameter] public Guid? MaintenanceWindowId { get; set; }
+    [SupplyParameterFromQuery] public Guid? serverRoomId { get; set; }
+    [SupplyParameterFromQuery] public Guid? customerId { get; set; }
+    private bool isLoading = true;
+    private bool IsEditMode => MaintenanceWindowId.HasValue;
+    private List<ServerRoomReadDto> serverRoomsForSelection = [];
+    private MaintenanceWindowCreateDto form = new() { StartUtc = DateTime.UtcNow, EndUtc = DateTime.UtcNow.AddHours(1) };
+    protected override async Task OnParametersSetAsync()
+    {
+        isLoading = true;
+        if (serverRoomId is not null) form.ServerRoomId = serverRoomId.Value;
+        var pageData = await CrudPageDataService.GetMaintenanceWindowPageDataAsync(serverRoomId, customerId);
+        serverRoomsForSelection = pageData.ServerRoomsForSelection.ToList();
+        if (IsEditMode)
+        {
+            var maintenanceWindowId = MaintenanceWindowId!.Value;
+            var item = pageData.Items.FirstOrDefault(x => x.Id == maintenanceWindowId) ?? (await ApiClient.GetMaintenanceWindowsAsync()).FirstOrDefault(x => x.Id == maintenanceWindowId);
+            if (item is not null)
+            {
+                form = new MaintenanceWindowCreateDto
+                {
+                    ServerRoomId = item.ServerRoomId, Title = item.Title, StartUtc = item.StartUtc, EndUtc = item.EndUtc, Description = item.Description
+                };
+            }
+        }
+        isLoading = false;
+    }
+    private async Task SaveAsync()
+    {
+        if (IsEditMode)
+        {
+            await ApiClient.UpdateMaintenanceWindowAsync(MaintenanceWindowId!.Value, new MaintenanceWindowUpdateDto
+            {
+                ServerRoomId = form.ServerRoomId, Title = form.Title, StartUtc = form.StartUtc, EndUtc = form.EndUtc, Description = form.Description
+            });
+        }
+        else
+        {
+            await ApiClient.CreateMaintenanceWindowAsync(form);
+        }
+        NavigationManager.NavigateTo(GetBackHref());
+    }
+    private string GetBackHref()
+        => serverRoomId is not null ? $"/serverrooms/{serverRoomId}/details"
+            : customerId is not null ? $"/customers/{customerId}/details"
+            : "/maintenance-windows";
+    private string GetBackText()
+        => serverRoomId is not null ? LanguageService.T("BackToServerRooms")
+            : customerId is not null ? LanguageService.T("BackToCustomerOverview")
+            : LanguageService.T("MaintenanceWindows");
+}

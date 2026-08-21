@@ -27,6 +27,8 @@ public class Program
         builder.Services.AddScoped<ProtectedSessionStorage>();
         builder.Services.AddScoped<AuthSessionService>();
         builder.Services.AddScoped<LanguageService>();
+        builder.Services.AddScoped<IOverviewDataService, OverviewDataService>();
+        builder.Services.AddScoped<ICrudPageDataService, CrudPageDataService>();
 
         var app = builder.Build();
 

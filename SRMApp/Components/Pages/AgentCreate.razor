@@ -1,0 +1,130 @@
+@page "/agents/create"
+@page "/agents/{AgentId:guid}/edit"
+@rendermode InteractiveServer
+@inherits LocalizedComponentBase
+@inject ICoreApiClient ApiClient
+@inject ICrudPageDataService CrudPageDataService
+@inject NavigationManager NavigationManager
+
+<PageTitle>@(IsEditMode ? LanguageService.T("EditAgent") : LanguageService.T("CreateAgent"))</PageTitle>
+
+<PageHeader Title="@(IsEditMode ? LanguageService.T("EditAgent") : LanguageService.T("CreateAgent"))" Description="@(IsEditMode ? LanguageService.T("EditAgentDescription") : LanguageService.T("CreateAgentDescription"))">
+    <Actions>
+        <a class="btn btn-outline-secondary" href="@GetBackHref()">@GetBackText()</a>
+    </Actions>
+</PageHeader>
+
+@if (isLoading)
+{
+    <p>@LanguageService.T("Loading")</p>
+}
+else
+{
+    <section class="form-card">
+        <EditForm Model="form" OnValidSubmit="SaveAsync">
+            <DataAnnotationsValidator />
+            <ValidationSummary />
+            <div class="form-grid">
+                <div>
+                    <label class="form-label">@LanguageService.T("ServerRoom")</label>
+                    <InputSelect class="form-select" @bind-Value="form.ServerRoomId" disabled="@(serverRoomId is not null)">
+                        <option value="@Guid.Empty">@LanguageService.T("SelectServerRoom")</option>
+                        @foreach (var room in serverRoomsForSelection)
+                        {
+                            <option value="@room.Id">@room.Name</option>
+                        }
+                    </InputSelect>
+                </div>
+                <div><label class="form-label">@LanguageService.T("Name")</label><InputText class="form-control" @bind-Value="form.Name" /></div>
+                <div><label class="form-label">@LanguageService.T("ApiKeyReference")</label><InputText class="form-control" @bind-Value="form.ApiKeyReference" /></div>
+                <div><label class="form-label">@LanguageService.T("Version")</label><InputText class="form-control" @bind-Value="form.Version" /></div>
+                <div><label class="form-label">@LanguageService.T("IpAddress")</label><InputText class="form-control" @bind-Value="form.LastKnownIpAddress" /></div>
+                <div><label class="form-label">@LanguageService.T("LastSeen")</label><InputDate class="form-control" @bind-Value="form.LastSeenAtUtc" /></div>
+                <div class="form-check mt-4"><InputCheckbox class="form-check-input" @bind-Value="form.IsActive" /><label class="form-check-label">@LanguageService.T("Active")</label></div>
+            </div>
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary">@LanguageService.T("Save")</button>
+                <a class="btn btn-outline-secondary" href="@GetBackHref()">@LanguageService.T("Cancel")</a>
+            </div>
+        </EditForm>
+    </section>
+}
+
+@code {
+    [Parameter] public Guid? AgentId { get; set; }
+    [SupplyParameterFromQuery] public Guid? serverRoomId { get; set; }
+    [SupplyParameterFromQuery] public Guid? customerId { get; set; }
+
+    private bool isLoading = true;
+    private bool IsEditMode => AgentId.HasValue;
+    private List<ServerRoomReadDto> serverRoomsForSelection = [];
+    private AgentCreateDto form = new() { IsActive = true };
+
+    protected override async Task OnParametersSetAsync()
+    {
+        isLoading = true;
+        if (serverRoomId is not null)
+        {
+            form.ServerRoomId = serverRoomId.Value;
+        }
+
+        var pageData = await CrudPageDataService.GetAgentPageDataAsync(serverRoomId, customerId);
+        serverRoomsForSelection = pageData.ServerRoomsForSelection.ToList();
+
+        if (IsEditMode)
+        {
+            var agentId = AgentId!.Value;
+            var item = pageData.Agents.FirstOrDefault(x => x.Id == agentId) ?? (await ApiClient.GetAgentsAsync()).FirstOrDefault(x => x.Id == agentId);
+            if (item is not null)
+            {
+                form = new AgentCreateDto
+                {
+                    ServerRoomId = item.ServerRoomId,
+                    Name = item.Name,
+                    ApiKeyReference = item.ApiKeyReference,
+                    Version = item.Version,
+                    LastKnownIpAddress = item.LastKnownIpAddress,
+                    LastSeenAtUtc = item.LastSeenAtUtc,
+                    IsActive = item.IsActive
+                };
+            }
+        }
+
+        isLoading = false;
+    }
+
+    private async Task SaveAsync()
+    {
+        if (IsEditMode)
+        {
+            await ApiClient.UpdateAgentAsync(AgentId!.Value, new AgentUpdateDto
+            {
+                ServerRoomId = form.ServerRoomId,
+                Name = form.Name,
+                ApiKeyReference = form.ApiKeyReference,
+                Version = form.Version,
+                LastKnownIpAddress = form.LastKnownIpAddress,
+                LastSeenAtUtc = form.LastSeenAtUtc,
+                IsActive = form.IsActive
+            });
+        }
+        else
+        {
+            await ApiClient.CreateAgentAsync(form);
+        }
+
+        NavigationManager.NavigateTo(GetBackHref());
+    }
+
+    private string GetBackHref()
+        => serverRoomId is not null
+            ? $"/serverrooms/{serverRoomId}/details"
+            : customerId is not null
+                ? $"/customers/{customerId}/details"
+                : "/agents";
+
+    private string GetBackText()
+        => serverRoomId is not null ? LanguageService.T("BackToServerRooms")
+            : customerId is not null ? LanguageService.T("BackToCustomerOverview")
+            : LanguageService.T("BackToAgents");
+}

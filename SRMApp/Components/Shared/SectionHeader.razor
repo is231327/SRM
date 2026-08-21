@@ -1,0 +1,20 @@
+<div class="section-heading">
+    <div>
+        <h3>@Title</h3>
+        @if (!string.IsNullOrWhiteSpace(Description))
+        {
+            <p class="subtle">@Description</p>
+        }
+    </div>
+    @if (!string.IsNullOrWhiteSpace(ViewAllHref))
+    {
+        <a class="btn btn-outline-primary btn-sm" href="@ViewAllHref">@ViewAllText</a>
+    }
+</div>
+
+@code {
+    [Parameter] public string Title { get; set; } = string.Empty;
+    [Parameter] public string Description { get; set; } = string.Empty;
+    [Parameter] public string ViewAllHref { get; set; } = string.Empty;
+    [Parameter] public string ViewAllText { get; set; } = "View All";
+}

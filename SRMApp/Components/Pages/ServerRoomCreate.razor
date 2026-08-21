@@ -1,0 +1,120 @@
+@page "/serverrooms/create"
+@page "/serverrooms/{ServerRoomId:guid}/edit"
+@rendermode InteractiveServer
+@inherits LocalizedComponentBase
+@inject ICoreApiClient ApiClient
+@inject ICrudPageDataService CrudPageDataService
+@inject NavigationManager NavigationManager
+
+<PageTitle>@(IsEditMode ? LanguageService.T("EditServerRoom") : LanguageService.T("CreateServerRoom"))</PageTitle>
+
+<PageHeader Title="@(IsEditMode ? LanguageService.T("EditServerRoom") : LanguageService.T("CreateServerRoom"))" Description="@(IsEditMode ? LanguageService.T("EditServerRoomDescription") : LanguageService.T("CreateServerRoomDescription"))">
+    <Actions>
+        <a class="btn btn-outline-secondary" href="@GetBackHref()">@GetBackText()</a>
+    </Actions>
+</PageHeader>
+
+@if (isLoading)
+{
+    <p>@LanguageService.T("Loading")</p>
+}
+else
+{
+    <section class="form-card">
+        <EditForm Model="form" OnValidSubmit="SaveAsync">
+            <DataAnnotationsValidator />
+            <ValidationSummary />
+            <div class="form-grid">
+                <div>
+                    <label class="form-label">@LanguageService.T("Customer")</label>
+                    <InputSelect class="form-select" @bind-Value="form.CustomerId" disabled="@(CustomerId is not null)">
+                        <option value="@Guid.Empty">@LanguageService.T("SelectCustomer")</option>
+                        @foreach (var customer in customersForSelection)
+                        {
+                            <option value="@customer.Id">@customer.Name</option>
+                        }
+                    </InputSelect>
+                </div>
+                <div><label class="form-label">@LanguageService.T("Name")</label><InputText class="form-control" @bind-Value="form.Name" /></div>
+                <div><label class="form-label">@LanguageService.T("Description")</label><InputText class="form-control" @bind-Value="form.LocationDescription" /></div>
+                <div><label class="form-label">@LanguageService.T("WarningThreshold")</label><InputNumber class="form-control" @bind-Value="form.TemperatureWarningThreshold" /></div>
+                <div><label class="form-label">@LanguageService.T("CriticalThreshold")</label><InputNumber class="form-control" @bind-Value="form.TemperatureCriticalThreshold" /></div>
+                <div class="form-check mt-4"><InputCheckbox class="form-check-input" @bind-Value="form.MonitoringEnabled" /><label class="form-check-label">@LanguageService.T("Active")</label></div>
+            </div>
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary">@LanguageService.T("Save")</button>
+                <a class="btn btn-outline-secondary" href="@GetBackHref()">@LanguageService.T("Cancel")</a>
+            </div>
+        </EditForm>
+    </section>
+}
+
+@code {
+    [Parameter] public Guid? ServerRoomId { get; set; }
+    [SupplyParameterFromQuery] public Guid? CustomerId { get; set; }
+
+    private bool isLoading = true;
+    private bool IsEditMode => ServerRoomId.HasValue;
+    private List<CustomerReadDto> customersForSelection = [];
+    private ServerRoomCreateDto form = new() { MonitoringEnabled = true, TemperatureWarningThreshold = 25, TemperatureCriticalThreshold = 30 };
+
+    protected override async Task OnParametersSetAsync()
+    {
+        isLoading = true;
+        if (CustomerId is not null)
+        {
+            form.CustomerId = CustomerId.Value;
+        }
+
+        var pageData = await CrudPageDataService.GetServerRoomPageDataAsync(CustomerId);
+        customersForSelection = pageData.CustomersForSelection.ToList();
+
+        if (IsEditMode)
+        {
+            var serverRoomId = ServerRoomId!.Value;
+            var room = pageData.ServerRooms.FirstOrDefault(x => x.Id == serverRoomId) ?? (await ApiClient.GetServerRoomsAsync()).FirstOrDefault(x => x.Id == serverRoomId);
+            if (room is not null)
+            {
+                form = new ServerRoomCreateDto
+                {
+                    CustomerId = room.CustomerId,
+                    Name = room.Name,
+                    LocationDescription = room.LocationDescription,
+                    TemperatureWarningThreshold = room.TemperatureWarningThreshold,
+                    TemperatureCriticalThreshold = room.TemperatureCriticalThreshold,
+                    MonitoringEnabled = room.MonitoringEnabled
+                };
+            }
+        }
+
+        isLoading = false;
+    }
+
+    private async Task SaveAsync()
+    {
+        if (IsEditMode)
+        {
+            await ApiClient.UpdateServerRoomAsync(ServerRoomId!.Value, new ServerRoomUpdateDto
+            {
+                CustomerId = form.CustomerId,
+                Name = form.Name,
+                LocationDescription = form.LocationDescription,
+                TemperatureWarningThreshold = form.TemperatureWarningThreshold,
+                TemperatureCriticalThreshold = form.TemperatureCriticalThreshold,
+                MonitoringEnabled = form.MonitoringEnabled
+            });
+        }
+        else
+        {
+            await ApiClient.CreateServerRoomAsync(form);
+        }
+
+        NavigationManager.NavigateTo(GetBackHref());
+    }
+
+    private string GetBackHref()
+        => CustomerId is not null ? $"/customers/{CustomerId}/details" : "/serverrooms";
+
+    private string GetBackText()
+        => CustomerId is not null ? LanguageService.T("BackToCustomerOverview") : LanguageService.T("BackToServerRooms");
+}

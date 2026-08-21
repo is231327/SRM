@@ -1,0 +1,109 @@
+@page "/shelly-devices/create"
+@page "/shelly-devices/{ShellyDeviceId:guid}/edit"
+@rendermode InteractiveServer
+@inherits LocalizedComponentBase
+@inject ICoreApiClient ApiClient
+@inject ICrudPageDataService CrudPageDataService
+@inject NavigationManager NavigationManager
+
+<PageTitle>@(IsEditMode ? LanguageService.T("EditShellyDevice") : LanguageService.T("CreateShellyDevice"))</PageTitle>
+<PageHeader Title="@(IsEditMode ? LanguageService.T("EditShellyDevice") : LanguageService.T("CreateShellyDevice"))" Description="@(IsEditMode ? LanguageService.T("EditShellyDeviceDescription") : LanguageService.T("CreateShellyDeviceDescription"))">
+    <Actions><a class="btn btn-outline-secondary" href="@GetBackHref()">@GetBackText()</a></Actions>
+</PageHeader>
+
+@if (isLoading)
+{
+    <p>@LanguageService.T("Loading")</p>
+}
+else
+{
+    <section class="form-card">
+        <EditForm Model="form" OnValidSubmit="SaveAsync">
+            <DataAnnotationsValidator />
+            <ValidationSummary />
+            <div class="form-grid">
+                <div>
+                    <label class="form-label">@LanguageService.T("AgentReference")</label>
+                    <InputSelect class="form-select" @bind-Value="form.AgentId" disabled="@(agentId is not null)">
+                        <option value="@Guid.Empty">@LanguageService.T("SelectAgent")</option>
+                        @foreach (var agent in agentsForSelection)
+                        {
+                            <option value="@agent.Id">@agent.Name</option>
+                        }
+                    </InputSelect>
+                </div>
+                <div><label class="form-label">@LanguageService.T("Name")</label><InputText class="form-control" @bind-Value="form.Name" /></div>
+                <div><label class="form-label">@LanguageService.T("DeviceType")</label><InputText class="form-control" @bind-Value="form.DeviceType" /></div>
+                <div><label class="form-label">@LanguageService.T("BaseUrl")</label><InputText class="form-control" @bind-Value="form.BaseUrl" /></div>
+                <div><label class="form-label">@LanguageService.T("MacAddress")</label><InputText class="form-control" @bind-Value="form.MacAddress" /></div>
+                <div><label class="form-label">@LanguageService.T("Firmware")</label><InputText class="form-control" @bind-Value="form.FirmwareVersion" /></div>
+                <div class="form-check mt-4"><InputCheckbox class="form-check-input" @bind-Value="form.IsVirtual" /><label class="form-check-label">@LanguageService.T("Virtual")</label></div>
+                <div class="form-check mt-4"><InputCheckbox class="form-check-input" @bind-Value="form.IsActive" /><label class="form-check-label">@LanguageService.T("Active")</label></div>
+            </div>
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary">@LanguageService.T("Save")</button>
+                <a class="btn btn-outline-secondary" href="@GetBackHref()">@LanguageService.T("Cancel")</a>
+            </div>
+        </EditForm>
+    </section>
+}
+
+@code {
+    [Parameter] public Guid? ShellyDeviceId { get; set; }
+    [SupplyParameterFromQuery] public Guid? agentId { get; set; }
+    [SupplyParameterFromQuery] public Guid? serverRoomId { get; set; }
+    [SupplyParameterFromQuery] public Guid? customerId { get; set; }
+    private bool isLoading = true;
+    private bool IsEditMode => ShellyDeviceId.HasValue;
+    private List<AgentReadDto> agentsForSelection = [];
+    private ShellyDeviceCreateDto form = new() { IsActive = true };
+
+    protected override async Task OnParametersSetAsync()
+    {
+        isLoading = true;
+        if (agentId is not null) form.AgentId = agentId.Value;
+        var pageData = await CrudPageDataService.GetShellyDevicePageDataAsync(agentId, serverRoomId, customerId);
+        agentsForSelection = pageData.AgentsForSelection.ToList();
+
+        if (IsEditMode)
+        {
+            var shellyDeviceId = ShellyDeviceId!.Value;
+            var item = pageData.Items.FirstOrDefault(x => x.Id == shellyDeviceId) ?? (await ApiClient.GetShellyDevicesAsync()).FirstOrDefault(x => x.Id == shellyDeviceId);
+            if (item is not null)
+            {
+                form = new ShellyDeviceCreateDto
+                {
+                    AgentId = item.AgentId, Name = item.Name, DeviceType = item.DeviceType, BaseUrl = item.BaseUrl,
+                    MacAddress = item.MacAddress, FirmwareVersion = item.FirmwareVersion, IsVirtual = item.IsVirtual, IsActive = item.IsActive
+                };
+            }
+        }
+        isLoading = false;
+    }
+    private async Task SaveAsync()
+    {
+        if (IsEditMode)
+        {
+            await ApiClient.UpdateShellyDeviceAsync(ShellyDeviceId!.Value, new ShellyDeviceUpdateDto
+            {
+                AgentId = form.AgentId, Name = form.Name, DeviceType = form.DeviceType, BaseUrl = form.BaseUrl,
+                MacAddress = form.MacAddress, FirmwareVersion = form.FirmwareVersion, IsVirtual = form.IsVirtual, IsActive = form.IsActive
+            });
+        }
+        else
+        {
+            await ApiClient.CreateShellyDeviceAsync(form);
+        }
+        NavigationManager.NavigateTo(GetBackHref());
+    }
+    private string GetBackHref()
+        => agentId is not null ? "/agents"
+            : serverRoomId is not null ? $"/serverrooms/{serverRoomId}/details"
+            : customerId is not null ? $"/customers/{customerId}/details"
+            : "/shelly-devices";
+    private string GetBackText()
+        => agentId is not null ? LanguageService.T("BackToAgents")
+            : serverRoomId is not null ? LanguageService.T("BackToServerRooms")
+            : customerId is not null ? LanguageService.T("BackToCustomerOverview")
+            : LanguageService.T("ShellyDevices");
+}

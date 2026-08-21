@@ -2,159 +2,112 @@
 @rendermode InteractiveServer
 @inherits LocalizedComponentBase
 @inject ICoreApiClient ApiClient
+@inject ICrudPageDataService CrudPageDataService
 
 <PageTitle>@LanguageService.T("MaintenanceWindows")</PageTitle>
 
-<div class="page-header">
-    <div>
-        <h1>@LanguageService.T("MaintenanceWindows")</h1>
-        <p>@LanguageService.T("ServerRoomChildren")</p>
+<PageHeader Title="@LanguageService.T("MaintenanceWindows")" Description="@LanguageService.T("MaintenanceWindowsOverviewDescription")">
+    <Actions>
+        <a class="btn btn-primary" href="@GetCreateHref()">@LanguageService.T("CreateMaintenanceWindow")</a>
+        @if (serverRoomId is not null)
+        {
+            <a class="btn btn-outline-primary" href="/serverrooms/@serverRoomId/details">@LanguageService.T("BackToServerRooms")</a>
+        }
+        else if (customerId is not null)
+        {
+            <a class="btn btn-outline-primary" href="/customers/@customerId/details">@LanguageService.T("BackToCustomerOverview")</a>
+        }
+    </Actions>
+</PageHeader>
+
+@if (isLoading)
+{
+    <p>@LanguageService.T("Loading")</p>
+}
+else if (items.Count == 0)
+{
+    <div class="empty-state">
+        <h3>@LanguageService.T("NoData")</h3>
+        <p class="subtle">@LanguageService.T("MaintenanceWindowsOverviewDescription")</p>
+        <a class="btn btn-primary" href="@GetCreateHref()">@LanguageService.T("CreateMaintenanceWindow")</a>
     </div>
-    @if (customerId is not null)
-    {
-        <a class="btn btn-outline-primary" href="/customers/@customerId/details">@LanguageService.T("BackToCustomerOverview")</a>
-    }
-</div>
-
-<div class="entity-grid">
-    <section class="entity-list">
-        @if (isLoading)
+}
+else
+{
+    <div class="stats-grid">
+        @foreach (var item in items)
         {
-            <p>@LanguageService.T("Loading")</p>
+            var cardClass = GetMaintenanceCardClass(item);
+            <SummaryStatCard CardClass="@cardClass"
+                             IconClass="stat-icon-maintenance"
+                             Title="@item.Title"
+                             Value="@GetMaintenanceValue(item)"
+                             SummaryText="@GetMaintenanceSummaryText(item)"
+                             SummaryTextClass="@OverviewUiHelper.GetStatusTextClass(cardClass)"
+                             SecondaryText="@($"{OverviewUiHelper.FormatLocalDateTime(item.StartUtc)} - {OverviewUiHelper.FormatLocalDateTime(item.EndUtc)}")">
+                <Details>
+                    <div>@item.Description</div>
+                </Details>
+                <Actions>
+                    <a class="btn btn-outline-primary btn-sm" href="@GetEditHref(item.Id)">@LanguageService.T("Edit")</a>
+                    <button class="btn btn-outline-danger btn-sm" @onclick="() => DeleteAsync(item.Id)">@LanguageService.T("Delete")</button>
+                </Actions>
+            </SummaryStatCard>
         }
-        else if (items.Count == 0)
-        {
-            <p>@LanguageService.T("NoData")</p>
-        }
-        else
-        {
-            @foreach (var item in items)
-            {
-                <article class="entity-card">
-                    <div class="entity-card-header">
-                        <div>
-                            <h3>@item.Title</h3>
-                            <div class="subtle">@item.StartUtc.ToLocalTime() - @item.EndUtc.ToLocalTime()</div>
-                            <div class="subtle">@item.Description</div>
-                        </div>
-                    </div>
-                    <div class="child-links">
-                        <button class="btn btn-outline-primary btn-sm" @onclick="() => BeginEdit(item)">@LanguageService.T("Edit")</button>
-                        <button class="btn btn-outline-danger btn-sm" @onclick="() => DeleteAsync(item.Id)">@LanguageService.T("Delete")</button>
-                    </div>
-                </article>
-            }
-        }
-    </section>
-
-    <section class="form-card">
-        <h3>@(editingId is null ? $"{LanguageService.T("Create")} {LanguageService.T("MaintenanceWindows")}" : $"{LanguageService.T("Update")} {LanguageService.T("MaintenanceWindows")}")</h3>
-        <EditForm Model="form" OnValidSubmit="SaveAsync">
-            <DataAnnotationsValidator />
-            <ValidationSummary />
-            <div class="form-grid">
-                <div>
-                    <label class="form-label">Server Room</label>
-                    <InputSelect class="form-select" @bind-Value="form.ServerRoomId" disabled="@(serverRoomId is not null)">
-                        <option value="@Guid.Empty">Select server room</option>
-                        @foreach (var room in serverRoomsForSelection)
-                        {
-                            <option value="@room.Id">@room.Name</option>
-                        }
-                    </InputSelect>
-                </div>
-                <div><label class="form-label">@LanguageService.T("MaintenanceTitle")</label><InputText class="form-control" @bind-Value="form.Title" /></div>
-                <div><label class="form-label">Start</label><InputDate class="form-control" @bind-Value="form.StartUtc" /></div>
-                <div><label class="form-label">End</label><InputDate class="form-control" @bind-Value="form.EndUtc" /></div>
-                <div><label class="form-label">@LanguageService.T("Description")</label><InputText class="form-control" @bind-Value="form.Description" /></div>
-            </div>
-            <div class="form-actions">
-                <button type="submit" class="btn btn-primary">@LanguageService.T("Save")</button>
-                <button type="button" class="btn btn-outline-secondary" @onclick="ResetForm">@LanguageService.T("Cancel")</button>
-            </div>
-        </EditForm>
-    </section>
-</div>
+    </div>
+}
 
 @code {
     [SupplyParameterFromQuery] public Guid? serverRoomId { get; set; }
     [SupplyParameterFromQuery] public Guid? customerId { get; set; }
-
     private bool isLoading = true;
     private List<MaintenanceWindowReadDto> items = [];
-    private List<ServerRoomReadDto> serverRoomsForSelection = [];
-    private MaintenanceWindowCreateDto form = new() { StartUtc = DateTime.UtcNow, EndUtc = DateTime.UtcNow.AddHours(1) };
-    private Guid? editingId;
 
     protected override async Task OnParametersSetAsync()
-    {
-        if (serverRoomId is not null)
-        {
-            form.ServerRoomId = serverRoomId.Value;
-        }
-
-        await LoadAsync();
-    }
+        => await LoadAsync();
 
     private async Task LoadAsync()
     {
         isLoading = true;
-        var all = await ApiClient.GetMaintenanceWindowsAsync();
-        serverRoomsForSelection = await ApiClient.GetServerRoomsAsync();
-        if (customerId is not null)
-        {
-            var customerRoomIds = serverRoomsForSelection.Where(x => x.CustomerId == customerId.Value).Select(x => x.Id).ToHashSet();
-            items = all.Where(x => customerRoomIds.Contains(x.ServerRoomId)).ToList();
-            serverRoomsForSelection = serverRoomsForSelection.Where(x => customerRoomIds.Contains(x.Id)).ToList();
-        }
-        else
-        {
-            items = serverRoomId is null ? all : all.Where(x => x.ServerRoomId == serverRoomId).ToList();
-        }
+        var pageData = await CrudPageDataService.GetMaintenanceWindowPageDataAsync(serverRoomId, customerId);
+        items = pageData.Items.ToList();
         isLoading = false;
-    }
-
-    private void BeginEdit(MaintenanceWindowReadDto item)
-    {
-        editingId = item.Id;
-        form = new MaintenanceWindowCreateDto
-        {
-            ServerRoomId = item.ServerRoomId,
-            Title = item.Title,
-            StartUtc = item.StartUtc,
-            EndUtc = item.EndUtc,
-            Description = item.Description
-        };
-    }
-
-    private async Task SaveAsync()
-    {
-        if (editingId is null)
-            await ApiClient.CreateMaintenanceWindowAsync(form);
-        else
-            await ApiClient.UpdateMaintenanceWindowAsync(editingId.Value, new MaintenanceWindowUpdateDto
-            {
-                ServerRoomId = form.ServerRoomId,
-                Title = form.Title,
-                StartUtc = form.StartUtc,
-                EndUtc = form.EndUtc,
-                Description = form.Description
-            });
-
-        ResetForm();
-        await LoadAsync();
     }
 
     private async Task DeleteAsync(Guid id)
     {
         await ApiClient.DeleteMaintenanceWindowAsync(id);
-        if (editingId == id) ResetForm();
         await LoadAsync();
     }
 
-    private void ResetForm()
+    private string GetCreateHref()
+        => serverRoomId is not null ? $"/maintenance-windows/create?serverRoomId={serverRoomId}"
+            : customerId is not null ? $"/maintenance-windows/create?customerId={customerId}"
+            : "/maintenance-windows/create";
+
+    private string GetEditHref(Guid id)
+        => serverRoomId is not null ? $"/maintenance-windows/{id}/edit?serverRoomId={serverRoomId}"
+            : customerId is not null ? $"/maintenance-windows/{id}/edit?customerId={customerId}"
+            : $"/maintenance-windows/{id}/edit";
+
+    private string GetMaintenanceCardClass(MaintenanceWindowReadDto item)
     {
-        editingId = null;
-        form = new MaintenanceWindowCreateDto { ServerRoomId = serverRoomId ?? Guid.Empty, StartUtc = DateTime.UtcNow, EndUtc = DateTime.UtcNow.AddHours(1) };
+        var now = DateTime.UtcNow;
+        if (item.StartUtc <= now && item.EndUtc >= now) return "alert-warning";
+        if (item.StartUtc > now) return "alert-ok";
+        return string.Empty;
     }
+
+    private string GetMaintenanceValue(MaintenanceWindowReadDto item)
+    {
+        var now = DateTime.UtcNow;
+        if (item.StartUtc <= now && item.EndUtc >= now) return LanguageService.T("Active");
+        if (item.StartUtc > now) return LanguageService.T("Upcoming");
+        return LanguageService.T("Completed");
+    }
+
+    private string GetMaintenanceSummaryText(MaintenanceWindowReadDto item)
+        => item.StartUtc > DateTime.UtcNow ? LanguageService.T("MaintenanceScheduled")
+            : item.EndUtc >= DateTime.UtcNow ? LanguageService.T("MaintenanceInProgress")
+            : LanguageService.T("MaintenanceFinished");
 }

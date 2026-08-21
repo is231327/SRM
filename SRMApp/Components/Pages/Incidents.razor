@@ -34,12 +34,12 @@
         {
             @foreach (var item in items)
             {
-                <article class="entity-card">
+                <article class="entity-card @GetIncidentCardClass(item)">
                     <div class="entity-card-header">
                         <div>
                             <h3>@item.Summary</h3>
                             <div class="subtle">@LanguageService.T("IncidentType"): @LanguageService.T(item.Type.ToString())</div>
-                            <div class="subtle">@LanguageService.T("Severity"): @LanguageService.T(item.Severity.ToString()) | @LanguageService.T("Status"): @LanguageService.T(item.Status.ToString())</div>
+                            <div class="@GetIncidentStatusClass(item)">@LanguageService.T("Severity"): @LanguageService.T(item.Severity.ToString()) | @LanguageService.T("Status"): @LanguageService.T(item.Status.ToString())</div>
                             <div class="subtle">@LanguageService.T("OpenedAt"): @item.OpenedAtUtc.ToLocalTime()</div>
                             <div class="subtle">@LanguageService.T("ServerRoom"): @item.ServerRoomName</div>
                             @if (!string.IsNullOrWhiteSpace(item.ShellyDeviceName))
@@ -57,6 +57,7 @@
                         </div>
                     </div>
                     <div class="child-links">
+                        <span class="@GetIncidentBadgeClass(item)">@LanguageService.T(item.Type.ToString())</span>
                         <a class="btn btn-primary btn-sm" href="/incidents/@item.Id">@LanguageService.T("Details")</a>
                     </div>
                 </article>
@@ -95,4 +96,28 @@
             .ToList();
         isLoading = false;
     }
+
+    private string GetIncidentCardClass(IncidentReadDto incident)
+        => incident.Severity.ToString() switch
+        {
+            "Critical" => "alert-critical",
+            "Major" => "alert-warning",
+            _ => string.Empty
+        };
+
+    private string GetIncidentBadgeClass(IncidentReadDto incident)
+        => incident.Severity.ToString() switch
+        {
+            "Critical" => "badge-critical",
+            "Major" => "badge-warning",
+            _ => "badge-soft"
+        };
+
+    private string GetIncidentStatusClass(IncidentReadDto incident)
+        => incident.Severity.ToString() switch
+        {
+            "Critical" => "status-line-critical",
+            "Major" => "status-line-warning",
+            _ => "subtle"
+        };
 }

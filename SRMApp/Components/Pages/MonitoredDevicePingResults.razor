@@ -2,17 +2,20 @@
 @rendermode InteractiveServer
 @inherits LocalizedComponentBase
 @inject ICoreApiClient ApiClient
+@inject ICrudPageDataService CrudPageDataService
 @using SRMShared.DTOs.MonitoredDevice
 @using SRMShared.DTOs.MonitoredDevicePingResult
 
 <PageTitle>@LanguageService.T("MonitoredDevicePingResults")</PageTitle>
 
-<div class="page-header">
-    <div>
-        <h1>@LanguageService.T("MonitoredDevicePingResults")</h1>
-        <p>@LanguageService.T("AgentChildren")</p>
-    </div>
-</div>
+<PageHeader Title="@LanguageService.T("MonitoredDevicePingResults")" Description="@LanguageService.T("AgentChildren")">
+    <Actions>
+        @if (monitoredDeviceId is not null)
+        {
+            <a class="btn btn-outline-primary" href="/monitored-devices">@LanguageService.T("MonitoredDevices")</a>
+        }
+    </Actions>
+</PageHeader>
 
 <div class="entity-grid">
     <section class="entity-list">
@@ -31,10 +34,10 @@
                 <article class="entity-card">
                     <div class="entity-card-header">
                         <div>
-                            <h3>@(item.IsReachable ? LanguageService.T("Reachable") : LanguageService.T("Inactive"))</h3>
-                            <div class="subtle">@LanguageService.T("RecordedAt"): @item.RecordedAtUtc.ToLocalTime()</div>
+                            <h3>@(item.IsReachable ? LanguageService.T("Reachable") : LanguageService.T("PingUnavailable"))</h3>
+                            <div class="subtle">@LanguageService.T("RecordedAt"): @OverviewUiHelper.FormatLocalDateTime(item.RecordedAtUtc)</div>
                             <div class="subtle">@LanguageService.T("Roundtrip"): @item.RoundtripTimeMilliseconds ms</div>
-                            <div class="subtle">@LanguageService.T("FailureCount"): @item.ConsecutiveFailureCount | @LanguageService.T("ThresholdReached"): @(item.FailureThresholdReached ? "Yes" : "No")</div>
+                            <div class="subtle">@LanguageService.T("FailureCount"): @item.ConsecutiveFailureCount | @LanguageService.T("ThresholdReached"): @(item.FailureThresholdReached ? LanguageService.T("Yes") : LanguageService.T("No"))</div>
                             @if (!string.IsNullOrWhiteSpace(item.ErrorMessage))
                             {
                                 <div class="subtle">@LanguageService.T("ErrorMessage"): @item.ErrorMessage</div>
@@ -59,7 +62,7 @@
                 <div>
                     <label class="form-label">@LanguageService.T("MonitoredDevices")</label>
                     <InputSelect class="form-select" @bind-Value="form.MonitoredDeviceId" disabled="@(monitoredDeviceId is not null)">
-                        <option value="@Guid.Empty">Select monitored device</option>
+                        <option value="@Guid.Empty">@LanguageService.T("SelectMonitoredDevice")</option>
                         @foreach (var device in monitoredDevicesForSelection)
                         {
                             <option value="@device.Id">@device.DisplayName</option>
@@ -103,9 +106,9 @@
     private async Task LoadAsync()
     {
         isLoading = true;
-        var all = await ApiClient.GetMonitoredDevicePingResultsAsync();
-        monitoredDevicesForSelection = await ApiClient.GetMonitoredDevicesAsync();
-        items = monitoredDeviceId is null ? all : all.Where(x => x.MonitoredDeviceId == monitoredDeviceId).ToList();
+        var pageData = await CrudPageDataService.GetMonitoredDevicePingResultPageDataAsync(monitoredDeviceId);
+        items = pageData.Items.ToList();
+        monitoredDevicesForSelection = pageData.MonitoredDevicesForSelection.ToList();
         isLoading = false;
     }
 

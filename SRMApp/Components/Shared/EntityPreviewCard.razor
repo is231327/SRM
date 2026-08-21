@@ -1,0 +1,46 @@
+<article class="entity-card compact-card @CardClass">
+    <div class="entity-card-header">
+        <div>
+            <h3>@Title</h3>
+            @if (!string.IsNullOrWhiteSpace(SubTitle))
+            {
+                <div class="subtle">@SubTitle</div>
+            }
+            @if (!string.IsNullOrWhiteSpace(MetaText))
+            {
+                <div class="subtle">@MetaText</div>
+            }
+            @if (!string.IsNullOrWhiteSpace(StatusText))
+            {
+                <div class="@StatusTextClass">@StatusText</div>
+            }
+            @if (Details is not null)
+            {
+                @Details
+            }
+        </div>
+        @if (!string.IsNullOrWhiteSpace(BadgeText))
+        {
+            <span class="@BadgeClass">@BadgeText</span>
+        }
+    </div>
+    @if (Actions is not null)
+    {
+        <div class="child-links">
+            @Actions
+        </div>
+    }
+</article>
+
+@code {
+    [Parameter] public string CardClass { get; set; } = string.Empty;
+    [Parameter] public string Title { get; set; } = string.Empty;
+    [Parameter] public string SubTitle { get; set; } = string.Empty;
+    [Parameter] public string MetaText { get; set; } = string.Empty;
+    [Parameter] public string StatusText { get; set; } = string.Empty;
+    [Parameter] public string StatusTextClass { get; set; } = "subtle";
+    [Parameter] public string BadgeText { get; set; } = string.Empty;
+    [Parameter] public string BadgeClass { get; set; } = "badge-soft";
+    [Parameter] public RenderFragment? Details { get; set; }
+    [Parameter] public RenderFragment? Actions { get; set; }
+}

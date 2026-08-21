@@ -1,0 +1,106 @@
+@page "/monitored-devices/create"
+@page "/monitored-devices/{MonitoredDeviceId:guid}/edit"
+@rendermode InteractiveServer
+@inherits LocalizedComponentBase
+@inject ICoreApiClient ApiClient
+@inject ICrudPageDataService CrudPageDataService
+@inject NavigationManager NavigationManager
+
+<PageTitle>@(IsEditMode ? LanguageService.T("EditMonitoredDevice") : LanguageService.T("CreateMonitoredDevice"))</PageTitle>
+<PageHeader Title="@(IsEditMode ? LanguageService.T("EditMonitoredDevice") : LanguageService.T("CreateMonitoredDevice"))" Description="@(IsEditMode ? LanguageService.T("EditMonitoredDeviceDescription") : LanguageService.T("CreateMonitoredDeviceDescription"))">
+    <Actions><a class="btn btn-outline-secondary" href="@GetBackHref()">@GetBackText()</a></Actions>
+</PageHeader>
+
+@if (isLoading)
+{
+    <p>@LanguageService.T("Loading")</p>
+}
+else
+{
+    <section class="form-card">
+        <EditForm Model="form" OnValidSubmit="SaveAsync">
+            <DataAnnotationsValidator />
+            <ValidationSummary />
+            <div class="form-grid">
+                <div>
+                    <label class="form-label">@LanguageService.T("AgentReference")</label>
+                    <InputSelect class="form-select" @bind-Value="form.AgentId" disabled="@(agentId is not null)">
+                        <option value="@Guid.Empty">@LanguageService.T("SelectAgent")</option>
+                        @foreach (var agent in agentsForSelection)
+                        {
+                            <option value="@agent.Id">@agent.Name</option>
+                        }
+                    </InputSelect>
+                </div>
+                <div><label class="form-label">@LanguageService.T("Name")</label><InputText class="form-control" @bind-Value="form.DisplayName" /></div>
+                <div><label class="form-label">@LanguageService.T("IpAddress")</label><InputText class="form-control" @bind-Value="form.IpAddress" /></div>
+                <div><label class="form-label">@LanguageService.T("IntervalSeconds")</label><InputNumber class="form-control" @bind-Value="form.IntervalSeconds" /></div>
+                <div><label class="form-label">@LanguageService.T("TimeoutMilliseconds")</label><InputNumber class="form-control" @bind-Value="form.TimeoutMilliseconds" /></div>
+                <div><label class="form-label">@LanguageService.T("FailureThreshold")</label><InputNumber class="form-control" @bind-Value="form.FailureThreshold" /></div>
+                <div class="form-check mt-4"><InputCheckbox class="form-check-input" @bind-Value="form.IsActive" /><label class="form-check-label">@LanguageService.T("Active")</label></div>
+            </div>
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary">@LanguageService.T("Save")</button>
+                <a class="btn btn-outline-secondary" href="@GetBackHref()">@LanguageService.T("Cancel")</a>
+            </div>
+        </EditForm>
+    </section>
+}
+
+@code {
+    [Parameter] public Guid? MonitoredDeviceId { get; set; }
+    [SupplyParameterFromQuery] public Guid? agentId { get; set; }
+    [SupplyParameterFromQuery] public Guid? serverRoomId { get; set; }
+    [SupplyParameterFromQuery] public Guid? customerId { get; set; }
+    private bool isLoading = true;
+    private bool IsEditMode => MonitoredDeviceId.HasValue;
+    private List<AgentReadDto> agentsForSelection = [];
+    private MonitoredDeviceCreateDto form = new() { IsActive = true, IntervalSeconds = 30, TimeoutMilliseconds = 1000, FailureThreshold = 3 };
+    protected override async Task OnParametersSetAsync()
+    {
+        isLoading = true;
+        if (agentId is not null) form.AgentId = agentId.Value;
+        var pageData = await CrudPageDataService.GetMonitoredDevicePageDataAsync(agentId, serverRoomId, customerId);
+        agentsForSelection = pageData.AgentsForSelection.ToList();
+        if (IsEditMode)
+        {
+            var monitoredDeviceId = MonitoredDeviceId!.Value;
+            var item = pageData.Items.FirstOrDefault(x => x.Id == monitoredDeviceId) ?? (await ApiClient.GetMonitoredDevicesAsync()).FirstOrDefault(x => x.Id == monitoredDeviceId);
+            if (item is not null)
+            {
+                form = new MonitoredDeviceCreateDto
+                {
+                    AgentId = item.AgentId, DisplayName = item.DisplayName, IpAddress = item.IpAddress,
+                    IntervalSeconds = item.IntervalSeconds, TimeoutMilliseconds = item.TimeoutMilliseconds, FailureThreshold = item.FailureThreshold, IsActive = item.IsActive
+                };
+            }
+        }
+        isLoading = false;
+    }
+    private async Task SaveAsync()
+    {
+        if (IsEditMode)
+        {
+            await ApiClient.UpdateMonitoredDeviceAsync(MonitoredDeviceId!.Value, new MonitoredDeviceUpdateDto
+            {
+                AgentId = form.AgentId, DisplayName = form.DisplayName, IpAddress = form.IpAddress,
+                IntervalSeconds = form.IntervalSeconds, TimeoutMilliseconds = form.TimeoutMilliseconds, FailureThreshold = form.FailureThreshold, IsActive = form.IsActive
+            });
+        }
+        else
+        {
+            await ApiClient.CreateMonitoredDeviceAsync(form);
+        }
+        NavigationManager.NavigateTo(GetBackHref());
+    }
+    private string GetBackHref()
+        => agentId is not null ? "/agents"
+            : serverRoomId is not null ? $"/serverrooms/{serverRoomId}/details"
+            : customerId is not null ? $"/customers/{customerId}/details"
+            : "/monitored-devices";
+    private string GetBackText()
+        => agentId is not null ? LanguageService.T("BackToAgents")
+            : serverRoomId is not null ? LanguageService.T("BackToServerRooms")
+            : customerId is not null ? LanguageService.T("BackToCustomerOverview")
+            : LanguageService.T("MonitoredDevices");
+}
