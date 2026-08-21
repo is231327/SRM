@@ -14,6 +14,10 @@
     {
         <a class="btn btn-outline-primary" href="/serverrooms/@serverRoomId/details">@LanguageService.T("BackToServerRooms")</a>
     }
+    else if (customerId is not null)
+    {
+        <a class="btn btn-outline-primary" href="/customers/@customerId/details">@LanguageService.T("BackToCustomerOverview")</a>
+    }
 </div>
 
 <div class="entity-grid">
@@ -62,6 +66,7 @@
 </div>
 
 @code {
+    [SupplyParameterFromQuery] public Guid? customerId { get; set; }
     [SupplyParameterFromQuery] public Guid? serverRoomId { get; set; }
     [SupplyParameterFromQuery] public Guid? shellyDeviceId { get; set; }
     [SupplyParameterFromQuery] public Guid? monitoredDeviceId { get; set; }
@@ -78,7 +83,12 @@
     {
         isLoading = true;
         var all = await ApiClient.GetIncidentsAsync();
+        var serverRooms = await ApiClient.GetServerRoomsAsync();
+        var customerRoomIds = customerId is null
+            ? null
+            : serverRooms.Where(x => x.CustomerId == customerId.Value).Select(x => x.Id).ToHashSet();
         items = all
+            .Where(x => customerRoomIds is null || customerRoomIds.Contains(x.ServerRoomId))
             .Where(x => serverRoomId is null || x.ServerRoomId == serverRoomId)
             .Where(x => shellyDeviceId is null || x.ShellyDeviceId == shellyDeviceId)
             .Where(x => monitoredDeviceId is null || x.MonitoredDeviceId == monitoredDeviceId)

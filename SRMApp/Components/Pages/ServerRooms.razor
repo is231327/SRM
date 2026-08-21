@@ -82,6 +82,7 @@
 
 @code {
     [Parameter] public Guid? CustomerId { get; set; }
+    [SupplyParameterFromQuery] public Guid? editId { get; set; }
 
     private bool isLoading = true;
     private List<ServerRoomReadDto> serverRooms = [];
@@ -93,6 +94,14 @@
     {
         if (CustomerId is not null) form.CustomerId = CustomerId.Value;
         await LoadAsync();
+        if (editId.HasValue)
+        {
+            var selectedRoom = serverRooms.FirstOrDefault(x => x.Id == editId.Value);
+            if (selectedRoom is not null)
+            {
+                BeginEdit(selectedRoom);
+            }
+        }
     }
 
     private async Task LoadAsync()

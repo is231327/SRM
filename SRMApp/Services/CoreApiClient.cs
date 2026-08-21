@@ -17,7 +17,7 @@ public class CoreApiClient(HttpClient httpClient, AuthSessionService authSession
     private readonly HttpClient _httpClient = httpClient;
 
     public async Task<List<CustomerReadDto>> GetCustomersAsync() => await GetListAsync<CustomerReadDto>("api/customers");
-    public async Task<CustomerReadDto?> GetCustomerAsync(Guid id) => await _httpClient.GetFromJsonAsync<CustomerReadDto>($"api/customers/{id}");
+    public async Task<CustomerReadDto?> GetCustomerAsync(Guid id) => await GetAsync<CustomerReadDto>($"api/customers/{id}");
     public async Task<CustomerReadDto?> CreateCustomerAsync(CustomerCreateDto dto) => await PostAsync<CustomerCreateDto, CustomerReadDto>("api/customers", dto);
     public async Task<CustomerReadDto?> UpdateCustomerAsync(Guid id, CustomerUpdateDto dto) => await PutAsync<CustomerUpdateDto, CustomerReadDto>($"api/customers/{id}", dto);
     public async Task<bool> DeleteCustomerAsync(Guid id) => await DeleteAsync($"api/customers/{id}");

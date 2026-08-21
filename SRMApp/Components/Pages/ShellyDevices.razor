@@ -14,6 +14,10 @@
     {
         <a class="btn btn-outline-primary" href="/agents">@LanguageService.T("BackToAgents")</a>
     }
+    else if (customerId is not null)
+    {
+        <a class="btn btn-outline-primary" href="/customers/@customerId/details">@LanguageService.T("BackToCustomerOverview")</a>
+    }
 </div>
 
 <div class="entity-grid">
@@ -84,6 +88,7 @@
 
 @code {
     [SupplyParameterFromQuery] public Guid? agentId { get; set; }
+    [SupplyParameterFromQuery] public Guid? customerId { get; set; }
 
     private bool isLoading = true;
     private List<ShellyDeviceReadDto> items = [];
@@ -106,7 +111,18 @@
         isLoading = true;
         var all = await ApiClient.GetShellyDevicesAsync();
         agentsForSelection = await ApiClient.GetAgentsAsync();
-        items = agentId is null ? all : all.Where(x => x.AgentId == agentId).ToList();
+        if (customerId is not null)
+        {
+            var serverRooms = await ApiClient.GetServerRoomsAsync();
+            var customerRoomIds = serverRooms.Where(x => x.CustomerId == customerId.Value).Select(x => x.Id).ToHashSet();
+            var customerAgentIds = agentsForSelection.Where(x => customerRoomIds.Contains(x.ServerRoomId)).Select(x => x.Id).ToHashSet();
+            items = all.Where(x => customerAgentIds.Contains(x.AgentId)).ToList();
+            agentsForSelection = agentsForSelection.Where(x => customerAgentIds.Contains(x.Id)).ToList();
+        }
+        else
+        {
+            items = agentId is null ? all : all.Where(x => x.AgentId == agentId).ToList();
+        }
         isLoading = false;
     }
 

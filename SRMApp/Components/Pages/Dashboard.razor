@@ -23,6 +23,8 @@ else
         <div class="stat-card"><h3>@LanguageService.T("RoomsCard")</h3><div class="stat-value">@serverRooms.Count</div></div>
         <div class="stat-card"><h3>@LanguageService.T("AgentsCard")</h3><div class="stat-value">@agents.Count</div></div>
         <div class="stat-card"><h3>@LanguageService.T("SensorsCard")</h3><div class="stat-value">@sensorReadings.Count</div></div>
+        <div class="stat-card"><h3>@LanguageService.T("OpenIncidents")</h3><div class="stat-value">@openIncidents.Count</div></div>
+        <div class="stat-card"><h3>@LanguageService.T("CriticalIncidents")</h3><div class="stat-value">@criticalIncidents.Count</div></div>
     </div>
 
     <div class="panel-grid">
@@ -30,8 +32,8 @@ else
             <h3>@LanguageService.T("QuickActions")</h3>
             <div class="child-links">
                 <a class="btn btn-primary" href="/customers">@LanguageService.T("Customers")</a>
-                <a class="btn btn-outline-primary" href="/serverrooms">@LanguageService.T("ServerRooms")</a>
-                <a class="btn btn-outline-primary" href="/agents">@LanguageService.T("Agents")</a>
+                <a class="btn btn-outline-primary" href="/incidents">@LanguageService.T("Incidents")</a>
+                <a class="btn btn-outline-primary" href="/users">@LanguageService.T("Users")</a>
             </div>
         </div>
         <div class="panel-card">
@@ -42,6 +44,59 @@ else
                 <div class="info-item"><strong>@LanguageService.T("MaintenanceWindows")</strong><span>@maintenanceWindows.Count</span></div>
             </div>
         </div>
+    </div>
+
+    <div class="panel-grid">
+        <section class="panel-card">
+            <div class="section-heading">
+                <div>
+                    <h3>@LanguageService.T("RecentIncidents")</h3>
+                    <p class="subtle">@LanguageService.T("DashboardIncidentsDescription")</p>
+                </div>
+                <a class="btn btn-outline-primary btn-sm" href="/incidents">@LanguageService.T("ViewAll")</a>
+            </div>
+            @foreach (var incident in recentIncidents)
+            {
+                <article class="entity-card compact-card">
+                    <div class="entity-card-header">
+                        <div>
+                            <h3>@incident.Summary</h3>
+                            <div class="subtle">@incident.ServerRoomName</div>
+                            <div class="subtle">@LanguageService.T("Severity"): @LanguageService.T(incident.Severity.ToString()) | @LanguageService.T("Status"): @LanguageService.T(incident.Status.ToString())</div>
+                        </div>
+                        <span class="badge-soft">@LanguageService.T(incident.Type.ToString())</span>
+                    </div>
+                    <div class="child-links">
+                        <a class="btn btn-primary btn-sm" href="/incidents/@incident.Id">@LanguageService.T("Details")</a>
+                    </div>
+                </article>
+            }
+        </section>
+
+        <section class="panel-card">
+            <div class="section-heading">
+                <div>
+                    <h3>@LanguageService.T("CustomerActivity")</h3>
+                    <p class="subtle">@LanguageService.T("DashboardCustomersDescription")</p>
+                </div>
+            </div>
+            @foreach (var customer in topCustomers)
+            {
+                <article class="entity-card compact-card">
+                    <div class="entity-card-header">
+                        <div>
+                            <h3>@customer.Name</h3>
+                            <div class="subtle">@LanguageService.T("ServerRooms"): @serverRooms.Count(x => x.CustomerId == customer.Id)</div>
+                            <div class="subtle">@LanguageService.T("Incidents"): @GetCustomerIncidentCount(customer.Id)</div>
+                            <div class="subtle">@LanguageService.T("LastLog"): @FormatCustomerLastActivity(customer.Id)</div>
+                        </div>
+                    </div>
+                    <div class="child-links">
+                        <a class="btn btn-primary btn-sm" href="/customers/@customer.Id/details">@LanguageService.T("Overview")</a>
+                    </div>
+                </article>
+            }
+        </section>
     </div>
 }
 
@@ -54,6 +109,11 @@ else
     private List<MonitoredDeviceReadDto> monitoredDevices = [];
     private List<MaintenanceWindowReadDto> maintenanceWindows = [];
     private List<SensorReadingReadDto> sensorReadings = [];
+    private List<IncidentReadDto> incidents = [];
+    private List<IncidentReadDto> openIncidents = [];
+    private List<IncidentReadDto> criticalIncidents = [];
+    private IEnumerable<IncidentReadDto> recentIncidents => incidents.OrderByDescending(x => x.OpenedAtUtc).Take(5);
+    private IEnumerable<CustomerReadDto> topCustomers => customers.OrderByDescending(x => GetCustomerIncidentCount(x.Id)).Take(5);
 
     protected override async Task OnInitializedAsync()
     {
@@ -64,6 +124,27 @@ else
         monitoredDevices = await ApiClient.GetMonitoredDevicesAsync();
         maintenanceWindows = await ApiClient.GetMaintenanceWindowsAsync();
         sensorReadings = await ApiClient.GetSensorReadingsAsync();
+        incidents = await ApiClient.GetIncidentsAsync();
+        openIncidents = incidents.Where(x => x.Status.ToString() == "Open").ToList();
+        criticalIncidents = incidents.Where(x => x.Severity.ToString() == "Critical").ToList();
         isLoading = false;
+    }
+
+    private string FormatCustomerLastActivity(Guid customerId)
+    {
+        var roomIds = serverRooms.Where(x => x.CustomerId == customerId).Select(x => x.Id).ToHashSet();
+        var value = incidents
+            .Where(x => roomIds.Contains(x.ServerRoomId))
+            .Select(x => x.LastOccurredAtUtc ?? x.OpenedAtUtc)
+            .OrderByDescending(x => x)
+            .FirstOrDefault();
+
+        return value == default ? LanguageService.T("NoData") : value.ToLocalTime().ToString("g");
+    }
+
+    private int GetCustomerIncidentCount(Guid customerId)
+    {
+        var roomIds = serverRooms.Where(x => x.CustomerId == customerId).Select(x => x.Id).ToHashSet();
+        return incidents.Count(x => roomIds.Contains(x.ServerRoomId));
     }
 }

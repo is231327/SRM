@@ -10,6 +10,10 @@
         <h1>@LanguageService.T("MaintenanceWindows")</h1>
         <p>@LanguageService.T("ServerRoomChildren")</p>
     </div>
+    @if (customerId is not null)
+    {
+        <a class="btn btn-outline-primary" href="/customers/@customerId/details">@LanguageService.T("BackToCustomerOverview")</a>
+    }
 </div>
 
 <div class="entity-grid">
@@ -74,6 +78,7 @@
 
 @code {
     [SupplyParameterFromQuery] public Guid? serverRoomId { get; set; }
+    [SupplyParameterFromQuery] public Guid? customerId { get; set; }
 
     private bool isLoading = true;
     private List<MaintenanceWindowReadDto> items = [];
@@ -96,7 +101,16 @@
         isLoading = true;
         var all = await ApiClient.GetMaintenanceWindowsAsync();
         serverRoomsForSelection = await ApiClient.GetServerRoomsAsync();
-        items = serverRoomId is null ? all : all.Where(x => x.ServerRoomId == serverRoomId).ToList();
+        if (customerId is not null)
+        {
+            var customerRoomIds = serverRoomsForSelection.Where(x => x.CustomerId == customerId.Value).Select(x => x.Id).ToHashSet();
+            items = all.Where(x => customerRoomIds.Contains(x.ServerRoomId)).ToList();
+            serverRoomsForSelection = serverRoomsForSelection.Where(x => customerRoomIds.Contains(x.Id)).ToList();
+        }
+        else
+        {
+            items = serverRoomId is null ? all : all.Where(x => x.ServerRoomId == serverRoomId).ToList();
+        }
         isLoading = false;
     }
 
