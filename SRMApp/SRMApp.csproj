@@ -10,8 +10,4 @@
     <ProjectReference Include="..\SRMShared\SRMShared.csproj" />
   </ItemGroup>
 
-  <ItemGroup>
-    <ProjectReference Include="..\SRMShared\SRMShared.csproj" />
-  </ItemGroup>
-
 </Project>

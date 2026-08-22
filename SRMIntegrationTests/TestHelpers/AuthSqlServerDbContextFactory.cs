@@ -8,11 +8,7 @@ internal static class AuthSqlServerDbContextFactory
 {
     public static SrmAuthDbContext CreateContext()
     {
-        IConfiguration configuration = new ConfigurationBuilder()
-            .SetBasePath(AppContext.BaseDirectory)
-            .AddJsonFile("appsettings.json", optional: false)
-            .AddEnvironmentVariables()
-            .Build();
+        IConfiguration configuration = IntegrationTestConfiguration.Build();
 
         string connectionString = configuration.GetConnectionString("SrmAuthDatabase")
             ?? throw new InvalidOperationException("Missing connection string 'SrmAuthDatabase'.");

@@ -16,15 +16,13 @@
     <PackageReference Include="NUnit" Version="4.3.2" />
     <PackageReference Include="NUnit.Analyzers" Version="4.7.0" />
     <PackageReference Include="NUnit3TestAdapter" Version="5.0.0" />
-    <PackageReference Include="xunit.abstractions" Version="2.0.3" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <Using Include="Xunit" />
   </ItemGroup>
 
   <ItemGroup>
     <Using Include="NUnit.Framework" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\SRMCore\SRMCore.csproj" />
     <ProjectReference Include="..\SRMAuth\SRMAuth.csproj" />
     <ProjectReference Include="..\SRMShared\SRMShared.csproj" />

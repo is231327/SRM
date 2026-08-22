@@ -1,6 +1,7 @@
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
+COPY SRMShared/SRMShared.csproj SRMShared/
 COPY SRMCore/SRMCore.csproj SRMCore/
 RUN dotnet restore SRMCore/SRMCore.csproj
 

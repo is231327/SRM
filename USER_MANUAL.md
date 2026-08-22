@@ -33,6 +33,8 @@ Depending on your role, you can use the application to:
 - update your own contact details
 - change your own password
 
+The application can be started as a full local environment with Docker. This setup step is handled through the provided project configuration and does not require manual editing of the application itself during normal use.
+
 ## Navigation
 
 The application uses a hierarchical structure.
@@ -47,6 +49,8 @@ The usual path is:
 6. Review the collected monitoring data
 
 You can usually move from the business context to the technical details step by step.
+
+Create and edit actions open dedicated forms instead of inline forms on the overview pages.
 
 ## Login
 
@@ -104,6 +108,8 @@ On the agent page, you can:
 - create agents
 - edit agents
 - delete agents
+
+When entering the agent address, you may use either an IP address or a host name, depending on how the agent is reached in your environment.
 
 From an agent entry, you can continue to:
 
@@ -211,6 +217,8 @@ Typical actions are:
 - review existing agent credentials
 - update existing agent credentials
 
+These credentials are technical access data for monitoring agents. They are not intended for interactive user login.
+
 ## Profile and Password
 
 On the profile page, you can:
@@ -245,7 +253,7 @@ At the current stage:
 
 - ticket synchronization to Redmine requires separate Redmine configuration before it can work end to end
 - the application is still being expanded and improved
-- some advanced security and session features are planned for a later step
+- token state is still being moved toward the planned SQL-plus-Redis target architecture
 
 ## Test Reminder
 

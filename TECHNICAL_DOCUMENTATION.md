@@ -2,7 +2,7 @@
 
 ## Project Status
 
-This document describes the current backend target architecture for the Server Room Monitoring project.
+This document describes the current backend and frontend architecture for the Server Room Monitoring project.
 
 As of Saturday, July 18, 2026, the project contains:
 
@@ -12,6 +12,10 @@ As of Saturday, July 18, 2026, the project contains:
 - `SRMAgent` as the customer-side monitoring agent
 
 Ticket system integration is partially implemented. Incidents, queued ticket synchronization, and the Redmine worker exist, but local Redmine still requires manual project and API-key setup before end-to-end synchronization will succeed.
+
+The current deployment target is Docker-based local hosting for all application components. Secrets and environment-specific connection values are no longer intended to live in tracked JSON configuration files.
+
+The local Docker stack also includes three virtual Shelly simulator containers built from `Python-Shelly-main`, exposed on ports `5000`, `5001`, and `5002`.
 
 ## Backend Scope
 
@@ -52,6 +56,7 @@ The current validation scope includes:
 - required fields
 - email format
 - IP address format
+- host name or IP address format for agent reachability metadata
 - URL format
 - MAC address format
 - numeric ranges
@@ -227,9 +232,12 @@ The frontend has been verified at build level through `dotnet build SRMApp\SRMAp
 - the current implementation initializes the schema through `Database.EnsureCreated()`
 - database schema changes require the SQL Server Docker data volume or database to be recreated unless the project is later switched to EF Core migrations
 - no secrets must be stored directly in source code
-- the initial auth seed users are read from the `AuthSeedData` section in the `SRMAuth` JSON configuration files
-- additional development-only demo data is seeded at backend startup when the databases are empty
-- API endpoint base URLs for `SRMApp` and `SRMAgent` are read directly from their JSON configuration files
+- tracked `appsettings*.json` files now contain only non-secret defaults and structure
+- secret values such as SQL connection strings, JWT signing keys, bootstrap admin credentials, Redmine credentials, and agent credentials are expected through environment variables
+- local container startup is orchestrated through the root `.env` file together with `docker-compose.yml`
+- `SRMAuth` bootstraps the first `SystemAdmin` user from the `BootstrapAdmin` configuration section, which is expected to be populated through environment variables
+- development-only demo data seeding has been removed
+- the application services can be started together with one `docker compose up --build` command
 
 ## Initial Data Model
 
@@ -458,3 +466,4 @@ Represents the synchronization state between a backend incident and the external
 - The current model treats `ServerRoom` as the aggregate root for `Agent` and `MaintenanceWindow`.
 - The current model treats `Agent` as the technical parent for `ShellyDevice` and `MonitoredDevice`.
 - The current frontend pages provide CRUD-oriented management structure, but deeper UX polish, richer validation feedback, and production-grade navigation behavior still need further iteration.
+- For local Docker-based operation, HTTP is used between containers and HTTPS redirection is disabled through environment-based configuration inside the containerized services.

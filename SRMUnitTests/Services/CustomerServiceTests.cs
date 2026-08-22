@@ -1,4 +1,3 @@
-using NUnit.Framework;
 using SRMCore.Services;
 using SRMShared.Entities;
 using SRMUnitTests.TestHelpers;

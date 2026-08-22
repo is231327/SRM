@@ -25,11 +25,8 @@
 - Add service-layer business validation beyond DTO annotations where required.
 - Review whether `AgentReadDto.ApiKeyReference` should remain exposed in API responses.
 - Keep auth role definitions aligned between enum-backed code roles and seeded database roles.
-- Move development-only auth seed passwords out of tracked JSON configuration before any non-local deployment.
-- Move development-only API credentials and endpoint values to environment-specific secret management before any non-local deployment.
 - Add Redis-backed integration tests for refresh-token rotation, logout, and token revocation once Redis is introduced.
 - Expand tests for customer-scoped authorization behavior in `SRMCore`.
-- Replace the temporary shared development JWT signing key configuration with environment-based secret management.
 - Add user deletion or deactivation strategy decision for administrative user management.
 - Refine policy-based authorization where broader or more explicit policies are still useful.
 - Extend role-aware frontend behavior beyond the current navigation and user-management entry points.
@@ -75,12 +72,15 @@
 - Access tokens can be refreshed and revoked through `SRMAuth`.
 - Logout revokes both refresh tokens and the active access-token JTI.
 - Administrative password resets force the target user to change the password on next login.
-- Development-only demo data is auto-seeded into `SRMCore` and `SRMAuth` when the databases are empty.
-- Ticket integration remains out of scope for the current iteration.
+- Development-only demo data has been removed from the tracked application startup flow.
+- Application secrets and runtime-specific endpoints are configured through environment variables and the root `.env` file for local Docker-based execution.
+- `docker-compose.yml` can start the full local stack, including SQL Server, Redmine, `SRMAuth`, `SRMCore`, `SRMAgent`, and `SRMApp`.
+- `docker-compose.yml` also starts the local virtual Shelly simulators `shelly1`, `shelly2`, and `shelly3`.
 
 ## Operational Notes
 
 - Local SQL Server runs in Docker via `docker-compose.yml`.
+- Local application secrets and connection values are read from the root `.env` file when the Docker stack is started.
 - The current implementation uses `Database.EnsureCreated()` instead of migrations.
 - When the entity model changes, the SQL Server Docker data volume must be recreated so the schema can be rebuilt from the new model.
 - Because this version includes the persisted `MonitoredDevicePingResult` table, the SQL Server Docker data volume must be recreated before runtime testing if the old Core schema still exists.

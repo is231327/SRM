@@ -1,4 +1,3 @@
-using NUnit.Framework;
 using SRMShared.DTOs.Agent;
 using SRMShared.DTOs.Customer;
 using SRMShared.DTOs.MaintenanceWindow;
@@ -49,7 +48,7 @@ public class DtoValidationTests
     }
 
     [Test]
-    public void AgentCreateDto_ShouldFailForInvalidIpAddress()
+    public void AgentCreateDto_ShouldFailForInvalidHostOrIpAddress()
     {
         var dto = new AgentCreateDto
         {
@@ -57,7 +56,7 @@ public class DtoValidationTests
             Name = "Agent A",
             ApiKeyReference = "key-a",
             Version = "1.0.0",
-            LastKnownIpAddress = "invalid-ip",
+            LastKnownIpAddress = "bad host value!",
             LastSeenAtUtc = DateTime.UtcNow,
             IsActive = true
         };
@@ -65,6 +64,25 @@ public class DtoValidationTests
         var results = DtoValidationHelper.Validate(dto);
 
         Assert.That(results.Any(x => x.MemberNames.Contains(nameof(AgentBaseDto.LastKnownIpAddress))), Is.True);
+    }
+
+    [Test]
+    public void AgentCreateDto_ShouldAllowValidHostName()
+    {
+        var dto = new AgentCreateDto
+        {
+            ServerRoomId = Guid.NewGuid(),
+            Name = "Agent A",
+            ApiKeyReference = "key-a",
+            Version = "1.0.0",
+            LastKnownIpAddress = "localhost",
+            LastSeenAtUtc = DateTime.UtcNow,
+            IsActive = true
+        };
+
+        var results = DtoValidationHelper.Validate(dto);
+
+        Assert.That(results.Any(x => x.MemberNames.Contains(nameof(AgentBaseDto.LastKnownIpAddress))), Is.False);
     }
 
     [Test]
@@ -183,8 +201,20 @@ public class DtoValidationTests
             IsActive = true
         };
 
+        var agent = new AgentCreateDto
+        {
+            ServerRoomId = Guid.NewGuid(),
+            Name = "Agent A",
+            ApiKeyReference = "key-a",
+            Version = "1.0.0",
+            LastKnownIpAddress = "localhost",
+            LastSeenAtUtc = DateTime.UtcNow,
+            IsActive = true
+        };
+
         Assert.That(DtoValidationHelper.Validate(customer), Is.Empty);
         Assert.That(DtoValidationHelper.Validate(room), Is.Empty);
+        Assert.That(DtoValidationHelper.Validate(agent), Is.Empty);
         Assert.That(DtoValidationHelper.Validate(monitoredDevice), Is.Empty);
     }
 }

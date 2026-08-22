@@ -38,7 +38,14 @@ public static class AuthDbSeeder
 
         await dbContext.SaveChangesAsync(cancellationToken);
 
-        var seedUsers = configuration.GetSection("AuthSeedData:Users").Get<List<AuthSeedUser>>() ?? [];
+        var bootstrapAdmin = BuildBootstrapAdmin(configuration);
+        if(bootstrapAdmin == null)
+        {
+            throw new InvalidOperationException("SRMAuth-ERROR: BootstrapAdmin configuration is missing or invalid. Please provide valid BootstrapAdmin settings in the configuration.");
+        }
+        List<AuthSeedUser> seedUsers = bootstrapAdmin is null
+            ? new List<AuthSeedUser>()
+            : new List<AuthSeedUser> { bootstrapAdmin };
         if (seedUsers.Count == 0)
         {
             return;
@@ -96,6 +103,35 @@ public static class AuthDbSeeder
         }
 
         await dbContext.SaveChangesAsync(cancellationToken);
+    }
+
+    private static AuthSeedUser? BuildBootstrapAdmin(IConfiguration configuration)
+    {
+        var username = configuration["BootstrapAdmin:Username"];
+        var email = configuration["BootstrapAdmin:Email"];
+        var password = configuration["BootstrapAdmin:Password"];
+
+        if (string.IsNullOrWhiteSpace(username)
+            || string.IsNullOrWhiteSpace(email)
+            || string.IsNullOrWhiteSpace(password))
+        {
+            return null;
+        }
+
+        return new AuthSeedUser
+        {
+            Username = username,
+            Email = email,
+            Password = password,
+            FirstName = configuration["BootstrapAdmin:FirstName"] ?? string.Empty,
+            LastName = configuration["BootstrapAdmin:LastName"] ?? string.Empty,
+            PhoneNumber = configuration["BootstrapAdmin:PhoneNumber"] ?? string.Empty,
+            IsActive = true,
+            MustChangePassword = bool.TryParse(configuration["BootstrapAdmin:MustChangePassword"], out var mustChangePassword)
+                ? mustChangePassword
+                : false,
+            Roles = [ "SystemAdmin" ]
+        };
     }
 }
 

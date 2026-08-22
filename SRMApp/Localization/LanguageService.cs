@@ -237,6 +237,7 @@ public class LanguageService
         ["Start"] = ("Start", "Start"),
         ["End"] = ("End", "Ende"),
         ["IpAddress"] = ("IP Address", "IP-Adresse"),
+        ["HostOrIpAddress"] = ("Host or IP Address", "Host oder IP-Adresse"),
         ["IntervalSeconds"] = ("Interval (s)", "Intervall (s)"),
         ["TimeoutMilliseconds"] = ("Timeout (ms)", "Zeitlimit (ms)"),
         ["Battery"] = ("Battery", "Batterie"),

@@ -1,5 +1,4 @@
 using Microsoft.AspNetCore.Identity;
-using NUnit.Framework;
 using Microsoft.Extensions.Options;
 using SRMAuth.Configuration;
 using SRMAuth.Services;

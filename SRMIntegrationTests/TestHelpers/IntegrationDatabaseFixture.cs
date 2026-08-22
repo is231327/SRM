@@ -39,19 +39,16 @@ public class IntegrationDatabaseFixture
 
         var passwordHasher = new PasswordHasher<AuthUser>();
         var configuration = new ConfigurationBuilder()
-            .SetBasePath(AppContext.BaseDirectory)
-            .AddJsonFile("appsettings.json", optional: false)
+            .AddConfiguration(IntegrationTestConfiguration.Build())
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["AuthSeedData:Users:0:Username"] = "systemadmin",
-                ["AuthSeedData:Users:0:Email"] = "systemadmin@example.local",
-                ["AuthSeedData:Users:0:Password"] = "YourTempAdminPassword123",
-                ["AuthSeedData:Users:0:FirstName"] = "System",
-                ["AuthSeedData:Users:0:LastName"] = "Administrator",
-                ["AuthSeedData:Users:0:PhoneNumber"] = string.Empty,
-                ["AuthSeedData:Users:0:IsActive"] = bool.TrueString,
-                ["AuthSeedData:Users:0:MustChangePassword"] = bool.TrueString,
-                ["AuthSeedData:Users:0:Roles:0"] = "SystemAdmin"
+                ["BootstrapAdmin:Username"] = "systemadmin",
+                ["BootstrapAdmin:Email"] = "systemadmin@example.local",
+                ["BootstrapAdmin:Password"] = "YourTempAdminPassword123",
+                ["BootstrapAdmin:FirstName"] = "System",
+                ["BootstrapAdmin:LastName"] = "Administrator",
+                ["BootstrapAdmin:PhoneNumber"] = string.Empty,
+                ["BootstrapAdmin:MustChangePassword"] = bool.TrueString
             })
             .Build();
 

@@ -21,7 +21,7 @@ public class AgentBaseDto
     public string Version { get; set; } = string.Empty;
 
     [Required]
-    [IpAddress]
+    [HostOrIpAddress]
     public string LastKnownIpAddress { get; set; } = string.Empty;
 
     public DateTime? LastSeenAtUtc { get; set; }

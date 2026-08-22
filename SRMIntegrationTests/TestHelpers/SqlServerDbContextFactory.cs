@@ -8,11 +8,7 @@ internal static class SqlServerDbContextFactory
 {
     public static SrmCoreDbContext CreateContext()
     {
-        IConfiguration configuration = new ConfigurationBuilder()
-            .SetBasePath(AppContext.BaseDirectory)
-            .AddJsonFile("appsettings.json", optional: false)
-            .AddEnvironmentVariables()
-            .Build();
+        IConfiguration configuration = IntegrationTestConfiguration.Build();
 
         string connectionString = configuration.GetConnectionString("SrmCoreDatabase")
             ?? throw new InvalidOperationException("Missing connection string 'SrmCoreDatabase'.");
