@@ -1,16 +1,18 @@
-using System.Text;
 using System.IdentityModel.Tokens.Jwt;
+using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
-using SRMCore.Data;
+using Scalar.AspNetCore;
 using SRMCore.Configuration;
-using SRMCore.Middleware;
 using SRMCore.Mappings;
 using SRMCore.Mappings.Interfaces;
+using SRMCore.Middleware;
 using SRMCore.Security;
 using SRMCore.Services;
 using SRMCore.Services.Interfaces;
+using SRMShared.Auth;
+using SRMShared.Configuration;
 using SRMShared.DTOs.Agent;
 using SRMShared.DTOs.Customer;
 using SRMShared.DTOs.Incident;
@@ -20,9 +22,9 @@ using SRMShared.DTOs.MonitoredDevicePingResult;
 using SRMShared.DTOs.SensorReading;
 using SRMShared.DTOs.ServerRoom;
 using SRMShared.DTOs.ShellyDevice;
-using SRMShared.Configuration;
 using SRMShared.Entities;
-using Scalar.AspNetCore;
+using StackExchange.Redis;
+using SRMCore.Data;
 
 namespace SRMCore;
 
@@ -38,16 +40,16 @@ public class Program
         }
 
         builder.Services.Configure<RedmineOptions>(builder.Configuration.GetSection(RedmineOptions.SectionName));
+        builder.Services.Configure<RedisOptions>(builder.Configuration.GetSection(RedisOptions.SectionName));
         builder.Services.AddHttpContextAccessor();
         builder.Services.AddDbContext<SrmCoreDbContext>(options =>
             options.UseSqlServer(
                 builder.Configuration.GetConnectionString("SrmCoreDatabase"),
                 sqlOptions => sqlOptions.EnableRetryOnFailure()));
-        builder.Services.AddDbContext<AuthTokenStateDbContext>(options =>
-            options.UseSqlServer(
-                builder.Configuration.GetConnectionString("SrmAuthDatabase")
-                ?? throw new InvalidOperationException("Missing connection string 'SrmAuthDatabase'."),
-                sqlOptions => sqlOptions.EnableRetryOnFailure()));
+        builder.Services.AddSingleton<IConnectionMultiplexer>(_ =>
+            ConnectionMultiplexer.Connect(builder.Configuration["Redis:ConnectionString"]
+                ?? throw new InvalidOperationException("Missing configuration value 'Redis:ConnectionString'.")));
+        builder.Services.AddSingleton<ITokenStateStore, RedisTokenStateStore>();
         builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             .AddJwtBearer(options =>
             {
@@ -73,8 +75,8 @@ public class Program
                             return;
                         }
 
-                        var authTokenStateContext = context.HttpContext.RequestServices.GetRequiredService<AuthTokenStateDbContext>();
-                        var revoked = await authTokenStateContext.RevokedAccessTokens.AnyAsync(x => x.TokenJti == tokenJti);
+                        var tokenStateStore = context.HttpContext.RequestServices.GetRequiredService<ITokenStateStore>();
+                        var revoked = await tokenStateStore.IsAccessTokenRevokedAsync(tokenJti, context.HttpContext.RequestAborted);
                         if (revoked)
                         {
                             context.Fail("The access token has been revoked.");
@@ -120,7 +122,7 @@ public class Program
 
         if (app.Environment.IsDevelopment())
         {
-            app.MapScalarApiReference(); // Add Scalar (like swagger ;-) )
+            app.MapScalarApiReference();
             app.MapOpenApi();
         }
 

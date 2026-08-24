@@ -253,7 +253,7 @@ At the current stage:
 
 - ticket synchronization to Redmine requires separate Redmine configuration before it can work end to end
 - the application is still being expanded and improved
-- token state is still being moved toward the planned SQL-plus-Redis target architecture
+- secure login sessions are handled through the dedicated authentication service and its supporting infrastructure
 
 ## Test Reminder
 
@@ -267,3 +267,4 @@ When testing the application, also check:
 - sensor readings
 - ping results
 - incidents and ticket synchronization status
+

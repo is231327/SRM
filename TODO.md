@@ -98,3 +98,6 @@
 - Maintain the hierarchical customer, server room, agent, Shelly device, monitored device, monitored-device ping result, maintenance window, and sensor reading pages.
 - Maintain the help and contact pages.
 - Extend the current user management UI with search, filtering, and pagination.
+
+- Because token state now lives in Redis instead of SQL tables, recreate the auth SQL database or container data if you want to remove obsolete AuthRefreshToken and RevokedAccessToken tables from older local schemas.
+

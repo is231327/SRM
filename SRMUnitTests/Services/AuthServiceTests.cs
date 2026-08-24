@@ -2,10 +2,10 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Options;
 using SRMAuth.Configuration;
 using SRMAuth.Services;
-using SRMShared.Auth;
 using SRMShared.DTOs.Auth;
 using SRMShared.Entities;
 using SRMUnitTests.TestHelpers;
+using SRMShared.Auth;
 
 namespace SRMUnitTests.Services;
 
@@ -170,6 +170,7 @@ public class AuthServiceTests
             new PasswordHasher<AuthUser>(),
             new FakeJwtTokenService(),
             currentUserContext ?? new FakeCurrentUserContext(),
+            new FakeTokenStateStore(),
             Options.Create(new JwtOptions()));
     }
 

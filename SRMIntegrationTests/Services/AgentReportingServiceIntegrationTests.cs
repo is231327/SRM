@@ -43,7 +43,7 @@ public class AgentReportingServiceIntegrationTests
             AgentId = agent.Id
         };
 
-        var service = new AgentReportingService(context, currentUserContext);
+        var service = new AgentReportingService(context, currentUserContext, new FakeIncidentService());
         var created = await service.CreatePingResultAsync(new AgentPingResultReportDto
         {
             MonitoredDeviceId = monitoredDevice.Id,
@@ -61,3 +61,4 @@ public class AgentReportingServiceIntegrationTests
         Assert.That(persisted, Is.Not.Null);
     }
 }
+

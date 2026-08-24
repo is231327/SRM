@@ -1,18 +1,20 @@
-using System.Text;
 using System.IdentityModel.Tokens.Jwt;
+using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using Scalar.AspNetCore;
 using SRMAuth.Configuration;
 using SRMAuth.Data;
 using SRMAuth.Middleware;
 using SRMAuth.Security;
 using SRMAuth.Services;
 using SRMAuth.Services.Interfaces;
+using SRMShared.Auth;
 using SRMShared.Configuration;
-using Scalar.AspNetCore;
 using SRMShared.Entities;
+using StackExchange.Redis;
 
 namespace SRMAuth;
 
@@ -28,11 +30,16 @@ public class Program
         }
 
         builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection(JwtOptions.SectionName));
+        builder.Services.Configure<RedisOptions>(builder.Configuration.GetSection(RedisOptions.SectionName));
         builder.Services.AddHttpContextAccessor();
         builder.Services.AddDbContext<SrmAuthDbContext>(options =>
             options.UseSqlServer(
                 builder.Configuration.GetConnectionString("SrmAuthDatabase"),
                 sqlOptions => sqlOptions.EnableRetryOnFailure()));
+        builder.Services.AddSingleton<IConnectionMultiplexer>(_ =>
+            ConnectionMultiplexer.Connect(builder.Configuration["Redis:ConnectionString"]
+                ?? throw new InvalidOperationException("Missing configuration value 'Redis:ConnectionString'.")));
+        builder.Services.AddSingleton<ITokenStateStore, RedisTokenStateStore>();
         builder.Services.AddScoped<ICurrentUserContext, CurrentUserContext>();
         builder.Services.AddScoped<IPasswordHasher<AuthUser>, PasswordHasher<AuthUser>>();
         builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
@@ -64,8 +71,8 @@ public class Program
                             return;
                         }
 
-                        var dbContext = context.HttpContext.RequestServices.GetRequiredService<SrmAuthDbContext>();
-                        var revoked = await dbContext.RevokedAccessTokens.AnyAsync(x => x.TokenJti == tokenJti);
+                        var tokenStateStore = context.HttpContext.RequestServices.GetRequiredService<ITokenStateStore>();
+                        var revoked = await tokenStateStore.IsAccessTokenRevokedAsync(tokenJti, context.HttpContext.RequestAborted);
                         if (revoked)
                         {
                             context.Fail("The access token has been revoked.");
@@ -90,7 +97,7 @@ public class Program
 
         if (app.Environment.IsDevelopment())
         {
-            app.MapScalarApiReference(); // Add Scalar (like swagger ;-) )
+            app.MapScalarApiReference();
             app.MapOpenApi();
         }
 

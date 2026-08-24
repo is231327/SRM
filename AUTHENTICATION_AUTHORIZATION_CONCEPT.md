@@ -18,12 +18,12 @@ It covers:
 
 The current implementation is:
 
-- `SRMAuth` uses a SQL database for users, machine credentials, refresh tokens, and revoked access-token JTIs
+- `SRMAuth` uses a SQL database for users and machine credentials, and Redis for refresh tokens and revoked access-token JTIs
 - `SRMCore` validates JWT access tokens issued by `SRMAuth`
 - `SRMApp` authenticates human users and calls `SRMCore` on their behalf with forwarded bearer tokens
 - `SRMAgent` authenticates as a machine principal and calls dedicated agent endpoints
 
-This is functionally working, but it does not yet match the required target architecture from the project specification because Redis is not yet used for token state.
+This now matches the required target architecture from the project specification: SQL Server stores identity data, and Redis stores short-lived token state.
 
 ## Target Architecture
 
@@ -346,6 +346,7 @@ When that change is implemented, `AUTH_REFRESH_TOKEN` and `REVOKED_ACCESS_TOKEN`
 - Migrate refresh-token storage from SQL Server to Redis.
 - Migrate revoked access-token JTI storage from SQL Server to Redis.
 - Update startup and configuration so `SRMAuth` requires a Redis connection for token-state handling.
-- Update tests to cover Redis-backed refresh-token rotation and logout revocation behavior.
+- Add dedicated end-to-end tests that exercise refresh-token rotation and logout revocation against a real Redis instance.
 - Add broader policy-based authorization in `SRMCore`.
 - Add unit and integration tests for auth and authorization behavior.
+

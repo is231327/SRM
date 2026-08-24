@@ -36,7 +36,7 @@ public class AgentReportingControllerTests
         };
 
         var controller = new AgentReportingController(
-            new AgentReportingService(context, currentUserContext),
+            new AgentReportingService(context, currentUserContext, new FakeIncidentService()),
             new SensorReadingDtoMapper(),
             new MonitoredDevicePingResultDtoMapper());
 
@@ -78,7 +78,7 @@ public class AgentReportingControllerTests
         };
 
         var controller = new AgentReportingController(
-            new AgentReportingService(context, currentUserContext),
+            new AgentReportingService(context, currentUserContext, new FakeIncidentService()),
             new SensorReadingDtoMapper(),
             new MonitoredDevicePingResultDtoMapper());
 
@@ -98,3 +98,4 @@ public class AgentReportingControllerTests
         Assert.That(okResult.Value, Is.InstanceOf<MonitoredDevicePingResultReadDto>());
     }
 }
+

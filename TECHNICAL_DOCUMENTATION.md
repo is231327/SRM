@@ -85,7 +85,7 @@ The current authentication implementation includes:
 - `SRMAgent` performs machine login against `SRMAuth` and calls dedicated agent endpoints in `SRMCore`
 - machine principals are represented by `AgentCredential` records instead of human user accounts
 - `AgentCredential.AgentId` is stored in `SRMAuth` as an external reference to the corresponding agent in `SRMCore`, without a database-level foreign key across service boundaries
-- access-token revocation is enforced in both `SRMAuth` and `SRMCore` through persisted revoked token JTIs
+- access-token revocation is enforced in both `SRMAuth` and `SRMCore` through Redis-backed revoked token JTIs
 
 The current dedicated agent reporting path is:
 
@@ -226,9 +226,9 @@ The frontend has been verified at build level through `dotnet build SRMApp\SRMAp
 - primary relational database: Microsoft SQL Server
 - SQL Server runs in a Docker container
 - `SRMCore` uses SQL Server through Entity Framework Core
-- `SRMAuth` currently also uses SQL Server for identity data, refresh tokens, and token revocation data
+- `SRMAuth` uses SQL Server for identity data and Redis for refresh-token and access-token revocation state
 - local Redmine can run in Docker through `docker-compose.yml`
-- Redis is part of the required target architecture for `SRMAuth`, but it is not yet used by the current implementation
+- Redis is now part of the implemented runtime architecture for `SRMAuth` and `SRMCore` token validation
 - the current implementation initializes the schema through `Database.EnsureCreated()`
 - database schema changes require the SQL Server Docker data volume or database to be recreated unless the project is later switched to EF Core migrations
 - no secrets must be stored directly in source code
@@ -461,9 +461,10 @@ Represents the synchronization state between a backend incident and the external
 
 - The authentication and authorization design is documented in `AUTHENTICATION_AUTHORIZATION_CONCEPT.md`.
 - Agents are authenticated through `AgentCredential` machine credentials instead of `AuthUser` human accounts.
-- The implemented auth persistence currently differs from the target architecture because token state is still stored in SQL Server instead of Redis.
+- The implemented auth persistence follows the target architecture: SQL Server stores identity data and Redis stores short-lived token state.
 - Ticket integration is specified in `TICKET_INTEGRATION_SPECIFICATION.md`; incident persistence, queue-state persistence, and the Redmine worker are implemented, but local Redmine still requires manual project and API-key setup before end-to-end ticket synchronization will succeed.
 - The current model treats `ServerRoom` as the aggregate root for `Agent` and `MaintenanceWindow`.
 - The current model treats `Agent` as the technical parent for `ShellyDevice` and `MonitoredDevice`.
 - The current frontend pages provide CRUD-oriented management structure, but deeper UX polish, richer validation feedback, and production-grade navigation behavior still need further iteration.
 - For local Docker-based operation, HTTP is used between containers and HTTPS redirection is disabled through environment-based configuration inside the containerized services.
+

@@ -1,13 +1,15 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
-using System.Security.Cryptography;
-using System.Text;
+using Microsoft.Extensions.Options;
+using SRMAuth.Configuration;
 using SRMAuth.Data;
 using SRMAuth.Security;
 using SRMAuth.Services.Interfaces;
 using SRMShared.Auth;
 using SRMShared.DTOs.Auth;
 using SRMShared.Entities;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace SRMAuth.Services;
 
@@ -16,7 +18,8 @@ public class AuthService(
     IPasswordHasher<AuthUser> passwordHasher,
     IJwtTokenService jwtTokenService,
     ICurrentUserContext currentUserContext,
-    Microsoft.Extensions.Options.IOptions<SRMAuth.Configuration.JwtOptions> jwtOptions) : IAuthService
+    ITokenStateStore tokenStateStore,
+    IOptions<JwtOptions> jwtOptions) : IAuthService
 {
     public async Task<AuthTokenResponseDto?> LoginAsync(LoginRequestDto request, CancellationToken cancellationToken = default)
     {
@@ -91,27 +94,26 @@ public class AuthService(
     public async Task<AuthTokenResponseDto?> RefreshAsync(RefreshTokenRequestDto request, CancellationToken cancellationToken = default)
     {
         var refreshTokenHash = HashToken(request.RefreshToken);
-        var storedToken = await dbContext.RefreshTokens
-            .Include(x => x.User)
-                .ThenInclude(x => x!.UserRoles)
-                    .ThenInclude(x => x.Role)
-            .Include(x => x.User)
-                .ThenInclude(x => x!.CustomerUsers)
-            .FirstOrDefaultAsync(x => x.TokenHash == refreshTokenHash, cancellationToken);
+        var storedToken = await tokenStateStore.GetRefreshTokenAsync(refreshTokenHash, cancellationToken);
 
         if (storedToken is null
-            || storedToken.User is null
             || storedToken.RevokedAtUtc.HasValue
-            || storedToken.ExpiresAtUtc <= DateTime.UtcNow
-            || !storedToken.User.IsActive)
+            || storedToken.ExpiresAtUtc <= DateTime.UtcNow)
         {
             return null;
         }
 
-        storedToken.RevokedAtUtc = DateTime.UtcNow;
-        storedToken.UpdatedAtUtc = DateTime.UtcNow;
+        var user = await dbContext.Users
+            .Include(x => x.UserRoles)
+                .ThenInclude(x => x.Role)
+            .Include(x => x.CustomerUsers)
+            .FirstOrDefaultAsync(x => x.Id == storedToken.UserId && x.IsActive, cancellationToken);
 
-        var user = storedToken.User;
+        if (user is null)
+        {
+            return null;
+        }
+
         var roles = user.UserRoles
             .Select(x => x.Role?.Name)
             .Where(x => !string.IsNullOrWhiteSpace(x))
@@ -121,8 +123,7 @@ public class AuthService(
         var customerId = user.CustomerUsers.Select(x => (Guid?)x.CustomerId).FirstOrDefault();
 
         var response = await CreateUserAuthResponseAsync(user, roles, customerId, cancellationToken);
-        storedToken.ReplacedByTokenHash = HashToken(response.RefreshToken);
-        await dbContext.SaveChangesAsync(cancellationToken);
+        await tokenStateStore.RevokeRefreshTokenAsync(refreshTokenHash, DateTime.UtcNow, HashToken(response.RefreshToken), cancellationToken);
         return response;
     }
 
@@ -131,33 +132,22 @@ public class AuthService(
         if (!string.IsNullOrWhiteSpace(request.RefreshToken))
         {
             var refreshTokenHash = HashToken(request.RefreshToken);
-            var refreshToken = await dbContext.RefreshTokens.FirstOrDefaultAsync(
-                x => x.UserId == userId && x.TokenHash == refreshTokenHash,
-                cancellationToken);
-
-            if (refreshToken is not null && !refreshToken.RevokedAtUtc.HasValue)
+            var refreshToken = await tokenStateStore.GetRefreshTokenAsync(refreshTokenHash, cancellationToken);
+            if (refreshToken is not null && refreshToken.UserId == userId && !refreshToken.RevokedAtUtc.HasValue)
             {
-                refreshToken.RevokedAtUtc = DateTime.UtcNow;
-                refreshToken.UpdatedAtUtc = DateTime.UtcNow;
+                await tokenStateStore.RevokeRefreshTokenAsync(refreshTokenHash, DateTime.UtcNow, null, cancellationToken);
             }
         }
 
         if (!string.IsNullOrWhiteSpace(currentTokenJti) && currentTokenExpiresAtUtc.HasValue)
         {
-            var exists = await dbContext.RevokedAccessTokens.AnyAsync(x => x.TokenJti == currentTokenJti, cancellationToken);
-            if (!exists)
-            {
-                dbContext.RevokedAccessTokens.Add(new RevokedAccessToken
-                {
-                    TokenJti = currentTokenJti,
-                    ExpiresAtUtc = currentTokenExpiresAtUtc.Value,
-                    UserId = userId,
-                    Reason = "Logout"
-                });
-            }
+            await tokenStateStore.StoreRevokedAccessTokenAsync(
+                userId,
+                currentTokenJti,
+                currentTokenExpiresAtUtc.Value,
+                "Logout",
+                cancellationToken);
         }
-
-        await dbContext.SaveChangesAsync(cancellationToken);
     }
 
     public async Task<UserProfileDto?> GetOwnProfileAsync(Guid userId, CancellationToken cancellationToken = default)
@@ -641,13 +631,13 @@ public class AuthService(
         var refreshToken = GenerateRefreshToken();
         var refreshTokenHash = HashToken(refreshToken);
 
-        dbContext.RefreshTokens.Add(new AuthRefreshToken
+        await tokenStateStore.StoreRefreshTokenAsync(new RefreshTokenState
         {
             UserId = user.Id,
             TokenHash = refreshTokenHash,
+            CreatedAtUtc = DateTime.UtcNow,
             ExpiresAtUtc = DateTime.UtcNow.AddDays(jwtOptions.Value.RefreshTokenLifetimeDays)
-        });
-        await dbContext.SaveChangesAsync(cancellationToken);
+        }, cancellationToken);
 
         return new AuthTokenResponseDto
         {

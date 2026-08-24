@@ -10,8 +10,6 @@ public class SrmAuthDbContext(DbContextOptions<SrmAuthDbContext> options) : DbCo
     public DbSet<AuthUserRole> UserRoles => Set<AuthUserRole>();
     public DbSet<CustomerUser> CustomerUsers => Set<CustomerUser>();
     public DbSet<AgentCredential> AgentCredentials => Set<AgentCredential>();
-    public DbSet<AuthRefreshToken> RefreshTokens => Set<AuthRefreshToken>();
-    public DbSet<RevokedAccessToken> RevokedAccessTokens => Set<RevokedAccessToken>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -71,25 +69,6 @@ public class SrmAuthDbContext(DbContextOptions<SrmAuthDbContext> options) : DbCo
             entity.Property(x => x.ClientIdentifier).HasMaxLength(200).IsRequired();
             entity.Property(x => x.SecretHash).HasMaxLength(1000).IsRequired();
             entity.HasIndex(x => x.ClientIdentifier).IsUnique();
-        });
-
-        modelBuilder.Entity<AuthRefreshToken>(entity =>
-        {
-            entity.Property(x => x.TokenHash).HasMaxLength(200).IsRequired();
-            entity.Property(x => x.ReplacedByTokenHash).HasMaxLength(200);
-            entity.HasIndex(x => x.TokenHash).IsUnique();
-
-            entity.HasOne(x => x.User)
-                .WithMany()
-                .HasForeignKey(x => x.UserId)
-                .OnDelete(DeleteBehavior.Cascade);
-        });
-
-        modelBuilder.Entity<RevokedAccessToken>(entity =>
-        {
-            entity.Property(x => x.TokenJti).HasMaxLength(200).IsRequired();
-            entity.Property(x => x.Reason).HasMaxLength(500);
-            entity.HasIndex(x => x.TokenJti).IsUnique();
         });
     }
 }
