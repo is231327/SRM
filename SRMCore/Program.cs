@@ -20,6 +20,7 @@ using SRMShared.DTOs.MonitoredDevicePingResult;
 using SRMShared.DTOs.SensorReading;
 using SRMShared.DTOs.ServerRoom;
 using SRMShared.DTOs.ShellyDevice;
+using SRMShared.Configuration;
 using SRMShared.Entities;
 using Scalar.AspNetCore;
 
@@ -30,13 +31,23 @@ public class Program
     public static void Main(string[] args)
     {
         var builder = WebApplication.CreateBuilder(args);
+        if (builder.Environment.IsDevelopment())
+        {
+            builder.Configuration.AddInMemoryCollection(DevelopmentEnvironment.Load());
+            builder.Configuration.AddEnvironmentVariables();
+        }
+
         builder.Services.Configure<RedmineOptions>(builder.Configuration.GetSection(RedmineOptions.SectionName));
         builder.Services.AddHttpContextAccessor();
         builder.Services.AddDbContext<SrmCoreDbContext>(options =>
-            options.UseSqlServer(builder.Configuration.GetConnectionString("SrmCoreDatabase")));
+            options.UseSqlServer(
+                builder.Configuration.GetConnectionString("SrmCoreDatabase"),
+                sqlOptions => sqlOptions.EnableRetryOnFailure()));
         builder.Services.AddDbContext<AuthTokenStateDbContext>(options =>
-            options.UseSqlServer(builder.Configuration.GetConnectionString("SrmAuthDatabase")
-                ?? throw new InvalidOperationException("Missing connection string 'SrmAuthDatabase'.")));
+            options.UseSqlServer(
+                builder.Configuration.GetConnectionString("SrmAuthDatabase")
+                ?? throw new InvalidOperationException("Missing connection string 'SrmAuthDatabase'."),
+                sqlOptions => sqlOptions.EnableRetryOnFailure()));
         builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             .AddJwtBearer(options =>
             {
@@ -113,7 +124,10 @@ public class Program
             app.MapOpenApi();
         }
 
-        app.UseHttpsRedirection();
+        if (app.Environment.IsDevelopment())
+        {
+            app.UseHttpsRedirection();
+        }
         app.UseMiddleware<AuthorizationExceptionMiddleware>();
         app.UseAuthentication();
         app.UseAuthorization();

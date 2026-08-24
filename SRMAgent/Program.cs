@@ -1,6 +1,7 @@
 using SRMAgent.Configuration;
 using SRMAgent.Services;
 using SRMAgent.Services.Interfaces;
+using SRMShared.Configuration;
 using Scalar.AspNetCore;
 
 namespace SRMAgent;
@@ -10,6 +11,12 @@ public class Program
     public static void Main(string[] args)
     {
         var builder = WebApplication.CreateBuilder(args);
+        if (builder.Environment.IsDevelopment())
+        {
+            builder.Configuration.AddInMemoryCollection(DevelopmentEnvironment.Load());
+            builder.Configuration.AddEnvironmentVariables();
+        }
+
         builder.Services.Configure<AgentRuntimeOptions>(builder.Configuration.GetSection(AgentRuntimeOptions.SectionName));
         builder.Services.AddControllers();
         builder.Services.AddOpenApi();
@@ -43,7 +50,10 @@ public class Program
             app.MapOpenApi();
         }
 
-        app.UseHttpsRedirection();
+        if (app.Environment.IsDevelopment())
+        {
+            app.UseHttpsRedirection();
+        }
         app.UseAuthorization();
         app.MapControllers();
 

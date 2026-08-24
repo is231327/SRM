@@ -2,6 +2,7 @@ using SRMApp.Components;
 using SRMApp.Localization;
 using SRMApp.Services;
 using Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage;
+using SRMShared.Configuration;
 
 namespace SRMApp;
 
@@ -10,6 +11,11 @@ public class Program
     public static void Main(string[] args)
     {
         var builder = WebApplication.CreateBuilder(args);
+        if (builder.Environment.IsDevelopment())
+        {
+            builder.Configuration.AddInMemoryCollection(DevelopmentEnvironment.Load());
+            builder.Configuration.AddEnvironmentVariables();
+        }
 
         // Add services to the container.
         builder.Services.AddRazorComponents()
@@ -40,7 +46,10 @@ public class Program
             app.UseHsts();
         }
 
-        app.UseHttpsRedirection();
+        if (app.Environment.IsDevelopment())
+        {
+            app.UseHttpsRedirection();
+        }
 
         app.UseStaticFiles();
         app.UseAntiforgery();

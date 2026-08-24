@@ -10,6 +10,7 @@ using SRMAuth.Middleware;
 using SRMAuth.Security;
 using SRMAuth.Services;
 using SRMAuth.Services.Interfaces;
+using SRMShared.Configuration;
 using Scalar.AspNetCore;
 using SRMShared.Entities;
 
@@ -20,10 +21,18 @@ public class Program
     public static void Main(string[] args)
     {
         var builder = WebApplication.CreateBuilder(args);
+        if (builder.Environment.IsDevelopment())
+        {
+            builder.Configuration.AddInMemoryCollection(DevelopmentEnvironment.Load());
+            builder.Configuration.AddEnvironmentVariables();
+        }
+
         builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection(JwtOptions.SectionName));
         builder.Services.AddHttpContextAccessor();
         builder.Services.AddDbContext<SrmAuthDbContext>(options =>
-            options.UseSqlServer(builder.Configuration.GetConnectionString("SrmAuthDatabase")));
+            options.UseSqlServer(
+                builder.Configuration.GetConnectionString("SrmAuthDatabase"),
+                sqlOptions => sqlOptions.EnableRetryOnFailure()));
         builder.Services.AddScoped<ICurrentUserContext, CurrentUserContext>();
         builder.Services.AddScoped<IPasswordHasher<AuthUser>, PasswordHasher<AuthUser>>();
         builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
@@ -85,7 +94,10 @@ public class Program
             app.MapOpenApi();
         }
 
-        app.UseHttpsRedirection();
+        if (app.Environment.IsDevelopment())
+        {
+            app.UseHttpsRedirection();
+        }
         app.UseMiddleware<AuthorizationExceptionMiddleware>();
         app.UseAuthentication();
         app.UseAuthorization();
