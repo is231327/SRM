@@ -247,3 +247,5 @@ ModelManifest.xml
 .env
 /ContainerServices/.env-development
 /ContainerServices/.env
+/ContainerServices/.env-azure
+/ContainerServices/.azure-services

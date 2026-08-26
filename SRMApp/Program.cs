@@ -1,7 +1,9 @@
+﻿using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage;
+using StackExchange.Redis;
 using SRMApp.Components;
 using SRMApp.Localization;
 using SRMApp.Services;
-using Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage;
 using SRMShared.Configuration;
 
 namespace SRMApp;
@@ -16,6 +18,16 @@ public class Program
             builder.Configuration.AddInMemoryCollection(DevelopmentEnvironment.Load());
             builder.Configuration.AddEnvironmentVariables();
         }
+
+        builder.Services.Configure<RedisOptions>(builder.Configuration.GetSection(RedisOptions.SectionName));
+
+        var redisConnectionString = ResolveRedisConnectionString(builder.Configuration);
+        var redisConnection = ConnectionMultiplexer.Connect(redisConnectionString);
+
+        builder.Services.AddSingleton<IConnectionMultiplexer>(redisConnection);
+        builder.Services.AddDataProtection()
+            .SetApplicationName("SRMApp")
+            .PersistKeysToStackExchangeRedis(redisConnection, "SRMApp-DataProtection-Keys");
 
         // Add services to the container.
         builder.Services.AddRazorComponents()
@@ -38,11 +50,9 @@ public class Program
 
         var app = builder.Build();
 
-        // Configure the HTTP request pipeline.
         if (!app.Environment.IsDevelopment())
         {
             app.UseExceptionHandler("/Error");
-            // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
             app.UseHsts();
         }
 
@@ -58,5 +68,20 @@ public class Program
             .AddInteractiveServerRenderMode();
 
         app.Run();
+    }
+    private static string ResolveRedisConnectionString(IConfiguration configuration)
+    {
+        var redisConnectionString = configuration["Redis:ConnectionString"]
+            ?? configuration["SRM_REDIS_CONNECTION"]
+            ?? Environment.GetEnvironmentVariable("SRM_REDIS_CONNECTION");
+
+        if (!string.IsNullOrWhiteSpace(redisConnectionString))
+        {
+            return redisConnectionString;
+        }
+
+        throw new InvalidOperationException(
+            "Missing Redis connection configuration. Provide either 'Redis:ConnectionString' or 'SRM_REDIS_CONNECTION'. " +
+            "For local development, make sure ContainerServices/.env-development is present or the launch profile sets SRM_REDIS_CONNECTION.");
     }
 }

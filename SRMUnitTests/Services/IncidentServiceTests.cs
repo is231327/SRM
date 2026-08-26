@@ -1,4 +1,4 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using SRMCore.Services;
 using SRMShared.Entities;
 using SRMUnitTests.TestHelpers;
@@ -65,6 +65,8 @@ public class IncidentServiceTests
         {
             IncidentId = openIncident.Id,
             ProviderName = "Redmine",
+            ExternalTicketId = "RM-1",
+            ExternalTicketUrl = "https://redmine.example.local/issues/1",
             SyncStatus = TicketSyncStatus.Created
         });
         await context.SaveChangesAsync();
@@ -198,3 +200,4 @@ public class IncidentServiceTests
         return (serverRoom, monitoredDevice);
     }
 }
+

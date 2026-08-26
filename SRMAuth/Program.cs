@@ -1,4 +1,4 @@
-using System.IdentityModel.Tokens.Jwt;
+﻿using System.IdentityModel.Tokens.Jwt;
 using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
@@ -34,11 +34,10 @@ public class Program
         builder.Services.AddHttpContextAccessor();
         builder.Services.AddDbContext<SrmAuthDbContext>(options =>
             options.UseSqlServer(
-                builder.Configuration.GetConnectionString("SrmAuthDatabase"),
+                ResolveAuthSqlConnectionString(builder.Configuration),
                 sqlOptions => sqlOptions.EnableRetryOnFailure()));
         builder.Services.AddSingleton<IConnectionMultiplexer>(_ =>
-            ConnectionMultiplexer.Connect(builder.Configuration["Redis:ConnectionString"]
-                ?? throw new InvalidOperationException("Missing configuration value 'Redis:ConnectionString'.")));
+            ConnectionMultiplexer.Connect(ResolveRedisConnectionString(builder.Configuration)));
         builder.Services.AddSingleton<ITokenStateStore, RedisTokenStateStore>();
         builder.Services.AddScoped<ICurrentUserContext, CurrentUserContext>();
         builder.Services.AddScoped<IPasswordHasher<AuthUser>, PasswordHasher<AuthUser>>();
@@ -86,14 +85,7 @@ public class Program
 
         var app = builder.Build();
 
-        using (var scope = app.Services.CreateScope())
-        {
-            var dbContext = scope.ServiceProvider.GetRequiredService<SrmAuthDbContext>();
-            var passwordHasher = scope.ServiceProvider.GetRequiredService<IPasswordHasher<AuthUser>>();
-            var configuration = scope.ServiceProvider.GetRequiredService<IConfiguration>();
-            dbContext.Database.EnsureCreated();
-            AuthDbSeeder.SeedAsync(dbContext, passwordHasher, configuration).GetAwaiter().GetResult();
-        }
+        InitializeDatabaseWithRetry(app.Services);
 
         if (app.Environment.IsDevelopment())
         {
@@ -112,4 +104,85 @@ public class Program
 
         app.Run();
     }
+
+    private static void InitializeDatabaseWithRetry(IServiceProvider services)
+    {
+        const int maxAttempts = 12;
+        var delay = TimeSpan.FromSeconds(5);
+
+        for (var attempt = 1; attempt <= maxAttempts; attempt++)
+        {
+            using var scope = services.CreateScope();
+            var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+
+            try
+            {
+                var dbContext = scope.ServiceProvider.GetRequiredService<SrmAuthDbContext>();
+                var passwordHasher = scope.ServiceProvider.GetRequiredService<IPasswordHasher<AuthUser>>();
+                var configuration = scope.ServiceProvider.GetRequiredService<IConfiguration>();
+
+                dbContext.Database.EnsureCreated();
+                AuthDbSeeder.SeedAsync(dbContext, passwordHasher, configuration).GetAwaiter().GetResult();
+                logger.LogInformation("SRMAuth database initialization completed on attempt {Attempt}.", attempt);
+                return;
+            }
+            catch (Exception exception) when (attempt < maxAttempts)
+            {
+                logger.LogWarning(
+                    exception,
+                    "SRMAuth database initialization attempt {Attempt} of {MaxAttempts} failed. Retrying in {DelaySeconds} seconds.",
+                    attempt,
+                    maxAttempts,
+                    delay.TotalSeconds);
+                Thread.Sleep(delay);
+            }
+        }
+
+        using var finalScope = services.CreateScope();
+        var finalLogger = finalScope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+        try
+        {
+            var dbContext = finalScope.ServiceProvider.GetRequiredService<SrmAuthDbContext>();
+            var passwordHasher = finalScope.ServiceProvider.GetRequiredService<IPasswordHasher<AuthUser>>();
+            var configuration = finalScope.ServiceProvider.GetRequiredService<IConfiguration>();
+
+            dbContext.Database.EnsureCreated();
+            AuthDbSeeder.SeedAsync(dbContext, passwordHasher, configuration).GetAwaiter().GetResult();
+        }
+        catch (Exception exception)
+        {
+            finalLogger.LogError(exception, "SRMAuth database initialization failed after all retry attempts.");
+            throw;
+        }
+    }
+    private static string ResolveAuthSqlConnectionString(IConfiguration configuration)
+    {
+        var connectionString = configuration.GetConnectionString("SrmAuthDatabase")
+            ?? configuration["SRM_SQL_AUTH_CONNECTION"]
+            ?? Environment.GetEnvironmentVariable("SRM_SQL_AUTH_CONNECTION");
+
+        if (!string.IsNullOrWhiteSpace(connectionString))
+        {
+            return connectionString;
+        }
+
+        throw new InvalidOperationException(
+            "Missing auth SQL connection configuration. Provide either 'ConnectionStrings:SrmAuthDatabase' or 'SRM_SQL_AUTH_CONNECTION'.");
+    }
+    private static string ResolveRedisConnectionString(IConfiguration configuration)
+    {
+        var redisConnectionString = configuration["Redis:ConnectionString"]
+            ?? configuration["SRM_REDIS_CONNECTION"]
+            ?? Environment.GetEnvironmentVariable("SRM_REDIS_CONNECTION");
+
+        if (!string.IsNullOrWhiteSpace(redisConnectionString))
+        {
+            return redisConnectionString;
+        }
+
+        throw new InvalidOperationException(
+            "Missing Redis connection configuration. Provide either 'Redis:ConnectionString' or 'SRM_REDIS_CONNECTION'. " +
+            "For local development, make sure ContainerServices/.env-development is present or the launch profile sets SRM_REDIS_CONNECTION.");
+    }
 }
+
