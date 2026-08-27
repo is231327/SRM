@@ -1,4 +1,4 @@
-﻿using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Configuration;
 
 namespace SRMIntegrationTests.TestHelpers;
 
@@ -6,11 +6,15 @@ internal static class IntegrationTestConfiguration
 {
     public static IConfiguration Build()
     {
+        var dotenvValues = LoadDotEnv();
+        var environmentAliasValues = LoadEnvironmentAliases();
+
         var builder = new ConfigurationBuilder()
             .SetBasePath(AppContext.BaseDirectory)
             .AddJsonFile("appsettings.json", optional: true)
-            .AddInMemoryCollection(LoadDotEnv())
-            .AddEnvironmentVariables();
+            .AddInMemoryCollection(dotenvValues)
+            .AddEnvironmentVariables()
+            .AddInMemoryCollection(environmentAliasValues);
 
         return builder.Build();
     }
@@ -47,19 +51,37 @@ internal static class IntegrationTestConfiguration
                 value = value[1..^1];
             }
 
-            values[key] = value;
-
-            if (key.Equals("SRM_TEST_SQL_AUTH_CONNECTION", StringComparison.OrdinalIgnoreCase))
-            {
-                values["ConnectionStrings:SrmAuthDatabase"] = value;
-            }
-            else if (key.Equals("SRM_TEST_SQL_CORE_CONNECTION", StringComparison.OrdinalIgnoreCase))
-            {
-                values["ConnectionStrings:SrmCoreDatabase"] = value;
-            }
+            AddAliasedValue(values, key, value);
         }
 
         return values;
+    }
+
+    private static IDictionary<string, string?> LoadEnvironmentAliases()
+    {
+        var values = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+        AddAliasedValue(values, "SRM_TEST_SQL_AUTH_CONNECTION", Environment.GetEnvironmentVariable("SRM_TEST_SQL_AUTH_CONNECTION"));
+        AddAliasedValue(values, "SRM_TEST_SQL_CORE_CONNECTION", Environment.GetEnvironmentVariable("SRM_TEST_SQL_CORE_CONNECTION"));
+        return values;
+    }
+
+    private static void AddAliasedValue(IDictionary<string, string?> values, string key, string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return;
+        }
+
+        values[key] = value;
+
+        if (key.Equals("SRM_TEST_SQL_AUTH_CONNECTION", StringComparison.OrdinalIgnoreCase))
+        {
+            values["ConnectionStrings:SrmAuthDatabase"] = value;
+        }
+        else if (key.Equals("SRM_TEST_SQL_CORE_CONNECTION", StringComparison.OrdinalIgnoreCase))
+        {
+            values["ConnectionStrings:SrmCoreDatabase"] = value;
+        }
     }
 
     private static string? FindRepoRootEnvFile()
@@ -85,4 +107,3 @@ internal static class IntegrationTestConfiguration
         return null;
     }
 }
-
