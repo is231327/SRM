@@ -22,6 +22,8 @@ services:
       start_period: 20s
     volumes:
       - srm-sqlserver-data:/var/opt/mssql
+    networks:
+      - srm-shared
 
   srm-redis:
     image: redis:7-alpine
@@ -32,6 +34,8 @@ services:
     command: ["redis-server", "--appendonly", "yes"]
     volumes:
       - srm-redis-data:/data
+    networks:
+      - srm-shared
 
   srm-redmine-db:
     image: postgres:16
@@ -43,39 +47,50 @@ services:
       POSTGRES_PASSWORD: "${REDMINE_POSTGRES_PASSWORD}"
     volumes:
       - srm-redmine-db-data:/var/lib/postgresql/data
+    networks:
+      - srm-shared
 
   shelly1:
     build:
       context: ../PythonShelly
       dockerfile: Dockerfile
+    image: srmprod.azurecr.io/shelly1-demo:latest
     container_name: shelly1
     restart: unless-stopped
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:
       - "5000:5000"
+    networks:
+      - srm-shared
 
   shelly2:
     build:
       context: ../PythonShelly
       dockerfile: Dockerfile
+    image: srmprod.azurecr.io/shelly2-demo:latest
     container_name: shelly2
     restart: unless-stopped
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:
       - "5001:5000"
+    networks:
+      - srm-shared
 
   shelly3:
     build:
       context: ../PythonShelly
       dockerfile: Dockerfile
+    image: srmprod.azurecr.io/shelly3-demo:latest
     container_name: shelly3
     restart: unless-stopped
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:
       - "5002:5000"
+    networks:
+      - srm-shared
 
   srm-redmine:
     image: redmine:6.0
@@ -92,111 +107,130 @@ services:
       REDMINE_DB_PASSWORD: "${REDMINE_POSTGRES_PASSWORD}"
     volumes:
       - srm-redmine-data:/usr/src/redmine/files
+    networks:
+      - srm-shared
 
-  # srm-auth:
-  #   build:
-  #     context: ..
-  #     dockerfile: SRMAuth/Dockerfile
-  #   container_name: srm-auth
-  #   restart: unless-stopped
-  #   depends_on:
-  #     srm-sqlserver:
-  #       condition: service_healthy
-  #     srm-redis:
-  #       condition: service_started
-  #   ports:
-  #     - "7031:8080"
-  #   environment:
-  #     ASPNETCORE_ENVIRONMENT: Production
-  #     ASPNETCORE_URLS: http://+:8080
-  #     ConnectionStrings__SrmAuthDatabase: "${SRM_SQL_AUTH_CONNECTION}"
-  #     Redis__ConnectionString: "${SRM_REDIS_CONNECTION}"
-  #     Jwt__Issuer: "${SRM_JWT_ISSUER}"
-  #     Jwt__Audience: "${SRM_JWT_AUDIENCE}"
-  #     Jwt__SigningKey: "${SRM_JWT_SIGNING_KEY}"
-  #     Jwt__AccessTokenLifetimeMinutes: "${SRM_JWT_ACCESS_TOKEN_LIFETIME_MINUTES}"
-  #     BootstrapAdmin__Username: "${SRM_BOOTSTRAP_ADMIN_USERNAME}"
-  #     BootstrapAdmin__Email: "${SRM_BOOTSTRAP_ADMIN_EMAIL}"
-  #     BootstrapAdmin__Password: "${SRM_BOOTSTRAP_ADMIN_PASSWORD}"
-  #     BootstrapAdmin__FirstName: "${SRM_BOOTSTRAP_ADMIN_FIRSTNAME}"
-  #     BootstrapAdmin__LastName: "${SRM_BOOTSTRAP_ADMIN_LASTNAME}"
-  #     BootstrapAdmin__PhoneNumber: "${SRM_BOOTSTRAP_ADMIN_PHONENUMBER}"
-  #     BootstrapAdmin__MustChangePassword: "${SRM_BOOTSTRAP_ADMIN_MUSTCHANGEPASSWORD}"
+  srm-auth:
+    build:
+      context: ..
+      dockerfile: SRMAuth/Dockerfile
+    image: srmprod.azurecr.io/srm-auth:latest
+    container_name: srm-auth
+    restart: unless-stopped
+    depends_on:
+      srm-sqlserver:
+        condition: service_healthy
+      srm-redis:
+        condition: service_started
+    ports:
+      - "7031:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: http://+:8080
+      SRM_SQL_AUTH_CONNECTION: "${SRM_SQL_AUTH_CONNECTION}"
+      Redis__ConnectionString: "${SRM_REDIS_CONNECTION}"
+      Jwt__Issuer: "${SRM_JWT_ISSUER}"
+      Jwt__Audience: "${SRM_JWT_AUDIENCE}"
+      Jwt__SigningKey: "${SRM_JWT_SIGNING_KEY}"
+      Jwt__AccessTokenLifetimeMinutes: "${SRM_JWT_ACCESS_TOKEN_LIFETIME_MINUTES}"
+      BootstrapAdmin__Username: "${SRM_BOOTSTRAP_ADMIN_USERNAME}"
+      BootstrapAdmin__Email: "${SRM_BOOTSTRAP_ADMIN_EMAIL}"
+      BootstrapAdmin__Password: "${SRM_BOOTSTRAP_ADMIN_PASSWORD}"
+      BootstrapAdmin__FirstName: "${SRM_BOOTSTRAP_ADMIN_FIRSTNAME}"
+      BootstrapAdmin__LastName: "${SRM_BOOTSTRAP_ADMIN_LASTNAME}"
+      BootstrapAdmin__PhoneNumber: "${SRM_BOOTSTRAP_ADMIN_PHONENUMBER}"
+      BootstrapAdmin__MustChangePassword: "${SRM_BOOTSTRAP_ADMIN_MUSTCHANGEPASSWORD}"
+    networks:
+      - srm-shared
 
-  # srm-core:
-  #   build:
-  #     context: ..
-  #     dockerfile: SRMCore/Dockerfile
-  #   container_name: srm-core
-  #   restart: unless-stopped
-  #   depends_on:
-  #     srm-sqlserver:
-  #       condition: service_healthy
-  #     srm-auth:
-  #       condition: service_started
-  #     srm-redmine:
-  #       condition: service_started
-  #     srm-redis:
-  #       condition: service_started
-  #   ports:
-  #     - "7030:8080"
-  #   environment:
-  #     ASPNETCORE_ENVIRONMENT: Production
-  #     ASPNETCORE_URLS: http://+:8080
-  #     ConnectionStrings__SrmCoreDatabase: "${SRM_SQL_CORE_CONNECTION}"
-  #     Redis__ConnectionString: "${SRM_REDIS_CONNECTION}"
-  #     Jwt__Issuer: "${SRM_JWT_ISSUER}"
-  #     Jwt__Audience: "${SRM_JWT_AUDIENCE}"
-  #     Jwt__SigningKey: "${SRM_JWT_SIGNING_KEY}"
-  #     Redmine__Enabled: "${SRM_REDMINE_ENABLED}"
-  #     Redmine__BaseUrl: "${SRM_REDMINE_BASE_URL}"
-  #     Redmine__ApiKey: "${SRM_REDMINE_API_KEY}"
-  #     Redmine__ProjectIdentifier: "${SRM_REDMINE_PROJECT_IDENTIFIER}"
-  #     Redmine__TrackerId: "${SRM_REDMINE_TRACKER_ID}"
-  #     Redmine__StatusId: "${SRM_REDMINE_STATUS_ID}"
-  #     Redmine__PollIntervalSeconds: "${SRM_REDMINE_POLL_INTERVAL_SECONDS}"
-  #     Redmine__WarningPriorityId: "${SRM_REDMINE_WARNING_PRIORITY_ID}"
-  #     Redmine__MajorPriorityId: "${SRM_REDMINE_MAJOR_PRIORITY_ID}"
-  #     Redmine__CriticalPriorityId: "${SRM_REDMINE_CRITICAL_PRIORITY_ID}"
+  srm-core:
+    build:
+      context: ..
+      dockerfile: SRMCore/Dockerfile
+    image: srmprod.azurecr.io/srm-core:latest
+    container_name: srm-core
+    restart: unless-stopped
+    depends_on:
+      srm-auth:
+        condition: service_started
+      srm-sqlserver:
+        condition: service_healthy
+      srm-redmine:
+        condition: service_started
+      srm-redis:
+        condition: service_started
+    ports:
+      - "7030:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: http://+:8080
+      SRM_SQL_CORE_CONNECTION: "${SRM_SQL_CORE_CONNECTION}"
+      Redis__ConnectionString: "${SRM_REDIS_CONNECTION}"
+      Jwt__Issuer: "${SRM_JWT_ISSUER}"
+      Jwt__Audience: "${SRM_JWT_AUDIENCE}"
+      Jwt__SigningKey: "${SRM_JWT_SIGNING_KEY}"
+      Redmine__Enabled: "${SRM_REDMINE_ENABLED}"
+      Redmine__BaseUrl: "${SRM_REDMINE_BASE_URL}"
+      Redmine__ApiKey: "${SRM_REDMINE_API_KEY}"
+      Redmine__ProjectIdentifier: "${SRM_REDMINE_PROJECT_IDENTIFIER}"
+      Redmine__TrackerId: "${SRM_REDMINE_TRACKER_ID}"
+      Redmine__StatusId: "${SRM_REDMINE_STATUS_ID}"
+      Redmine__PollIntervalSeconds: "${SRM_REDMINE_POLL_INTERVAL_SECONDS}"
+      Redmine__WarningPriorityId: "${SRM_REDMINE_WARNING_PRIORITY_ID}"
+      Redmine__MajorPriorityId: "${SRM_REDMINE_MAJOR_PRIORITY_ID}"
+      Redmine__CriticalPriorityId: "${SRM_REDMINE_CRITICAL_PRIORITY_ID}"
+    networks:
+      - srm-shared
 
-  # srm-agent:
-  #   build:
-  #     context: ..
-  #     dockerfile: SRMAgent/Dockerfile
-  #   container_name: srm-agent
-  #   restart: unless-stopped
-  #   depends_on:
-  #     - srm-auth
-  #     - srm-core
-  #   ports:
-  #     - "7032:8080"
-  #   environment:
-  #     ASPNETCORE_ENVIRONMENT: Production
-  #     ASPNETCORE_URLS: http://+:8080
-  #     AgentApi__AuthBaseUrl: "${SRM_AUTH_BASE_URL}"
-  #     AgentApi__CoreBaseUrl: "${SRM_CORE_BASE_URL}"
-  #     AgentApi__ClientIdentifier: "${SRM_AGENT_CLIENT_IDENTIFIER}"
-  #     AgentApi__ClientSecret: "${SRM_AGENT_CLIENT_SECRET}"
+  srm-agent:
+    build:
+      context: ..
+      dockerfile: SRMAgent/Dockerfile
+    image: srmprod.azurecr.io/srm-agent-demo:latest
+    container_name: srm-agent
+    restart: unless-stopped
+    depends_on:
+      - srm-auth
+      - srm-core
+    ports:
+      - "7032:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: http://+:8080
+      AgentApi__AuthBaseUrl: "${SRM_AUTH_BASE_URL}"
+      AgentApi__CoreBaseUrl: "${SRM_CORE_BASE_URL}"
+      AgentApi__ClientIdentifier: "${SRM_AGENT_CLIENT_IDENTIFIER}"
+      AgentApi__ClientSecret: "${SRM_AGENT_CLIENT_SECRET}"
+    networks:
+      - srm-shared
 
-  # srm-app:
-  #   build:
-  #     context: ..
-  #     dockerfile: SRMApp/Dockerfile
-  #   container_name: srm-app
-  #   restart: unless-stopped
-  #   depends_on:
-  #     - srm-auth
-  #     - srm-core
-  #   ports:
-  #     - "7001:8080"
-  #   environment:
-  #     ASPNETCORE_ENVIRONMENT: Production
-  #     ASPNETCORE_URLS: http://+:8080
-  #     CoreApi__BaseUrl: "${SRM_CORE_BASE_URL}"
-  #     AuthApi__BaseUrl: "${SRM_AUTH_BASE_URL}"
+  srm-app:
+    build:
+      context: ..
+      dockerfile: SRMApp/Dockerfile
+    image: srmprod.azurecr.io/srm-app:latest
+    container_name: srm-app
+    restart: unless-stopped
+    depends_on:
+      - srm-auth
+      - srm-core
+    ports:
+      - "7001:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: http://+:8080
+      CoreApi__BaseUrl: "${SRM_CORE_BASE_URL}"
+      AuthApi__BaseUrl: "${SRM_AUTH_BASE_URL}"
+      Redis__ConnectionString: "${SRM_REDIS_CONNECTION}"
+    networks:
+      - srm-shared
 
 volumes:
   srm-sqlserver-data:
   srm-redis-data:
   srm-redmine-db-data:
   srm-redmine-data:
+
+networks:
+  srm-shared:
+    name: srm-shared
