@@ -1,4 +1,4 @@
-using Microsoft.Extensions.Configuration;
+﻿using Microsoft.Extensions.Configuration;
 
 namespace SRMIntegrationTests.TestHelpers;
 
@@ -48,6 +48,15 @@ internal static class IntegrationTestConfiguration
             }
 
             values[key] = value;
+
+            if (key.Equals("SRM_TEST_SQL_AUTH_CONNECTION", StringComparison.OrdinalIgnoreCase))
+            {
+                values["ConnectionStrings:SrmAuthDatabase"] = value;
+            }
+            else if (key.Equals("SRM_TEST_SQL_CORE_CONNECTION", StringComparison.OrdinalIgnoreCase))
+            {
+                values["ConnectionStrings:SrmCoreDatabase"] = value;
+            }
         }
 
         return values;
@@ -58,10 +67,16 @@ internal static class IntegrationTestConfiguration
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
         while (directory is not null)
         {
-            var candidate = Path.Combine(directory.FullName, ".env");
-            if (File.Exists(candidate))
+            var developmentCandidate = Path.Combine(directory.FullName, "ContainerServices", ".env-development");
+            if (File.Exists(developmentCandidate))
             {
-                return candidate;
+                return developmentCandidate;
+            }
+
+            var localCandidate = Path.Combine(directory.FullName, "ContainerServices", ".env");
+            if (File.Exists(localCandidate))
+            {
+                return localCandidate;
             }
 
             directory = directory.Parent;
@@ -70,3 +85,4 @@ internal static class IntegrationTestConfiguration
         return null;
     }
 }
+

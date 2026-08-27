@@ -1,4 +1,4 @@
-namespace SRMShared.Configuration;
+﻿namespace SRMShared.Configuration;
 
 public static class DevelopmentEnvironment
 {
@@ -10,6 +10,8 @@ public static class DevelopmentEnvironment
             ["SRM_SQL_AUTH_CONNECTION"] = "ConnectionStrings:SrmAuthDatabase",
             ["SRM_SQL_CORE_CONNECTION"] = "ConnectionStrings:SrmCoreDatabase",
             ["SRM_REDIS_CONNECTION"] = "Redis:ConnectionString",
+            ["SRM_TEST_SQL_AUTH_CONNECTION"] = "ConnectionStrings:SrmAuthDatabase",
+            ["SRM_TEST_SQL_CORE_CONNECTION"] = "ConnectionStrings:SrmCoreDatabase",
             ["SRM_BOOTSTRAP_ADMIN_USERNAME"] = "BootstrapAdmin:Username",
             ["SRM_BOOTSTRAP_ADMIN_EMAIL"] = "BootstrapAdmin:Email",
             ["SRM_BOOTSTRAP_ADMIN_PASSWORD"] = "BootstrapAdmin:Password",
@@ -136,3 +138,4 @@ public static class DevelopmentEnvironment
         return null;
     }
 }
+

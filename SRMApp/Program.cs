@@ -1,5 +1,5 @@
-﻿using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage;
+using Microsoft.AspNetCore.DataProtection;
 using StackExchange.Redis;
 using SRMApp.Components;
 using SRMApp.Localization;
@@ -29,7 +29,6 @@ public class Program
             .SetApplicationName("SRMApp")
             .PersistKeysToStackExchangeRedis(redisConnection, "SRMApp-DataProtection-Keys");
 
-        // Add services to the container.
         builder.Services.AddRazorComponents()
             .AddInteractiveServerComponents();
         builder.Services.AddHttpClient<ICoreApiClient, CoreApiClient>((serviceProvider, client) =>
@@ -64,11 +63,13 @@ public class Program
         app.UseStaticFiles();
         app.UseAntiforgery();
 
+        app.MapStaticAssets();
         app.MapRazorComponents<App>()
             .AddInteractiveServerRenderMode();
 
         app.Run();
     }
+
     private static string ResolveRedisConnectionString(IConfiguration configuration)
     {
         var redisConnectionString = configuration["Redis:ConnectionString"]

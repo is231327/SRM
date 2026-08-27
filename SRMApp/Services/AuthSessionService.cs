@@ -1,10 +1,13 @@
 using Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage;
+using Microsoft.Extensions.Logging;
 using SRMShared.DTOs.Auth;
 using SRMShared.Auth;
 
 namespace SRMApp.Services;
 
-public class AuthSessionService(ProtectedSessionStorage protectedSessionStorage)
+public class AuthSessionService(
+    ProtectedSessionStorage protectedSessionStorage,
+    ILogger<AuthSessionService> logger)
 {
     private const string StorageKey = "auth-session";
     private bool _isInitialized;
@@ -46,8 +49,9 @@ public class AuthSessionService(ProtectedSessionStorage protectedSessionStorage)
                 CurrentUser = result.Value.CurrentUser;
             }
         }
-        catch
+        catch (Exception exception)
         {
+            logger.LogWarning(exception, "Failed to restore the protected browser auth session.");
         }
 
         _isInitialized = true;
@@ -60,13 +64,22 @@ public class AuthSessionService(ProtectedSessionStorage protectedSessionStorage)
         RefreshToken = tokenResponse.RefreshToken;
         AccessTokenExpiresAtUtc = tokenResponse.ExpiresAtUtc;
         CurrentUser = profile;
-        await protectedSessionStorage.SetAsync(StorageKey, new AuthSessionState
+
+        try
         {
-            AccessToken = tokenResponse.AccessToken,
-            RefreshToken = tokenResponse.RefreshToken,
-            AccessTokenExpiresAtUtc = tokenResponse.ExpiresAtUtc,
-            CurrentUser = profile
-        });
+            await protectedSessionStorage.SetAsync(StorageKey, new AuthSessionState
+            {
+                AccessToken = tokenResponse.AccessToken,
+                RefreshToken = tokenResponse.RefreshToken,
+                AccessTokenExpiresAtUtc = tokenResponse.ExpiresAtUtc,
+                CurrentUser = profile
+            });
+        }
+        catch (Exception exception)
+        {
+            logger.LogError(exception, "Failed to persist the protected browser auth session. Continuing with in-memory session state only.");
+        }
+
         AuthenticationChanged?.Invoke();
     }
 
@@ -88,7 +101,16 @@ public class AuthSessionService(ProtectedSessionStorage protectedSessionStorage)
         RefreshToken = null;
         AccessTokenExpiresAtUtc = null;
         CurrentUser = null;
-        await protectedSessionStorage.DeleteAsync(StorageKey);
+
+        try
+        {
+            await protectedSessionStorage.DeleteAsync(StorageKey);
+        }
+        catch (Exception exception)
+        {
+            logger.LogWarning(exception, "Failed to clear the protected browser auth session.");
+        }
+
         AuthenticationChanged?.Invoke();
     }
 
@@ -119,19 +141,26 @@ public class AuthSessionService(ProtectedSessionStorage protectedSessionStorage)
 
     private async Task PersistAsync()
     {
-        if (!IsAuthenticated || CurrentUser is null)
+        try
         {
-            await protectedSessionStorage.DeleteAsync(StorageKey);
-            return;
-        }
+            if (!IsAuthenticated || CurrentUser is null)
+            {
+                await protectedSessionStorage.DeleteAsync(StorageKey);
+                return;
+            }
 
-        await protectedSessionStorage.SetAsync(StorageKey, new AuthSessionState
+            await protectedSessionStorage.SetAsync(StorageKey, new AuthSessionState
+            {
+                AccessToken = AccessToken!,
+                RefreshToken = RefreshToken ?? string.Empty,
+                AccessTokenExpiresAtUtc = AccessTokenExpiresAtUtc,
+                CurrentUser = CurrentUser
+            });
+        }
+        catch (Exception exception)
         {
-            AccessToken = AccessToken!,
-            RefreshToken = RefreshToken ?? string.Empty,
-            AccessTokenExpiresAtUtc = AccessTokenExpiresAtUtc,
-            CurrentUser = CurrentUser
-        });
+            logger.LogWarning(exception, "Failed to persist the protected browser auth session update.");
+        }
     }
 
     private bool HasRole(AuthRoleType role)
