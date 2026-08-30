@@ -388,7 +388,6 @@ Configure these repository or Environment secrets:
 - `CI_SQL_ACCEPT_EULA`
 - `CI_SQL_EDITION`
 - `CI_SQL_HOST`
-- `CI_SQL_PORT`
 - `CI_SQL_USERNAME`
 - `CI_SQL_SA_PASSWORD`
 - `CI_AUTH_CONNECTION_STRING`

@@ -34,7 +34,7 @@ jobs:
           CI_SQL_USERNAME: ${{ secrets.CI_SQL_USERNAME }}
           CI_SQL_HOST: ${{ secrets.CI_SQL_HOST }}
         ports:
-          - "${{ secrets.CI_SQL_PORT }}:1433"
+          - "1433:1433"
         options: >-
           --health-cmd "/opt/mssql-tools18/bin/sqlcmd -S \"$CI_SQL_HOST\" -U \"$CI_SQL_USERNAME\" -P \"$MSSQL_SA_PASSWORD\" -C -Q \"SELECT 1\" || exit 1"
           --health-interval 10s
