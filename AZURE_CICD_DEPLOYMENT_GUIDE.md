@@ -387,15 +387,64 @@ CI needs no repository secrets. Each run derives a temporary SQL password from i
 
 ## 13. GitHub-to-Azure OIDC
 
-Create an Entra application/service principal, add a federated credential for the GitHub Environment, and grant only the permissions needed to push images to the existing ACR and update the existing application Container Apps. The release identity does not need permission to create infrastructure or role assignments.
+Use the user-assigned managed identity created by `Deployment-Azure.ps1` (`<prefix>-identity`) as the GitHub release identity. This avoids a client secret and does not require permission to register another Entra application, which may be unavailable in an Azure for Students tenant.
 
-Example subject for repository `<owner>/<repo>` and Environment `azure-development`:
+GitHub's OIDC subject can contain immutable owner and repository IDs. Do not construct it from the visible repository name. Read the current prefix from GitHub and append the Environment:
 
-```text
-repo:<owner>/<repo>:environment:azure-development
+```powershell
+$repository = '<owner>/<repo>'
+$githubEnvironment = 'azure-development'
+$subjectPrefix = gh api "repos/$repository/actions/oidc/customization/sub" --jq '.sub_claim_prefix'
+$oidcSubject = "$subjectPrefix`:environment:$githubEnvironment"
 ```
 
-The issuer is `https://token.actions.githubusercontent.com` and audience is `api://AzureADTokenExchange`.
+Create the credential on the deployment identity. The issuer is `https://token.actions.githubusercontent.com` and the audience is `api://AzureADTokenExchange`:
+
+```powershell
+$parameters = Get-Content ./ContainerServices/azure.parameters.json -Raw | ConvertFrom-Json
+$resourceGroup = [string]$parameters.resourceGroup
+$identityName = "$([string]$parameters.parameters.prefix.value)-identity"
+
+az identity federated-credential create `
+  --name test-github-azure-development `
+  --identity-name $identityName `
+  --resource-group $resourceGroup `
+  --issuer https://token.actions.githubusercontent.com `
+  --subject $oidcSubject `
+  --audiences api://AzureADTokenExchange
+```
+
+Grant this identity `AcrPush` on the configured ACR and `Container Apps Contributor` separately on the existing Auth, Core, App, Redmine, and, when enabled, Agent Container Apps:
+
+```powershell
+. ./ContainerServices/Deployment.Library.ps1
+$runtime = Read-KeyValueFile ./ContainerServices/.env.azure
+$identity = az identity show --name $identityName --resource-group $resourceGroup --output json | ConvertFrom-Json
+$acrId = az acr show --name $parameters.parameters.registryName.value --query id --output tsv
+
+az role assignment create `
+  --assignee-object-id $identity.principalId `
+  --assignee-principal-type ServicePrincipal `
+  --role AcrPush `
+  --scope $acrId
+
+$appKeys = @('AUTH_HOST', 'CORE_HOST', 'APP_HOST', 'REDMINE_HOST')
+if ([bool]$parameters.parameters.deployAgent.value) { $appKeys += 'AGENT_HOST' }
+foreach ($key in $appKeys) {
+  $appId = az containerapp show `
+    --name $runtime[$key] `
+    --resource-group $resourceGroup `
+    --query id `
+    --output tsv
+  az role assignment create `
+    --assignee-object-id $identity.principalId `
+    --assignee-principal-type ServicePrincipal `
+    --role 'Container Apps Contributor' `
+    --scope $appId
+}
+```
+
+Do not grant subscription-wide Contributor. The release identity does not need permission to create infrastructure or role assignments; one-time deployment remains an interactive administrator operation.
 
 Configure GitHub Environment `azure-development` with these secrets because this project treats all environment-specific identifiers as sensitive:
 
@@ -406,6 +455,19 @@ Configure GitHub Environment `azure-development` with these secrets because this
 - `SRM_AZURE_ENV`: complete multiline `.env.azure` contents after the initial deployment has initialized Redmine.
 
 Add required reviewers to the Environment if deployments need approval. OIDC avoids a long-lived Azure client secret.
+
+Create the Environment and store the five protected values without printing them:
+
+```powershell
+gh api --method PUT "repos/$repository/environments/$githubEnvironment" --silent
+$account = az account show --output json | ConvertFrom-Json
+$identity.clientId | gh secret set AZURE_CLIENT_ID --repo $repository --env $githubEnvironment
+$account.tenantId | gh secret set AZURE_TENANT_ID --repo $repository --env $githubEnvironment
+$account.id | gh secret set AZURE_SUBSCRIPTION_ID --repo $repository --env $githubEnvironment
+Get-Content ./ContainerServices/azure.parameters.json -Raw | gh secret set SRM_AZURE_PARAMETERS --repo $repository --env $githubEnvironment
+Get-Content ./ContainerServices/.env.azure -Raw | gh secret set SRM_AZURE_ENV --repo $repository --env $githubEnvironment
+gh secret list --repo $repository --env $githubEnvironment
+```
 
 ## 14. Release workflow
 
@@ -532,5 +594,5 @@ When reuse is intentional, put the existing environment's name and resource grou
 7. Deploy the optional Shelly simulator.
 8. Run and delete the demo-seeder job.
 9. Verify browser, CRUD, live agent/Shelly readings, and Redmine tickets.
-10. Configure GitHub CI secrets and Azure OIDC Environment settings.
+10. Configure the GitHub Azure OIDC identity and the protected `azure-development` Environment settings. CI itself needs no secrets.
 11. Publish a CI-verified release and observe the image-only release workflow.

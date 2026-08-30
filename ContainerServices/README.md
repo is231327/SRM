@@ -219,7 +219,7 @@ Configure the protected GitHub Environment `azure-development` with these secret
 - `SRM_AZURE_PARAMETERS`: the complete multiline contents of `ContainerServices/azure.parameters.json`.
 - `SRM_AZURE_ENV`: the complete multiline contents of `ContainerServices/.env.azure` after the initial deployment has initialized Redmine.
 
-The release OIDC service principal needs permission only to push images to the existing ACR and update the existing application Container Apps. Initial infrastructure creation and ACR pull-role assignment remain part of the separately authenticated one-time deployment.
+Use the user-assigned managed identity created by `Deployment-Azure.ps1` as the release OIDC identity. It needs `AcrPush` only on the existing ACR and `Container Apps Contributor` only on each existing application Container App. GitHub may include immutable owner and repository IDs in its OIDC subject, so obtain the current prefix with `gh api repos/<owner>/<repo>/actions/oidc/customization/sub --jq '.sub_claim_prefix'` and append `:environment:azure-development`. Initial infrastructure creation and ACR pull-role assignment remain part of the separately authenticated one-time deployment. See the main deployment guide for the complete commands.
 
 Release procedure:
 
