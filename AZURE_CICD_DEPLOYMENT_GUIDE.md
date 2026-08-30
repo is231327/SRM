@@ -383,18 +383,7 @@ On Windows, old Azure CLI builds can fail while streaming a Python ACR build log
 4. builds Auth, Core, App, Agent, and demo-seeder images;
 5. verifies that the App image contains `/app/wwwroot/_framework/blazor.web.js`.
 
-Configure these repository or Environment secrets:
-
-- `CI_SQL_ACCEPT_EULA`
-- `CI_SQL_EDITION`
-- `CI_SQL_HOST`
-- `CI_SQL_USERNAME`
-- `CI_SQL_SA_PASSWORD`
-- `CI_AUTH_CONNECTION_STRING`
-- `CI_CORE_CONNECTION_STRING`
-- `CI_LOCAL_ENV` (complete multiline `.env.local`-format CI configuration)
-
-Use dedicated CI values and databases. Do not reuse development or Azure credentials.
+CI needs no repository secrets. Each run derives its temporary SQL password from GitHub's short-lived job token, creates random test database names, and runs `New-DeploymentConfiguration.ps1` for an isolated ignored Compose configuration. It never reuses development or Azure credentials.
 
 ## 13. GitHub-to-Azure OIDC
 
