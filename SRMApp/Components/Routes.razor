@@ -1,6 +1,7 @@
-@inject AuthSessionService AuthSessionService
+﻿@inject AuthSessionService AuthSessionService
 @inject IAuthApiClient AuthApiClient
 @inject NavigationManager NavigationManager
+@inject ILogger<Routes> Logger
 
 @if (!isReady)
 {
@@ -25,7 +26,6 @@ else
         </NotFound>
     </Router>
 }
-
 @code {
     private static readonly HashSet<string> PublicPageNames =
     [
@@ -40,26 +40,33 @@ else
 
     protected override async Task OnInitializedAsync()
     {
-        await AuthSessionService.InitializeAsync();
-
-        if (AuthSessionService.IsAuthenticated && !string.IsNullOrWhiteSpace(AuthSessionService.AccessToken))
+        try
         {
-            var ensured = await AuthApiClient.EnsureAccessTokenAsync();
-            var profile = ensured ? await AuthApiClient.GetOwnProfileAsync() : null;
-            if (profile is null)
+            await AuthSessionService.InitializeAsync();
+
+            if (AuthSessionService.IsAuthenticated && !string.IsNullOrWhiteSpace(AuthSessionService.AccessToken))
             {
-                await AuthSessionService.ClearAsync();
+                var ensured = await AuthApiClient.EnsureAccessTokenAsync();
+                var profile = ensured ? await AuthApiClient.GetOwnProfileAsync() : null;
+                if (profile is null)
+                {
+                    await AuthSessionService.ClearAsync();
+                }
+                else
+                {
+                    await AuthSessionService.UpdateCurrentUserAsync(profile);
+                }
             }
-            else
-            {
-                await AuthSessionService.UpdateCurrentUserAsync(profile);
-            }
+        }
+        catch (Exception exception)
+        {
+            Logger.LogWarning(exception, "Failed to restore the authenticated UI session during route initialization.");
+            await AuthSessionService.ClearAsync();
         }
 
         AuthSessionService.AuthenticationChanged += OnAuthenticationChanged;
         isReady = true;
     }
-
     private bool HandleRouteGuard(Type pageType)
     {
         var pageName = pageType.Name;

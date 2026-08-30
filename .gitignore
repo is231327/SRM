@@ -245,7 +245,9 @@ ModelManifest.xml
 # Rider
 .idea/
 .env
-/ContainerServices/.env-development
-/ContainerServices/.env
-/ContainerServices/.env-azure
-/ContainerServices/.azure-services
+/ContainerServices/.env.development
+/ContainerServices/.env.local
+/ContainerServices/.env.azure
+/ContainerServices/azure.parameters.json
+/ContainerServices/_deploy_worktree
+/ContainerServices/.runtime-env

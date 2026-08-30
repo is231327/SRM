@@ -46,6 +46,7 @@ public class Program
         builder.Services.AddScoped<LanguageService>();
         builder.Services.AddScoped<IOverviewDataService, OverviewDataService>();
         builder.Services.AddScoped<ICrudPageDataService, CrudPageDataService>();
+        builder.Services.AddHealthChecks();
 
         var app = builder.Build();
 
@@ -66,6 +67,7 @@ public class Program
         app.MapStaticAssets();
         app.MapRazorComponents<App>()
             .AddInteractiveServerRenderMode();
+        app.MapHealthChecks("/health");
 
         app.Run();
     }
@@ -83,6 +85,6 @@ public class Program
 
         throw new InvalidOperationException(
             "Missing Redis connection configuration. Provide either 'Redis:ConnectionString' or 'SRM_REDIS_CONNECTION'. " +
-            "For local development, make sure ContainerServices/.env-development is present or the launch profile sets SRM_REDIS_CONNECTION.");
+            "For local development, start the Redis infrastructure container and configure ContainerServices/.env.development.");
     }
 }

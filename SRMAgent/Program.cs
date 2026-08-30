@@ -41,6 +41,7 @@ public class Program
         builder.Services.AddScoped<IMonitoredDevicePingService, MonitoredDevicePingService>();
         builder.Services.AddScoped<AgentMonitoringOrchestrator>();
         builder.Services.AddHostedService<AgentMonitoringWorker>();
+        builder.Services.AddHealthChecks();
 
         var app = builder.Build();
 
@@ -56,6 +57,7 @@ public class Program
         }
         app.UseAuthorization();
         app.MapControllers();
+        app.MapHealthChecks("/health");
 
         app.Run();
     }

@@ -19,15 +19,17 @@
             <div class="form-grid">
                 <div>
                     <label class="form-label">@LanguageService.T("Username")</label>
-                    <InputText class="form-control" name="username" autocomplete="username" @bind-Value="form.Username" />
+                    <InputText class="form-control" name="username" autocomplete="username" disabled="@isSubmitting" @bind-Value="form.Username" />
                 </div>
                 <div>
                     <label class="form-label">@LanguageService.T("Password")</label>
-                    <InputText class="form-control" name="current-password" autocomplete="current-password" type="password" @bind-Value="form.Password" />
+                    <InputText class="form-control" name="current-password" autocomplete="current-password" type="password" disabled="@isSubmitting" @bind-Value="form.Password" />
                 </div>
             </div>
             <div class="form-actions">
-                <button type="submit" class="btn btn-primary">@LanguageService.T("Login")</button>
+                <button type="submit" class="btn btn-primary" disabled="@isSubmitting">
+                    @(isSubmitting ? "Signing in..." : LanguageService.T("Login"))
+                </button>
             </div>
         </EditForm>
     </section>
@@ -36,9 +38,16 @@
 @code {
     private LoginRequestDto form = new();
     private string? errorMessage;
+    private bool isSubmitting;
 
     private async Task LoginAsync()
     {
+        if (isSubmitting)
+        {
+            return;
+        }
+
+        isSubmitting = true;
         errorMessage = null;
         try
         {
@@ -66,6 +75,10 @@
         catch (Exception exception)
         {
             errorMessage = exception.Message;
+        }
+        finally
+        {
+            isSubmitting = false;
         }
     }
 }

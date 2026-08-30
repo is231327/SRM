@@ -80,6 +80,7 @@ public class Program
                 };
             });
         builder.Services.AddAuthorization();
+        builder.Services.AddHealthChecks();
         builder.Services.AddControllers();
         builder.Services.AddOpenApi();
 
@@ -101,6 +102,7 @@ public class Program
         app.UseAuthentication();
         app.UseAuthorization();
         app.MapControllers();
+        app.MapHealthChecks("/health");
 
         app.Run();
     }
@@ -157,9 +159,11 @@ public class Program
     }
     private static string ResolveAuthSqlConnectionString(IConfiguration configuration)
     {
-        var connectionString = configuration.GetConnectionString("SrmAuthDatabase")
-            ?? configuration["SRM_SQL_AUTH_CONNECTION"]
-            ?? Environment.GetEnvironmentVariable("SRM_SQL_AUTH_CONNECTION");
+        var connectionString = SqlServerConnectionStringFactory.Resolve(
+            configuration,
+            connectionStringName: "SrmAuthDatabase",
+            connectionStringEnvironmentKey: null,
+            databaseEnvironmentKey: "SRM_SQL_AUTH_DATABASE");
 
         if (!string.IsNullOrWhiteSpace(connectionString))
         {
@@ -167,7 +171,7 @@ public class Program
         }
 
         throw new InvalidOperationException(
-            "Missing auth SQL connection configuration. Provide either 'ConnectionStrings:SrmAuthDatabase' or 'SRM_SQL_AUTH_CONNECTION'.");
+            "Missing auth SQL connection configuration. Provide either 'ConnectionStrings:SrmAuthDatabase' or the split SQL settings 'SRM_SQL_HOST', 'SRM_SQL_PORT', 'SRM_SQL_USERNAME', 'MSSQL_SA_PASSWORD', and 'SRM_SQL_AUTH_DATABASE'.");
     }
     private static string ResolveRedisConnectionString(IConfiguration configuration)
     {
@@ -182,7 +186,6 @@ public class Program
 
         throw new InvalidOperationException(
             "Missing Redis connection configuration. Provide either 'Redis:ConnectionString' or 'SRM_REDIS_CONNECTION'. " +
-            "For local development, make sure ContainerServices/.env-development is present or the launch profile sets SRM_REDIS_CONNECTION.");
+            "For local development, start the Redis infrastructure container and configure ContainerServices/.env.development.");
     }
 }
-

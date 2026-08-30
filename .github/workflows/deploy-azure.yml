@@ -1,0 +1,131 @@
+name: Release Azure
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Commit SHA or tag to release
+        required: true
+        default: master
+
+permissions:
+  actions: read
+  contents: read
+  id-token: write
+
+concurrency:
+  group: azure-development-release
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      sha: ${{ steps.commit.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name || inputs.ref }}
+
+      - id: commit
+        name: Resolve and verify commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          SHA=$(git rev-parse HEAD)
+          SUCCESSFUL_RUNS=$(gh run list --workflow ci.yml --commit "$SHA" --status success --limit 1 --json databaseId --jq 'length')
+          test "$SUCCESSFUL_RUNS" = "1" || { echo "No successful CI run exists for $SHA"; exit 1; }
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+
+  build-images:
+    needs: prepare
+    runs-on: ubuntu-latest
+    environment: azure-development
+    strategy:
+      matrix:
+        include:
+          - image: srm-auth
+            dockerfile: SRMAuth/Dockerfile
+          - image: srm-core
+            dockerfile: SRMCore/Dockerfile
+          - image: srm-app
+            dockerfile: SRMApp/Dockerfile
+          - image: srm-redmine
+            dockerfile: SRMRedmine/Dockerfile
+          - image: srm-agent
+            dockerfile: SRMAgent/Dockerfile
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.sha }}
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Load protected Azure settings
+        shell: pwsh
+        env:
+          AZURE_PARAMETERS: ${{ secrets.SRM_AZURE_PARAMETERS }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:AZURE_PARAMETERS)) {
+            throw 'The SRM_AZURE_PARAMETERS GitHub Environment secret is missing.'
+          }
+          $settings = $env:AZURE_PARAMETERS | ConvertFrom-Json
+          $registry = [string]$settings.parameters.registryName.value
+          if ([string]::IsNullOrWhiteSpace($registry)) { throw 'registryName is missing from SRM_AZURE_PARAMETERS.' }
+          Write-Output "::add-mask::$registry"
+          "AZURE_REGISTRY_NAME=$registry" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Log in to ACR
+        run: az acr login --name "$AZURE_REGISTRY_NAME"
+
+      - name: Build and push immutable image
+        env:
+          IMAGE: ${{ matrix.image }}
+          DOCKERFILE: ${{ matrix.dockerfile }}
+          SHA: ${{ needs.prepare.outputs.sha }}
+        run: |
+          REGISTRY="$AZURE_REGISTRY_NAME.azurecr.io"
+          docker build --file "$DOCKERFILE" --tag "$REGISTRY/$IMAGE:$SHA" .
+          docker push "$REGISTRY/$IMAGE:$SHA"
+
+  deploy:
+    needs: [prepare, build-images]
+    runs-on: ubuntu-latest
+    environment: azure-development
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.sha }}
+
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Create ephemeral release inputs
+        shell: pwsh
+        env:
+          AZURE_PARAMETERS: ${{ secrets.SRM_AZURE_PARAMETERS }}
+          AZURE_RUNTIME_CONFIGURATION: ${{ secrets.SRM_AZURE_ENV }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:AZURE_PARAMETERS)) {
+            throw 'The SRM_AZURE_PARAMETERS GitHub Environment secret is missing.'
+          }
+          if ([string]::IsNullOrWhiteSpace($env:AZURE_RUNTIME_CONFIGURATION)) {
+            throw 'The SRM_AZURE_ENV GitHub Environment secret is missing.'
+          }
+          $null = $env:AZURE_PARAMETERS | ConvertFrom-Json
+          Set-Content ContainerServices/azure.parameters.json -Value $env:AZURE_PARAMETERS -NoNewline
+          Set-Content ContainerServices/.env.azure -Value $env:AZURE_RUNTIME_CONFIGURATION -NoNewline
+
+      - name: Release application images only
+        shell: pwsh
+        run: ./ContainerServices/Release-Azure.ps1 -ImageTag '${{ needs.prepare.outputs.sha }}' -SkipBuild

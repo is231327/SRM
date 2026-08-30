@@ -1,0 +1,15 @@
+.git
+.github
+.vs
+**/.vs
+**/bin
+**/obj
+**/TestResults
+**/*.user
+ContainerServices/.env-*
+ContainerServices/azure.parameters.json
+ContainerServices/_deploy_worktree
+SRMIntegrationTests
+SRMUnitTests
+AZURE_CICD_DEPLOYMENT_GUIDE.md
+**/*.md

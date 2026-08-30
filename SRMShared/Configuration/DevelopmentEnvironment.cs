@@ -2,47 +2,47 @@
 
 public static class DevelopmentEnvironment
 {
-    private const string FileName = "../ContainerServices/.env-development";
-
     private static readonly IReadOnlyDictionary<string, string> ConfigurationKeys =
         new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
-            ["SRM_SQL_AUTH_CONNECTION"] = "ConnectionStrings:SrmAuthDatabase",
-            ["SRM_SQL_CORE_CONNECTION"] = "ConnectionStrings:SrmCoreDatabase",
-            ["SRM_REDIS_CONNECTION"] = "Redis:ConnectionString",
-            ["SRM_TEST_SQL_AUTH_CONNECTION"] = "ConnectionStrings:SrmAuthDatabase",
-            ["SRM_TEST_SQL_CORE_CONNECTION"] = "ConnectionStrings:SrmCoreDatabase",
-            ["SRM_BOOTSTRAP_ADMIN_USERNAME"] = "BootstrapAdmin:Username",
-            ["SRM_BOOTSTRAP_ADMIN_EMAIL"] = "BootstrapAdmin:Email",
-            ["SRM_BOOTSTRAP_ADMIN_PASSWORD"] = "BootstrapAdmin:Password",
-            ["SRM_BOOTSTRAP_ADMIN_FIRSTNAME"] = "BootstrapAdmin:FirstName",
-            ["SRM_BOOTSTRAP_ADMIN_LASTNAME"] = "BootstrapAdmin:LastName",
-            ["SRM_BOOTSTRAP_ADMIN_PHONENUMBER"] = "BootstrapAdmin:PhoneNumber",
-            ["SRM_BOOTSTRAP_ADMIN_MUSTCHANGEPASSWORD"] = "BootstrapAdmin:MustChangePassword",
-            ["SRM_JWT_ISSUER"] = "Jwt:Issuer",
-            ["SRM_JWT_AUDIENCE"] = "Jwt:Audience",
-            ["SRM_JWT_SIGNING_KEY"] = "Jwt:SigningKey",
-            ["SRM_JWT_ACCESS_TOKEN_LIFETIME_MINUTES"] = "Jwt:AccessTokenLifetimeMinutes",
-            ["SRM_AUTH_BASE_URL"] = "AgentApi:AuthBaseUrl",
-            ["SRM_CORE_BASE_URL"] = "AgentApi:CoreBaseUrl",
-            ["SRM_AGENT_CLIENT_IDENTIFIER"] = "AgentApi:ClientIdentifier",
-            ["SRM_AGENT_CLIENT_SECRET"] = "AgentApi:ClientSecret",
-            ["SRM_REDMINE_ENABLED"] = "Redmine:Enabled",
-            ["SRM_REDMINE_BASE_URL"] = "Redmine:BaseUrl",
-            ["SRM_REDMINE_API_KEY"] = "Redmine:ApiKey",
-            ["SRM_REDMINE_PROJECT_IDENTIFIER"] = "Redmine:ProjectIdentifier",
-            ["SRM_REDMINE_TRACKER_ID"] = "Redmine:TrackerId",
-            ["SRM_REDMINE_STATUS_ID"] = "Redmine:StatusId",
-            ["SRM_REDMINE_POLL_INTERVAL_SECONDS"] = "Redmine:PollIntervalSeconds",
-            ["SRM_REDMINE_WARNING_PRIORITY_ID"] = "Redmine:WarningPriorityId",
-            ["SRM_REDMINE_MAJOR_PRIORITY_ID"] = "Redmine:MajorPriorityId",
-            ["SRM_REDMINE_CRITICAL_PRIORITY_ID"] = "Redmine:CriticalPriorityId",
-            ["SRM_AGENT_POLLING_INTERVAL_SECONDS"] = "AgentRuntime:PollingIntervalSeconds",
-            ["SRM_AGENT_CONFIGURATION_REFRESH_INTERVAL_SECONDS"] = "AgentRuntime:ConfigurationRefreshIntervalSeconds",
-            ["SRM_AGENT_SHELLY_STATUS_PATH"] = "AgentRuntime:ShellyStatusPath",
-            ["SRM_LOG_LEVEL_DEFAULT"] = "Logging:LogLevel:Default",
-            ["SRM_LOG_LEVEL_MICROSOFT_ASPNETCORE"] = "Logging:LogLevel:Microsoft.AspNetCore"
+            ["SQL_HOST"] = "SqlServer:Host", ["SQL_PORT"] = "SqlServer:Port",
+            ["SQL_USERNAME"] = "SqlServer:Username", ["SQL_PASSWORD"] = "SqlServer:Password",
+            ["SQL_AUTH_DATABASE"] = "SqlServer:AuthDatabase", ["SQL_CORE_DATABASE"] = "SqlServer:CoreDatabase",
+            ["SQL_TEST_AUTH_DATABASE"] = "SqlServer:TestAuthDatabase",
+            ["SQL_TEST_CORE_DATABASE"] = "SqlServer:TestCoreDatabase",
+            ["REDIS_HOST"] = "Private:RedisHost", ["REDIS_PORT"] = "Private:RedisPort",
+            ["JWT_ISSUER"] = "Jwt:Issuer", ["JWT_AUDIENCE"] = "Jwt:Audience",
+            ["JWT_SIGNING_KEY"] = "Jwt:SigningKey", ["JWT_ACCESS_TOKEN_LIFETIME_MINUTES"] = "Jwt:AccessTokenLifetimeMinutes",
+            ["BOOTSTRAP_ADMIN_USERNAME"] = "BootstrapAdmin:Username", ["BOOTSTRAP_ADMIN_EMAIL"] = "BootstrapAdmin:Email",
+            ["BOOTSTRAP_ADMIN_PASSWORD"] = "BootstrapAdmin:Password", ["BOOTSTRAP_ADMIN_FIRST_NAME"] = "BootstrapAdmin:FirstName",
+            ["BOOTSTRAP_ADMIN_LAST_NAME"] = "BootstrapAdmin:LastName", ["BOOTSTRAP_ADMIN_PHONE_NUMBER"] = "BootstrapAdmin:PhoneNumber",
+            ["BOOTSTRAP_ADMIN_MUST_CHANGE_PASSWORD"] = "BootstrapAdmin:MustChangePassword",
+            ["REDMINE_ENABLED"] = "Redmine:Enabled", ["REDMINE_HOST"] = "Private:RedmineHost",
+            ["REDMINE_PORT"] = "Private:RedminePort",
+            ["REDMINE_API_KEY"] = "Redmine:ApiKey", ["REDMINE_PROJECT_IDENTIFIER"] = "Redmine:ProjectIdentifier",
+            ["REDMINE_TRACKER_ID"] = "Redmine:TrackerId", ["REDMINE_STATUS_ID"] = "Redmine:StatusId",
+            ["REDMINE_POLL_INTERVAL_SECONDS"] = "Redmine:PollIntervalSeconds",
+            ["REDMINE_WARNING_PRIORITY_ID"] = "Redmine:WarningPriorityId",
+            ["REDMINE_MAJOR_PRIORITY_ID"] = "Redmine:MajorPriorityId",
+            ["REDMINE_CRITICAL_PRIORITY_ID"] = "Redmine:CriticalPriorityId",
+            ["CORE_HOST"] = "Private:CoreHost", ["CORE_PORT"] = "Private:CorePort",
+            ["AUTH_HOST"] = "Private:AuthHost", ["AUTH_PORT"] = "Private:AuthPort",
+            ["AGENT_CLIENT_IDENTIFIER"] = "AgentApi:ClientIdentifier", ["AGENT_CLIENT_SECRET"] = "AgentApi:ClientSecret"
         };
+
+    private static readonly HashSet<string> InfrastructureOnlyKeys = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "SQL_ACCEPT_EULA", "SQL_EDITION", "SQL_HOST_PORT", "REDIS_HOST_PORT",
+        "REDMINE_DB_HOST", "REDMINE_DB_NAME", "REDMINE_DB_USERNAME", "REDMINE_DB_PASSWORD",
+        "REDMINE_HOST_PORT", "SHELLY_PORT", "SHELLY1_HOST_PORT",
+        "SHELLY2_HOST_PORT", "SHELLY3_HOST_PORT"
+    };
+
+    private static readonly string[] RelativePaths =
+    [
+        Path.Combine("ContainerServices", ".env.development"),
+        ".env.development"
+    ];
 
     public static IDictionary<string, string?> Load()
     {
@@ -50,8 +50,8 @@ public static class DevelopmentEnvironment
         if (path is null)
         {
             throw new FileNotFoundException(
-                $"Development configuration file '{FileName}' was not found. " +
-                "Create it in the repository root before starting the application in Development.");
+                "Development configuration file 'ContainerServices/.env.development' was not found. " +
+                "Copy ContainerServices/.env.development.example to ContainerServices/.env.development and set every value.");
         }
 
         var values = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
@@ -80,39 +80,46 @@ public static class DevelopmentEnvironment
                 value = value[1..^1];
             }
 
-            AddConfigurationValue(values, key, value);
+            if (InfrastructureOnlyKeys.Contains(key))
+            {
+                continue;
+            }
+
+            if (!ConfigurationKeys.TryGetValue(key, out var configurationKey))
+            {
+                throw new FormatException($"Unknown key '{key}' in '{path}'.");
+            }
+
+            values[configurationKey] = value;
         }
 
-        foreach (var key in ConfigurationKeys.Keys)
-        {
-            var environmentValue = Environment.GetEnvironmentVariable(key);
-            if (environmentValue is not null)
-            {
-                AddConfigurationValue(values, key, environmentValue);
-            }
-        }
+        AddDerivedEndpoint(values, "Redis", "Redis:ConnectionString", suffix: ",abortConnect=false");
+        AddDerivedEndpoint(values, "Redmine", "Redmine:BaseUrl");
+        AddDerivedEndpoint(values, "Core", "CoreApi:BaseUrl");
+        AddDerivedEndpoint(values, "Auth", "AuthApi:BaseUrl");
+        values["AgentApi:CoreBaseUrl"] = values["CoreApi:BaseUrl"];
+        values["AgentApi:AuthBaseUrl"] = values["AuthApi:BaseUrl"];
 
         return values;
     }
 
-    private static void AddConfigurationValue(
+    private static void AddDerivedEndpoint(
         IDictionary<string, string?> values,
-        string key,
-        string value)
+        string name,
+        string targetKey,
+        string suffix = "")
     {
-        if (ConfigurationKeys.TryGetValue(key, out var configurationKey))
+        var hostKey = $"Private:{name}Host";
+        var portKey = $"Private:{name}Port";
+        if (!values.Remove(hostKey, out var host) || string.IsNullOrWhiteSpace(host)
+            || !values.Remove(portKey, out var port) || string.IsNullOrWhiteSpace(port))
         {
-            values[configurationKey] = value;
+            throw new FormatException($"{name.ToUpperInvariant()}_HOST and {name.ToUpperInvariant()}_PORT are required.");
         }
 
-        if (key.Equals("SRM_AUTH_BASE_URL", StringComparison.OrdinalIgnoreCase))
-        {
-            values["AuthApi:BaseUrl"] = value;
-        }
-        else if (key.Equals("SRM_CORE_BASE_URL", StringComparison.OrdinalIgnoreCase))
-        {
-            values["CoreApi:BaseUrl"] = value;
-        }
+        values[targetKey] = name == "Redis"
+            ? $"{host}:{port}{suffix}"
+            : $"http://{host}:{port}/";
     }
 
     private static string? FindFile()
@@ -126,10 +133,13 @@ public static class DevelopmentEnvironment
         var directory = new DirectoryInfo(startPath);
         while (directory is not null)
         {
-            var candidate = Path.Combine(directory.FullName, FileName);
-            if (File.Exists(candidate))
+            foreach (var relativePath in RelativePaths)
             {
-                return candidate;
+                var candidate = Path.Combine(directory.FullName, relativePath);
+                if (File.Exists(candidate))
+                {
+                    return candidate;
+                }
             }
 
             directory = directory.Parent;
@@ -138,4 +148,3 @@ public static class DevelopmentEnvironment
         return null;
     }
 }
-

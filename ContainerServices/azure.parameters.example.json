@@ -1,0 +1,14 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "resourceGroup": "replace-with-azure-resource-group",
+  "parameters": {
+    "location": { "value": "replace-with-allowed-azure-region" },
+    "prefix": { "value": "replace-with-private-resource-prefix" },
+    "containerAppsEnvironmentName": { "value": "" },
+    "containerAppsEnvironmentResourceGroup": { "value": "" },
+    "registryName": { "value": "replacewithgloballyuniqueacr" },
+    "storageAccountName": { "value": "replacewithuniquestorage" },
+    "deployAgent": { "value": false }
+  }
+}

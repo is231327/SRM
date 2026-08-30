@@ -1,43 +1,106 @@
-name: .NET
+name: CI
 
 on:
   push:
-    branches: [ "master" ]
+    branches: [master]
   pull_request:
-    branches: [ "master" ]
+    branches: [master]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  build:
+  verify:
     runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      MSSQL_SA_PASSWORD: ${{ secrets.CI_SQL_SA_PASSWORD }}
+      CI_SQL_USERNAME: ${{ secrets.CI_SQL_USERNAME }}
+      CI_SQL_HOST: ${{ secrets.CI_SQL_HOST }}
+      ConnectionStrings__SrmAuthDatabase: ${{ secrets.CI_AUTH_CONNECTION_STRING }}
+      ConnectionStrings__SrmCoreDatabase: ${{ secrets.CI_CORE_CONNECTION_STRING }}
 
     services:
       sqlserver:
         image: mcr.microsoft.com/mssql/server:2022-latest
         env:
-          ACCEPT_EULA: Y
+          ACCEPT_EULA: ${{ secrets.CI_SQL_ACCEPT_EULA }}
+          MSSQL_PID: ${{ secrets.CI_SQL_EDITION }}
           MSSQL_SA_PASSWORD: ${{ secrets.CI_SQL_SA_PASSWORD }}
+          CI_SQL_USERNAME: ${{ secrets.CI_SQL_USERNAME }}
+          CI_SQL_HOST: ${{ secrets.CI_SQL_HOST }}
         ports:
-          - 1433:1433
+          - "${{ secrets.CI_SQL_PORT }}:1433"
         options: >-
-          --health-cmd "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"${{ secrets.CI_SQL_SA_PASSWORD }}\" -C -Q \"SELECT 1\" || exit 1"
+          --health-cmd "/opt/mssql-tools18/bin/sqlcmd -S \"$CI_SQL_HOST\" -U \"$CI_SQL_USERNAME\" -P \"$MSSQL_SA_PASSWORD\" -C -Q \"SELECT 1\" || exit 1"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 20
           --health-start-period 30s
 
-    env:
-      SRM_TEST_SQL_AUTH_CONNECTION: Server=localhost,1433;Database=SRMAuthIntegrationTestsDb;User Id=sa;Password=${{ secrets.CI_SQL_SA_PASSWORD }};TrustServerCertificate=True;Encrypt=False
-      SRM_TEST_SQL_CORE_CONNECTION: Server=localhost,1433;Database=SRMCoreIntegrationTestsDb;User Id=sa;Password=${{ secrets.CI_SQL_SA_PASSWORD }};TrustServerCertificate=True;Encrypt=False
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore
+        run: dotnet restore SRM.sln
+
+      - name: Build
+        run: dotnet build SRM.sln --configuration Release --no-restore /p:ContinuousIntegrationBuild=true
+
+      - name: Test
+        run: dotnet test SRM.sln --configuration Release --no-build --verbosity normal
+
+      - name: Validate Compose
+        env:
+          CI_LOCAL_CONFIGURATION: ${{ secrets.CI_LOCAL_ENV }}
+        shell: pwsh
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:CI_LOCAL_CONFIGURATION)) {
+            throw 'The CI_LOCAL_ENV secret is missing.'
+          }
+          Set-Content ContainerServices/.env.local -Value $env:CI_LOCAL_CONFIGURATION -NoNewline
+          ./ContainerServices/Deployment-Local.ps1 -Mode Full -PrepareOnly
+          Push-Location ContainerServices
+          docker compose -f docker-compose.yml -f .runtime-env/docker-compose.runtime.yml --profile apps --profile simulators config --quiet
+          Pop-Location
+
+  container-builds:
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - service: auth
+            dockerfile: SRMAuth/Dockerfile
+          - service: core
+            dockerfile: SRMCore/Dockerfile
+          - service: app
+            dockerfile: SRMApp/Dockerfile
+          - service: agent
+            dockerfile: SRMAgent/Dockerfile
+          - service: demo-seeder
+            dockerfile: SRMDemoSeeder/Dockerfile
+          - service: redmine
+            dockerfile: SRMRedmine/Dockerfile
 
     steps:
-    - uses: actions/checkout@v4
-    - name: Setup .NET
-      uses: actions/setup-dotnet@v4
-      with:
-        dotnet-version: 10.0.x
-    - name: Restore dependencies
-      run: dotnet restore
-    - name: Build
-      run: dotnet build --no-restore
-    - name: Test
-      run: dotnet test --no-build --verbosity normal
+      - uses: actions/checkout@v4
+      - name: Build ${{ matrix.service }} image
+        run: docker build --file "${{ matrix.dockerfile }}" --tag "srm-${{ matrix.service }}:ci" .
+      - name: Validate Blazor framework asset
+        if: matrix.service == 'app'
+        run: docker run --rm --entrypoint test srm-app:ci -f /app/wwwroot/_framework/blazor.web.js
+      - name: Validate Agent network dependency
+        if: matrix.service == 'agent'
+        run: docker run --rm --entrypoint sh srm-agent:ci -c 'command -v ping'
