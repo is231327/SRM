@@ -383,7 +383,7 @@ On Windows, old Azure CLI builds can fail while streaming a Python ACR build log
 4. builds Auth, Core, App, Agent, and demo-seeder images;
 5. verifies that the App image contains `/app/wwwroot/_framework/blazor.web.js`.
 
-CI needs no repository secrets. Each run derives its temporary SQL password from GitHub's short-lived job token, creates random test database names, and runs `New-DeploymentConfiguration.ps1` for an isolated ignored Compose configuration. It never reuses development or Azure credentials.
+CI needs no repository secrets. Each run derives a temporary SQL password from its unique run ID, creates random test database names, and runs `New-DeploymentConfiguration.ps1` for an isolated ignored Compose configuration. The SQL service is reachable only inside the temporary runner and is deleted with the job; CI never reuses development or Azure credentials.
 
 ## 13. GitHub-to-Azure OIDC
 
