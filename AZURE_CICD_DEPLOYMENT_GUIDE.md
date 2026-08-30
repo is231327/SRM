@@ -458,6 +458,8 @@ Add required reviewers to the Environment if deployments need approval. OIDC avo
 
 Create the Environment and store the five protected values without printing them:
 
+Run this block in PowerShell 7 (`pwsh`). Windows PowerShell 5.1 can prepend a byte-order mark when it pipes text to a native program; the release workflow removes such a mark defensively, but PowerShell 7 avoids adding it during secret upload.
+
 ```powershell
 gh api --method PUT "repos/$repository/environments/$githubEnvironment" --silent
 $account = az account show --output json | ConvertFrom-Json

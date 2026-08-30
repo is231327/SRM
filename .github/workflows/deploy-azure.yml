@@ -76,7 +76,8 @@ jobs:
           if ([string]::IsNullOrWhiteSpace($env:AZURE_PARAMETERS)) {
             throw 'The SRM_AZURE_PARAMETERS GitHub Environment secret is missing.'
           }
-          $settings = $env:AZURE_PARAMETERS | ConvertFrom-Json
+          $parameterContent = $env:AZURE_PARAMETERS.TrimStart([char]0xFEFF)
+          $settings = $parameterContent | ConvertFrom-Json
           $registry = [string]$settings.parameters.registryName.value
           if ([string]::IsNullOrWhiteSpace($registry)) { throw 'registryName is missing from SRM_AZURE_PARAMETERS.' }
           Write-Output "::add-mask::$registry"
@@ -122,9 +123,11 @@ jobs:
           if ([string]::IsNullOrWhiteSpace($env:AZURE_RUNTIME_CONFIGURATION)) {
             throw 'The SRM_AZURE_ENV GitHub Environment secret is missing.'
           }
-          $null = $env:AZURE_PARAMETERS | ConvertFrom-Json
-          Set-Content ContainerServices/azure.parameters.json -Value $env:AZURE_PARAMETERS -NoNewline
-          Set-Content ContainerServices/.env.azure -Value $env:AZURE_RUNTIME_CONFIGURATION -NoNewline
+          $parameterContent = $env:AZURE_PARAMETERS.TrimStart([char]0xFEFF)
+          $runtimeContent = $env:AZURE_RUNTIME_CONFIGURATION.TrimStart([char]0xFEFF)
+          $null = $parameterContent | ConvertFrom-Json
+          Set-Content ContainerServices/azure.parameters.json -Value $parameterContent -NoNewline
+          Set-Content ContainerServices/.env.azure -Value $runtimeContent -NoNewline
 
       - name: Release application images only
         shell: pwsh
