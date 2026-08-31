@@ -4,7 +4,7 @@ public class LanguageService
 {
     private readonly Dictionary<string, (string En, string De)> _translations = new()
     {
-        ["AppTitle"] = ("Server Room Monitoring Test", "Serverraum-Monitoring Test"),
+        ["AppTitle"] = ("Server Room Monitoring", "Serverraum-Monitoring"),
         ["Home"] = ("Home", "Start"),
         ["Dashboard"] = ("Dashboard", "Dashboard"),
         ["Operations"] = ("Operations", "Betrieb"),

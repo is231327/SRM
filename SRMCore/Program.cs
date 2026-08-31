@@ -1,4 +1,6 @@
 ﻿using System.IdentityModel.Tokens.Jwt;
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
@@ -41,6 +43,7 @@ public class Program
 
         builder.Services.Configure<RedmineOptions>(builder.Configuration.GetSection(RedmineOptions.SectionName));
         builder.Services.Configure<RedisOptions>(builder.Configuration.GetSection(RedisOptions.SectionName));
+        builder.Services.Configure<JwtCertificateOptions>(builder.Configuration.GetSection("JwtValidationCertificate"));
         builder.Services.AddHttpContextAccessor();
         builder.Services.AddDbContext<SrmCoreDbContext>(options =>
             options.UseSqlServer(
@@ -49,6 +52,26 @@ public class Program
         builder.Services.AddSingleton<IConnectionMultiplexer>(_ =>
             ConnectionMultiplexer.Connect(ResolveRedisConnectionString(builder.Configuration)));
         builder.Services.AddSingleton<ITokenStateStore, RedisTokenStateStore>();
+        var jwtIssuer = builder.Configuration["Jwt:Issuer"]
+            ?? builder.Configuration["SRM_JWT_ISSUER"]
+            ?? Environment.GetEnvironmentVariable("SRM_JWT_ISSUER");
+        var jwtAudience = builder.Configuration["Jwt:Audience"]
+            ?? builder.Configuration["SRM_JWT_AUDIENCE"]
+            ?? Environment.GetEnvironmentVariable("SRM_JWT_AUDIENCE");
+
+        if (string.IsNullOrWhiteSpace(jwtIssuer))
+        {
+            throw new InvalidOperationException("Missing JWT issuer configuration. Provide either 'Jwt:Issuer' or 'SRM_JWT_ISSUER'.");
+        }
+        if (string.IsNullOrWhiteSpace(jwtAudience))
+        {
+            throw new InvalidOperationException("Missing JWT audience configuration. Provide either 'Jwt:Audience' or 'SRM_JWT_AUDIENCE'.");
+        }
+
+        var validationCertOptions = builder.Configuration.GetSection("JwtValidationCertificate").Get<JwtCertificateOptions>() ?? new JwtCertificateOptions();
+        var validationCertificate = ResolveValidationCertificate(validationCertOptions);
+        var issuerSigningKey = new X509SecurityKey(validationCertificate);
+
         builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             .AddJwtBearer(options =>
             {
@@ -58,9 +81,9 @@ public class Program
                     ValidateAudience = true,
                     ValidateIssuerSigningKey = true,
                     ValidateLifetime = true,
-                    ValidIssuer = builder.Configuration["Jwt:Issuer"],
-                    ValidAudience = builder.Configuration["Jwt:Audience"],
-                    IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(builder.Configuration["Jwt:SigningKey"] ?? string.Empty)),
+                    ValidIssuer = jwtIssuer,
+                    ValidAudience = jwtAudience,
+                    IssuerSigningKey = issuerSigningKey,
                     ClockSkew = TimeSpan.FromMinutes(1)
                 };
                 options.Events = new JwtBearerEvents
@@ -207,5 +230,38 @@ public class Program
         throw new InvalidOperationException(
             "Missing Redis connection configuration. Provide either 'Redis:ConnectionString' or 'SRM_REDIS_CONNECTION'. " +
             "For local development, start the Redis infrastructure container and configure ContainerServices/.env.development.");
+    }
+
+    private static X509Certificate2 ResolveValidationCertificate(JwtCertificateOptions certOptions)
+    {
+        // If a path is provided, load the certificate file directly.
+        if (!string.IsNullOrWhiteSpace(certOptions.Path))
+        {
+            return new X509Certificate2(certOptions.Path);
+        }
+
+        // Otherwise, look up the certificate in the Windows certificate store.
+        if (string.IsNullOrWhiteSpace(certOptions.Thumbprint))
+        {
+            throw new InvalidOperationException(
+                "Certificate thumbprint or path must be configured for JWT validation.");
+        }
+
+        var storeName = certOptions.Store ?? "Root";
+        var storeLocation = certOptions.StoreLocation ?? "CurrentUser";
+
+        var store = new X509Store(storeName, (StoreLocation)Enum.Parse(typeof(StoreLocation), storeLocation, ignoreCase: true));
+        store.Open(OpenFlags.ReadOnly);
+
+        var certificates = store.Certificates.Find(X509FindType.FindByThumbprint, certOptions.Thumbprint, validOnly: false);
+        store.Close();
+
+        if (!certificates.Any())
+        {
+            throw new InvalidOperationException(
+                $"No certificate found with thumbprint '{certOptions.Thumbprint}' in store {storeName}\\{storeLocation}.");
+        }
+
+        return certificates[0];
     }
 }

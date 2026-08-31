@@ -71,6 +71,8 @@ services:
     env_file:
       - path: .runtime-env/srm-auth.env
         format: raw
+    volumes:
+      - ../ContainerServices/certs/jwt-signing.pfx:/certs/jwt-signing.pfx:ro
     networks: [srm-shared]
 
   srm-core:
@@ -87,6 +89,8 @@ services:
     env_file:
       - path: .runtime-env/srm-core.env
         format: raw
+    volumes:
+      - ../ContainerServices/certs/jwt-certificate.crt:/certs/jwt-certificate.crt:ro
     networks: [srm-shared]
 
   srm-app:

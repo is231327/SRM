@@ -1,4 +1,6 @@
 ﻿using System.IdentityModel.Tokens.Jwt;
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
@@ -30,6 +32,7 @@ public class Program
         }
 
         builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection(JwtOptions.SectionName));
+        builder.Services.Configure<JwtCertificateOptions>(builder.Configuration.GetSection("JwtSigningCertificate"));
         builder.Services.Configure<RedisOptions>(builder.Configuration.GetSection(RedisOptions.SectionName));
         builder.Services.AddHttpContextAccessor();
         builder.Services.AddDbContext<SrmAuthDbContext>(options =>
@@ -39,12 +42,22 @@ public class Program
         builder.Services.AddSingleton<IConnectionMultiplexer>(_ =>
             ConnectionMultiplexer.Connect(ResolveRedisConnectionString(builder.Configuration)));
         builder.Services.AddSingleton<ITokenStateStore, RedisTokenStateStore>();
-        builder.Services.AddScoped<ICurrentUserContext, CurrentUserContext>();
         builder.Services.AddScoped<IPasswordHasher<AuthUser>, PasswordHasher<AuthUser>>();
         builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
         builder.Services.AddScoped<IAuthService, AuthService>();
-
+        builder.Services.AddScoped<ICurrentUserContext, CurrentUserContext>();
         var jwtOptions = builder.Configuration.GetSection(JwtOptions.SectionName).Get<JwtOptions>() ?? new JwtOptions();
+
+        if (string.IsNullOrWhiteSpace(jwtOptions.Issuer))
+        {
+            throw new InvalidOperationException("Missing JWT issuer configuration. Provide either 'Jwt:Issuer' or 'SRM_JWT_ISSUER'.");
+        }
+        if (string.IsNullOrWhiteSpace(jwtOptions.Audience))
+        {
+            throw new InvalidOperationException("Missing JWT audience configuration. Provide either 'Jwt:Audience' or 'SRM_JWT_AUDIENCE'.");
+        }
+
+
         builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             .AddJwtBearer(options =>
             {
@@ -56,7 +69,7 @@ public class Program
                     ValidateLifetime = true,
                     ValidIssuer = jwtOptions.Issuer,
                     ValidAudience = jwtOptions.Audience,
-                    IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtOptions.SigningKey)),
+                    IssuerSigningKey = new X509SecurityKey(ResolveSigningCertificate(builder.Configuration)),
                     ClockSkew = TimeSpan.FromMinutes(1)
                 };
                 options.Events = new JwtBearerEvents
@@ -187,5 +200,41 @@ public class Program
         throw new InvalidOperationException(
             "Missing Redis connection configuration. Provide either 'Redis:ConnectionString' or 'SRM_REDIS_CONNECTION'. " +
             "For local development, start the Redis infrastructure container and configure ContainerServices/.env.development.");
+    }
+
+    private static X509Certificate2 ResolveSigningCertificate(IConfiguration configuration)
+    {
+        var certOptions = configuration.GetSection("JwtSigningCertificate").Get<JwtCertificateOptions>() ?? new JwtCertificateOptions();
+
+        // If a path is provided, load the certificate file directly.
+        if (!string.IsNullOrWhiteSpace(certOptions.Path))
+        {
+            var password = certOptions.Password ?? string.Empty;
+            return new X509Certificate2(certOptions.Path, password);
+        }
+
+        // Otherwise, look up the certificate in the Windows certificate store.
+        if (string.IsNullOrWhiteSpace(certOptions.Thumbprint))
+        {
+            throw new InvalidOperationException(
+                "Certificate thumbprint or path must be configured for JWT signing.");
+        }
+
+        var storeName = certOptions.Store ?? "My";
+        var storeLocation = certOptions.StoreLocation ?? "CurrentUser";
+
+        var store = new X509Store(storeName, (StoreLocation)Enum.Parse(typeof(StoreLocation), storeLocation, ignoreCase: true));
+        store.Open(OpenFlags.ReadWrite);
+
+        var certificates = store.Certificates.Find(X509FindType.FindByThumbprint, certOptions.Thumbprint, validOnly: false);
+        store.Close();
+
+        if (!certificates.Any())
+        {
+            throw new InvalidOperationException(
+                $"No certificate found with thumbprint '{certOptions.Thumbprint}' in store {storeName}\\{storeLocation}.");
+        }
+
+        return certificates[0];
     }
 }

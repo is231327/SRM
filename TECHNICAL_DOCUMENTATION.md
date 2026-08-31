@@ -218,6 +218,7 @@ DTO validation rules are verified through dedicated unit tests in `SRMUnitTests`
 
 `SRMIntegrationTests` is a separate NUnit project for real SQL Server-backed integration tests.
 These tests require the Docker SQL Server container to be running and use dedicated integration test databases for `SRMCore` and `SRMAuth`.
+They connect via the `SRM_TEST_SQL_CORE_CONNECTION` / `SRM_TEST_SQL_AUTH_CONNECTION` environment variables (see `AGENTS.md` §7 for ready-to-run commands, including the Docker-based fallback when the host lacks the ASP.NET Core shared framework).
 
 The frontend has been verified at build level through `dotnet build SRMApp\SRMApp.csproj`.
 

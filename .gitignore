@@ -251,3 +251,4 @@ ModelManifest.xml
 /ContainerServices/azure.parameters.json
 /ContainerServices/_deploy_worktree
 /ContainerServices/.runtime-env
+/ContainerServices/jwt-signing-key.pem
