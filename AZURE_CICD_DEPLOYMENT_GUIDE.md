@@ -377,11 +377,15 @@ On Windows, old Azure CLI builds can fail while streaming a Python ACR build log
 
 `.github/workflows/ci.yml` runs for pushes and pull requests to `master`. It:
 
-1. starts a SQL Server service container;
-2. restores, builds, and tests the solution;
-3. generates scoped Compose env files and validates the complete Compose model;
-4. builds Auth, Core, App, Agent, and demo-seeder images;
-5. verifies that the App image contains `/app/wwwroot/_framework/blazor.web.js`.
+1. assigns the increasing `github.run_number` as the visible build number;
+2. validates every included commit message;
+3. starts a SQL Server service container;
+4. restores, builds, and tests the solution;
+5. generates scoped Compose env files and validates the complete Compose model;
+6. builds Auth, Core, App, Agent, and demo-seeder images;
+7. verifies that the App image contains `/app/wwwroot/_framework/blazor.web.js`.
+
+Each commit must contain the exact, case-sensitive marker `Release Please`. Its subject must start with `fix:`/`fix(scope):`, `feat:`/`feat(scope):`, or any Conventional Commit type followed by `!`, such as `feat!:` or `fix(api)!:`. CI fails before building when any included commit violates this rule.
 
 CI needs no repository secrets. Each run derives a temporary SQL password from its unique run ID, creates random test database names, and runs `New-DeploymentConfiguration.ps1` for an isolated ignored Compose configuration. The SQL service is reachable only inside the temporary runner and is deleted with the job; CI never reuses development or Azure credentials.
 
@@ -473,7 +477,35 @@ gh secret list --repo $repository --env $githubEnvironment
 
 ## 14. Release workflow
 
-`.github/workflows/deploy-azure.yml`:
+Release creation is deliberately manual and deployment remains a separate workflow:
+
+1. `ci.yml` validates and builds every `master` commit but never creates a release.
+2. `create-release.yml` promotes the successful build for the current `master` commit only when manually started.
+3. `deploy-azure.yml` deploys the resulting tag.
+
+`Get-ReleaseVersion.ps1` finds the latest reachable `v<major>.<minor>.<build>` tag and inspects all commits after it. The highest Conventional Commit change controls major/minor, while the successful CI run number is always the patch component:
+
+| Unreleased change | Previous tag | CI build | New tag |
+|---|---|---:|---|
+| `fix:` | `v1.4.141` | 142 | `v1.4.142` |
+| `feat:` | `v1.4.141` | 142 | `v1.5.142` |
+| Any type with `!` | `v1.4.141` | 142 | `v2.0.142` |
+
+The calculator rejects missing markers, unsupported prefixes, no unreleased commits, and build numbers that are not greater than the previous release's build component.
+
+To create and deploy a release:
+
+1. Push commits that satisfy the message rule.
+2. Wait for **Actions > CI** to succeed on `master`.
+3. Open **Actions > Create Release**.
+4. Select **Run workflow**, keep branch `master`, and confirm.
+5. Follow the linked **Release Azure** run and approve the `azure-development` Environment if it has required reviewers.
+
+There is no version or patch/minor/major input. A successful CI build alone never releases. If the current `master` commit has not passed CI, release creation stops instead of silently promoting an older commit. Re-running **Create Release** for the same successful build reuses its existing tag and GitHub Release and dispatches Azure deployment again.
+
+The creation workflow explicitly dispatches `deploy-azure.yml`. This is required because a release created with GitHub's built-in workflow token does not emit a second automatic release-workflow run. No personal access token is required.
+
+`deploy-azure.yml`:
 
 1. resolves the selected release/ref to a commit SHA;
 2. requires a successful CI run for exactly that SHA;
@@ -483,19 +515,7 @@ gh secret list --repo $repository --env $githubEnvironment
 6. runs `Release-Azure.ps1 -SkipBuild` to preflight the existing target apps and update only their images;
 7. waits for every updated revision to become ready.
 
-The workflow never runs Bicep, creates Azure resources, changes runtime configuration, or initializes Redmine. `deployAgent` in the protected Azure parameters determines whether the existing Agent app is updated; the Agent image is still built so the matrix remains deterministic.
-
-Create a release:
-
-```powershell
-git status --short
-dotnet test SRM.sln
-git tag v1.0.0
-git push origin v1.0.0
-gh release create v1.0.0 --verify-tag --generate-notes
-```
-
-Publishing triggers the release. You can also manually run **Release Azure** and choose a ref.
+The deployment workflow never runs Bicep, creates Azure resources, changes runtime configuration, or initializes Redmine. `deployAgent` in the protected Azure parameters determines whether the existing Agent app is updated; the Agent image is still built so the matrix remains deterministic. You can also manually run **Release Azure** with a known tag or commit SHA when you intentionally want to redeploy it.
 
 Local fallback:
 
@@ -597,4 +617,4 @@ When reuse is intentional, put the existing environment's name and resource grou
 8. Run and delete the demo-seeder job.
 9. Verify browser, CRUD, live agent/Shelly readings, and Redmine tickets.
 10. Configure the GitHub Azure OIDC identity and the protected `azure-development` Environment settings. CI itself needs no secrets.
-11. Publish a CI-verified release and observe the image-only release workflow.
+11. Run **Create Release** manually for the latest successful `master` build and observe the dispatched image-only Azure release workflow.

@@ -10,6 +10,7 @@ This directory owns local container orchestration and Azure deployment. Runtime 
 | `Deployment-Azure.ps1` | Creates a complete Azure environment and automatically initializes its fresh Redmine instance |
 | `Deployment.Library.ps1` | Shared parsing, validation, and external-command helpers; not run directly |
 | `Deployment-Local.ps1` | Starts the selected Compose topology and automatically initializes its fresh Redmine instance |
+| `Get-ReleaseVersion.ps1` | Calculates the next release tag from Conventional Commit prefixes and the successful GitHub CI build number |
 | `New-DeploymentConfiguration.ps1` | Creates independent ignored development, local, and Azure configuration files with random credentials |
 | `Release-Azure.ps1` | Builds optional immutable images and updates only existing application Container Apps |
 | `.env.azure.example` | Template for all Azure Container App names and runtime values |
@@ -209,7 +210,11 @@ The script performs a foundation deployment; builds `srm-auth`, `srm-core`, `srm
 
 ### Recommended: GitHub Actions
 
-The release workflow is `.github/workflows/deploy-azure.yml`. It releases a published GitHub Release or a manually selected ref only after that commit has a successful `ci.yml` run. Images are tagged with the immutable commit SHA.
+GitHub Actions separates validation, release creation, and Azure deployment:
+
+- `ci.yml` assigns GitHub's increasing workflow run number to every build and validates all included commit messages.
+- `create-release.yml` is started manually. It promotes the latest successful `master` CI build, calculates its version, creates the tag and GitHub Release, and dispatches the Azure workflow.
+- `deploy-azure.yml` deploys the selected release only after verifying that its exact commit passed CI. Images are tagged with the immutable commit SHA.
 
 Configure the protected GitHub Environment `azure-development` with these secrets:
 
@@ -221,17 +226,28 @@ Configure the protected GitHub Environment `azure-development` with these secret
 
 Use the user-assigned managed identity created by `Deployment-Azure.ps1` as the release OIDC identity. It needs `AcrPush` only on the existing ACR and `Container Apps Contributor` only on each existing application Container App. GitHub may include immutable owner and repository IDs in its OIDC subject, so obtain the current prefix with `gh api repos/<owner>/<repo>/actions/oidc/customization/sub --jq '.sub_claim_prefix'` and append `:environment:azure-development`. Initial infrastructure creation and ACR pull-role assignment remain part of the separately authenticated one-time deployment. See the main deployment guide for the complete commands.
 
-Release procedure:
+Every commit included in a build must contain the exact, case-sensitive text `Release Please` and use one of these subjects:
+
+| Subject prefix | Version effect |
+|---|---|
+| `fix:` or `fix(scope):` | Keep major and minor |
+| `feat:` or `feat(scope):` | Increment minor |
+| Any Conventional Commit type with `!`, such as `feat!:` or `fix(api)!:` | Increment major and reset minor to zero |
+
+The patch component is always the successful `ci.yml` run number. If the previous release is `v1.4.141`, CI build 142 produces `v1.4.142` for `fix:`, `v1.5.142` for `feat:`, or `v2.0.142` for a breaking `!` prefix. `Get-ReleaseVersion.ps1` evaluates every unreleased commit, applies the highest required bump, and rejects a missing marker, unsupported prefix, duplicate release, or non-increasing build number.
+
+Use a commit message such as:
 
 ```powershell
 git status --short
 dotnet test SRM.sln
-git tag v1.0.0
-git push origin v1.0.0
-gh release create v1.0.0 --verify-tag --generate-notes
+git commit -m "fix: correct login redirect" -m "Release Please"
+git push origin master
 ```
 
-Publishing the release triggers an application-only release. The workflow builds immutable images and uses `Release-Azure.ps1`; it does not run Bicep, create infrastructure, change runtime configuration, or initialize Redmine. Protect the GitHub Environment with required reviewers if desired. A manual release is available through **Actions > Release Azure > Run workflow**.
+Wait for **CI** to succeed on the current `master` commit. A successful build does not create a release. When you decide to release, open **Actions > Create Release > Run workflow** and run it on `master`. There is no version input: the workflow selects the successful build for the current `master` commit and calculates the tag. It refuses to release an older successful build while a newer `master` commit is unverified or failing. It is safe to run again for the same build; it reuses the existing tag/release and dispatches the deployment again.
+
+The dispatched workflow performs an application-only release. It builds immutable images and uses `Release-Azure.ps1`; it does not run Bicep, create infrastructure, change runtime configuration, or initialize Redmine. Protect the GitHub Environment with required reviewers if desired. **Actions > Release Azure > Run workflow** remains available for explicitly redeploying a known tag or commit SHA.
 
 ### Local release fallback
 

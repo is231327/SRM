@@ -1,0 +1,120 @@
+name: Create Release
+run-name: Create release from the latest successful master build
+
+on:
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  contents: write
+
+concurrency:
+  group: create-release
+  cancel-in-progress: false
+
+jobs:
+  create-release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: master
+          fetch-depth: 0
+
+      - id: build
+        name: Select latest successful master CI build
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          $masterSha = (git rev-parse HEAD).Trim()
+          $response = gh api "repos/$env:REPOSITORY/actions/workflows/ci.yml/runs?branch=master&status=success&event=push&per_page=1" | ConvertFrom-Json
+          $run = @($response.workflow_runs)[0]
+          if ($null -eq $run) {
+            throw 'No successful CI build exists for master.'
+          }
+          if ($run.head_sha -ne $masterSha) {
+            throw "The current master commit $masterSha has not completed CI successfully. The latest successful build belongs to $($run.head_sha)."
+          }
+
+          "sha=$($run.head_sha)" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "number=$($run.run_number)" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "url=$($run.html_url)" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      - name: Check out the verified build
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.build.outputs.sha }}
+          fetch-depth: 0
+
+      - id: version
+        name: Calculate release version
+        shell: pwsh
+        env:
+          BUILD_NUMBER: ${{ steps.build.outputs.number }}
+          TARGET_SHA: ${{ steps.build.outputs.sha }}
+        run: |
+          $existing = @(git tag --points-at $env:TARGET_SHA | Where-Object { $_ -match '^v[0-9]+\.[0-9]+\.[0-9]+$' })
+          if ($existing.Count -gt 0) {
+            $tag = $existing |
+              Sort-Object { [version]($_ -replace '^v', '') } -Descending |
+              Select-Object -First 1
+            $isNew = 'false'
+          }
+          else {
+            $tag = ./ContainerServices/Get-ReleaseVersion.ps1 -BuildNumber ([int]$env:BUILD_NUMBER) -TargetRef $env:TARGET_SHA
+            $isNew = 'true'
+          }
+
+          "tag=$tag" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "is_new=$isNew" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      - name: Create tag and GitHub Release
+        if: steps.version.outputs.is_new == 'true'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          SHA: ${{ steps.build.outputs.sha }}
+          BUILD_NUMBER: ${{ steps.build.outputs.number }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git tag --annotate $env:TAG $env:SHA --message "$env:TAG (CI build $env:BUILD_NUMBER)"
+          git push origin $env:TAG
+          gh release create $env:TAG --repo $env:REPOSITORY --verify-tag --generate-notes --title "$env:TAG (build $env:BUILD_NUMBER)"
+
+      - name: Ensure the GitHub Release exists
+        if: steps.version.outputs.is_new == 'false'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          BUILD_NUMBER: ${{ steps.build.outputs.number }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          gh release view $env:TAG --repo $env:REPOSITORY 2>$null
+          if ($LASTEXITCODE -ne 0) {
+            gh release create $env:TAG --repo $env:REPOSITORY --verify-tag --generate-notes --title "$env:TAG (build $env:BUILD_NUMBER)"
+          }
+
+      - name: Start Azure release deployment
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: gh workflow run deploy-azure.yml --repo $env:REPOSITORY --ref master -f ref=$env:TAG
+
+      - name: Write summary
+        shell: pwsh
+        env:
+          BUILD_NUMBER: ${{ steps.build.outputs.number }}
+          BUILD_URL: ${{ steps.build.outputs.url }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          "## Release $env:TAG" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
+          "Promoted [CI build $env:BUILD_NUMBER]($env:BUILD_URL) and dispatched **Release Azure**." | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
