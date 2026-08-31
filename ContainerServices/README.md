@@ -6,6 +6,7 @@ This directory owns local container orchestration and Azure deployment. Runtime 
 
 | File | Purpose |
 |---|---|
+| `Create-Release.ps1` | Starts the parameterless GitHub `Create Release` workflow for `master` |
 | `Deploy-Release.ps1` | Resolves and verifies an exact GitHub Release, then passes it to the image-only Azure release script |
 | `Deployment-Azure.ps1` | Creates a complete Azure environment and automatically initializes its fresh Redmine instance |
 | `Deployment.Library.ps1` | Shared parsing, validation, and external-command helpers; not run directly |
@@ -245,7 +246,13 @@ git commit -m "fix: correct login redirect" -m "Release Please"
 git push origin master
 ```
 
-Wait for **CI** to succeed on the current `master` commit. A successful build does not create a release. When you decide to release, open **Actions > Create Release > Run workflow** and run it on `master`. There is no version input: the workflow selects the successful build for the current `master` commit and calculates the tag. It refuses to release an older successful build while a newer `master` commit is unverified or failing. It is safe to run again for the same build; it reuses the existing tag/release and dispatches the deployment again.
+Wait for **CI** to succeed on the current `master` commit. A successful build does not create a release. When you decide to release, run:
+
+```powershell
+./ContainerServices/Create-Release.ps1
+```
+
+The script requires an authenticated GitHub CLI and simply starts **Actions > Create Release** on `master`; it has no parameters. You can perform the same operation in the GitHub web UI by opening **Actions > Create Release > Run workflow**. There is no version input: the workflow selects the successful build for the current `master` commit and calculates the tag. It refuses to release an older successful build while a newer `master` commit is unverified or failing. It is safe to run again for the same build; it reuses the existing tag/release and dispatches the deployment again.
 
 The dispatched workflow performs an application-only release. It builds immutable images and uses `Release-Azure.ps1`; it does not run Bicep, create infrastructure, change runtime configuration, or initialize Redmine. Protect the GitHub Environment with required reviewers if desired. **Actions > Release Azure > Run workflow** remains available for explicitly redeploying a known tag or commit SHA.
 

@@ -497,11 +497,11 @@ To create and deploy a release:
 
 1. Push commits that satisfy the message rule.
 2. Wait for **Actions > CI** to succeed on `master`.
-3. Open **Actions > Create Release**.
-4. Select **Run workflow**, keep branch `master`, and confirm.
+3. Run `./ContainerServices/Create-Release.ps1` from the repository root.
+4. Alternatively, open **Actions > Create Release**, select **Run workflow**, keep branch `master`, and confirm.
 5. Follow the linked **Release Azure** run and approve the `azure-development` Environment if it has required reviewers.
 
-There is no version or patch/minor/major input. A successful CI build alone never releases. If the current `master` commit has not passed CI, release creation stops instead of silently promoting an older commit. Re-running **Create Release** for the same successful build reuses its existing tag and GitHub Release and dispatches Azure deployment again.
+`Create-Release.ps1` has no parameters; it only invokes the existing GitHub workflow for `master` through the authenticated GitHub CLI. There is no version or patch/minor/major input. A successful CI build alone never releases. If the current `master` commit has not passed CI, release creation stops instead of silently promoting an older commit. Re-running **Create Release** for the same successful build reuses its existing tag and GitHub Release and dispatches Azure deployment again.
 
 The creation workflow explicitly dispatches `deploy-azure.yml`. This is required because a release created with GitHub's built-in workflow token does not emit a second automatic release-workflow run. No personal access token is required.
 
