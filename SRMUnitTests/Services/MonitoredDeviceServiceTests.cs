@@ -39,4 +39,34 @@ public class MonitoredDeviceServiceTests : CrudServiceTestBase<MonitoredDevice>
         Assert.That(entity.IpAddress, Is.EqualTo("10.0.0.2"));
         Assert.That(entity.IsActive, Is.False);
     }
+
+    [Test]
+    public async Task DeleteAsync_PreservesIncidentAndClearsDeviceReference()
+    {
+        using var context = DbContextFactory.CreateContext();
+        var device = CreateEntity();
+        device.Id = Guid.NewGuid();
+        var incident = new Incident
+        {
+            Id = Guid.NewGuid(),
+            ServerRoomId = Guid.NewGuid(),
+            MonitoredDeviceId = device.Id,
+            Summary = "Device unreachable",
+            Description = "Test",
+            CorrelationKey = "ping:test"
+        };
+        context.AddRange(device, incident);
+        await context.SaveChangesAsync();
+        var service = CreateService(context);
+
+        var deleted = await service.DeleteAsync(device.Id);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(deleted, Is.True);
+            Assert.That(context.MonitoredDevices.Find(device.Id), Is.Null);
+            Assert.That(context.Incidents.Find(incident.Id), Is.Not.Null);
+            Assert.That(context.Incidents.Find(incident.Id)!.MonitoredDeviceId, Is.Null);
+        });
+    }
 }

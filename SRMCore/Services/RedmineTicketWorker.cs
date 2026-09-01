@@ -162,11 +162,7 @@ public class RedmineTicketWorker(
 
         foreach (var ticketLink in ticketLinks)
         {
-            var expectedUrl = _options.BuildPublicIssueUrl(ticketLink.ExternalTicketId);
-            if (!string.Equals(ticketLink.ExternalTicketUrl, expectedUrl, StringComparison.Ordinal))
-            {
-                ticketLink.ExternalTicketUrl = expectedUrl;
-            }
+            RedmineTicketSynchronization.RepairPublicUrl(ticketLink, _options);
         }
     }
 
@@ -177,6 +173,7 @@ public class RedmineTicketWorker(
     {
         var refreshBefore = DateTime.UtcNow.AddSeconds(-Math.Max(15, _options.IssueRefreshIntervalSeconds));
         var ticketLinks = await dbContext.TicketLinks
+            .Include(x => x.Incident)
             .Where(x => x.ExternalTicketId != string.Empty
                 && (!x.ExternalDataSynchronizedAtUtc.HasValue || x.ExternalDataSynchronizedAtUtc <= refreshBefore))
             .OrderBy(x => x.ExternalDataSynchronizedAtUtc)
@@ -188,19 +185,7 @@ public class RedmineTicketWorker(
             try
             {
                 var details = await redmineClient.GetIssueAsync(ticketLink.ExternalTicketId, cancellationToken);
-                ticketLink.ExternalStatusName = details.StatusName;
-                ticketLink.ExternalPriorityName = details.PriorityName;
-                ticketLink.ExternalDataSynchronizedAtUtc = DateTime.UtcNow;
-                var incidentStatus = MapIncidentStatus(details.StatusName);
-                if (ticketLink.Incident is not null && incidentStatus.HasValue)
-                {
-                    ticketLink.Incident.Status = incidentStatus.Value;
-                    ticketLink.Incident.UpdatedAtUtc = DateTime.UtcNow;
-                    if (incidentStatus is IncidentStatus.Closed or IncidentStatus.Rejected)
-                    {
-                        ticketLink.Incident.ClosedAtUtc ??= DateTime.UtcNow;
-                    }
-                }
+                RedmineTicketSynchronization.ApplyIssueDetails(ticketLink, details, DateTime.UtcNow);
             }
             catch (Exception exception)
             {
@@ -219,20 +204,6 @@ public class RedmineTicketWorker(
         var exponent = Math.Min(Math.Max(0, attemptCount - 1), 10);
         var delay = TimeSpan.FromSeconds(5 * Math.Pow(2, exponent));
         return delay <= MaximumRetryDelay ? delay : MaximumRetryDelay;
-    }
-
-    private static IncidentStatus? MapIncidentStatus(string externalStatusName)
-    {
-        return externalStatusName switch
-        {
-            "New" => IncidentStatus.New,
-            "In Progress" => IncidentStatus.InProgress,
-            "Resolved" => IncidentStatus.Resolved,
-            "Feedback" => IncidentStatus.Feedback,
-            "Closed" => IncidentStatus.Closed,
-            "Rejected" => IncidentStatus.Rejected,
-            _ => null
-        };
     }
 
     private static string BuildResolutionComment(TicketLink ticketLink)

@@ -210,4 +210,80 @@ public class CrudOwnershipIntegrationTests
 
         Assert.That(deleted, Is.False);
     }
+
+    [Test]
+    public async Task DeleteMonitoredDevice_WithHistoricalIncident_PreservesIncident_InSqlServer()
+    {
+        using var context = SqlServerDbContextFactory.CreateContext();
+        var customerId = Guid.NewGuid();
+        var roomId = Guid.NewGuid();
+        var agentId = Guid.NewGuid();
+        var deviceId = Guid.NewGuid();
+        var incidentId = Guid.NewGuid();
+
+        context.Customers.Add(new Customer
+        {
+            Id = customerId,
+            Name = "Delete Test",
+            ExternalReference = "DELETE-TEST",
+            ContactEmail = "delete@example.com",
+            ContactPhone = "1",
+            IsActive = true
+        });
+        context.ServerRooms.Add(new ServerRoom
+        {
+            Id = roomId,
+            CustomerId = customerId,
+            Name = "Room",
+            LocationDescription = "Test",
+            TemperatureWarningThreshold = 25,
+            TemperatureCriticalThreshold = 30,
+            MonitoringEnabled = true
+        });
+        context.Agents.Add(new Agent
+        {
+            Id = agentId,
+            ServerRoomId = roomId,
+            Name = "Agent",
+            ApiKeyReference = "key",
+            Version = "1",
+            LastKnownIpAddress = "127.0.0.1",
+            LastSeenAtUtc = DateTime.UtcNow,
+            IsActive = true
+        });
+        context.MonitoredDevices.Add(new MonitoredDevice
+        {
+            Id = deviceId,
+            AgentId = agentId,
+            DisplayName = "Switch",
+            IpAddress = "10.0.0.1",
+            IntervalSeconds = 30,
+            TimeoutMilliseconds = 1000,
+            FailureThreshold = 3,
+            IsActive = true
+        });
+        context.Incidents.Add(new Incident
+        {
+            Id = incidentId,
+            ServerRoomId = roomId,
+            MonitoredDeviceId = deviceId,
+            Summary = "Switch unreachable",
+            Description = "Historical incident",
+            CorrelationKey = "ping:switch"
+        });
+        await context.SaveChangesAsync();
+
+        var service = new MonitoredDeviceService(context, CoreCurrentUserContextFactory.Create());
+        var deleted = await service.DeleteAsync(deviceId);
+
+        context.ChangeTracker.Clear();
+        var persistedIncident = await context.Incidents.FindAsync(incidentId);
+        Assert.Multiple(() =>
+        {
+            Assert.That(deleted, Is.True);
+            Assert.That(context.MonitoredDevices.Find(deviceId), Is.Null);
+            Assert.That(persistedIncident, Is.Not.Null);
+            Assert.That(persistedIncident!.MonitoredDeviceId, Is.Null);
+        });
+    }
 }
