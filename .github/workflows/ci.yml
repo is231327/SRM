@@ -67,11 +67,7 @@ jobs:
           }
 
           foreach ($commit in $commits) {
-            $message = (git show --no-patch --format=%B $commit) -join "`n"
             $subject = (git show --no-patch --format=%s $commit).Trim()
-            if ($message.IndexOf('Release Please', [StringComparison]::Ordinal) -lt 0) {
-              throw "Commit $commit is missing the exact marker 'Release Please'."
-            }
             if ($subject -notmatch '^fix(\([^)]+\))?:' -and
                 $subject -notmatch '^feat(\([^)]+\))?:' -and
                 $subject -notmatch '^[a-z][a-z0-9-]*(\([^)]+\))?!:') {

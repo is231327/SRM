@@ -6,9 +6,7 @@ param(
 
     [string]$TargetRef = 'HEAD',
 
-    [string]$RepositoryPath = (Split-Path -Parent $PSScriptRoot),
-
-    [string]$RequiredMarker = 'Release Please'
+    [string]$RepositoryPath = (Split-Path -Parent $PSScriptRoot)
 )
 
 Set-StrictMode -Version Latest
@@ -60,12 +58,7 @@ if ($commitShas.Count -eq 0) {
 $highestBump = 0
 foreach ($commitShaValue in $commitShas) {
     $commitSha = ([string]$commitShaValue).Trim()
-    $message = (Invoke-Git -Arguments @('show', '--no-patch', '--format=%B', $commitSha)) -join "`n"
     $subject = ([string]@(Invoke-Git -Arguments @('show', '--no-patch', '--format=%s', $commitSha))[0]).Trim()
-
-    if ($message.IndexOf($RequiredMarker, [StringComparison]::Ordinal) -lt 0) {
-        throw "Commit $commitSha is missing the exact marker '$RequiredMarker'."
-    }
 
     $bump = if ($subject -match '^[a-z][a-z0-9-]*(\([^)]+\))?!:') {
         3

@@ -385,7 +385,7 @@ On Windows, old Azure CLI builds can fail while streaming a Python ACR build log
 6. builds Auth, Core, App, Agent, and demo-seeder images;
 7. verifies that the App image contains `/app/wwwroot/_framework/blazor.web.js`.
 
-Each commit must contain the exact, case-sensitive marker `Release Please`. Its subject must start with `fix:`/`fix(scope):`, `feat:`/`feat(scope):`, or any Conventional Commit type followed by `!`, such as `feat!:` or `fix(api)!:`. CI fails before building when any included commit violates this rule.
+Each commit subject must start with `fix:`/`fix(scope):`, `feat:`/`feat(scope):`, or any Conventional Commit type followed by `!`, such as `feat!:` or `fix(api)!:`. CI fails before building when any included commit violates this rule.
 
 CI needs no repository secrets. Each run derives a temporary SQL password from its unique run ID, creates random test database names, and runs `New-DeploymentConfiguration.ps1` for an isolated ignored Compose configuration. The SQL service is reachable only inside the temporary runner and is deleted with the job; CI never reuses development or Azure credentials.
 

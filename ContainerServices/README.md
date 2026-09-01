@@ -229,7 +229,7 @@ Configure the protected GitHub Environment `azure-development` with these secret
 
 Use the user-assigned managed identity created by `Deployment-Azure.ps1` as the release OIDC identity. It needs `AcrPush` only on the existing ACR and `Container Apps Contributor` only on each existing application Container App. GitHub may include immutable owner and repository IDs in its OIDC subject, so obtain the current prefix with `gh api repos/<owner>/<repo>/actions/oidc/customization/sub --jq '.sub_claim_prefix'` and append `:environment:azure-development`. Initial infrastructure creation and ACR pull-role assignment remain part of the separately authenticated one-time deployment. See the main deployment guide for the complete commands.
 
-Every commit included in a build must contain the exact, case-sensitive text `Release Please` and use one of these subjects:
+Every commit included in a build must use one of these subjects:
 
 | Subject prefix | Version effect |
 |---|---|
@@ -237,14 +237,14 @@ Every commit included in a build must contain the exact, case-sensitive text `Re
 | `feat:` or `feat(scope):` | Increment minor |
 | Any Conventional Commit type with `!`, such as `feat!:` or `fix(api)!:` | Increment major and reset minor to zero |
 
-The patch component is always the successful `ci.yml` run number. If the previous release is `v1.4.141`, CI build 142 produces `v1.4.142` for `fix:`, `v1.5.142` for `feat:`, or `v2.0.142` for a breaking `!` prefix. `Get-ReleaseVersion.ps1` evaluates every unreleased commit, applies the highest required bump, and rejects a missing marker, unsupported prefix, duplicate release, or non-increasing build number.
+The patch component is always the successful `ci.yml` run number. If the previous release is `v1.4.141`, CI build 142 produces `v1.4.142` for `fix:`, `v1.5.142` for `feat:`, or `v2.0.142` for a breaking `!` prefix. `Get-ReleaseVersion.ps1` evaluates every unreleased commit, applies the highest required bump, and rejects an unsupported prefix, duplicate release, or non-increasing build number.
 
 Use a commit message such as:
 
 ```powershell
 git status --short
 dotnet test SRM.sln
-git commit -m "fix: correct login redirect" -m "Release Please"
+git commit -m "fix: correct login redirect"
 git push origin master
 ```
 
