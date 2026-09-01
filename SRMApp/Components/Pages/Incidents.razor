@@ -25,6 +25,57 @@
     </div>
 </div>
 
+<div class="list-controls" aria-label="@LanguageService.T("FilterAndSorting")">
+    <div class="list-control list-control-search">
+        <label for="incident-search">@LanguageService.T("Search")</label>
+        <input id="incident-search" class="form-control" type="search" placeholder="@LanguageService.T("SearchIncidentsPlaceholder")" @bind="incidentSearchText" @bind:event="oninput" />
+    </div>
+    <div class="list-control">
+        <label for="incident-type-filter">@LanguageService.T("IncidentType")</label>
+        <select id="incident-type-filter" class="form-select" @bind="incidentTypeFilter">
+            <option value="">@LanguageService.T("All")</option>
+            @foreach (var type in Enum.GetValues<IncidentType>())
+            {
+                <option value="@type">@LanguageService.T(type.ToString())</option>
+            }
+        </select>
+    </div>
+    <div class="list-control">
+        <label for="incident-priority-filter">@LanguageService.T("TicketPriority")</label>
+        <select id="incident-priority-filter" class="form-select" @bind="ticketPriorityFilter">
+            <option value="">@LanguageService.T("All")</option>
+            @foreach (var priority in TicketPriorities)
+            {
+                <option value="@priority">@LanguageService.T(priority)</option>
+            }
+        </select>
+    </div>
+    <div class="list-control">
+        <label for="incident-status-filter">@LanguageService.T("TicketStatus")</label>
+        <select id="incident-status-filter" class="form-select" @bind="ticketStatusFilter">
+            <option value="">@LanguageService.T("All")</option>
+            @foreach (var status in TicketStatuses)
+            {
+                <option value="@status">@LanguageService.T(status)</option>
+            }
+        </select>
+    </div>
+    <div class="list-control">
+        <label for="incident-sort">@LanguageService.T("SortBy")</label>
+        <select id="incident-sort" class="form-select" @bind="incidentSort">
+            <option value="DateNewest">@LanguageService.T("DateNewest")</option>
+            <option value="DateOldest">@LanguageService.T("DateOldest")</option>
+            <option value="PriorityHighest">@LanguageService.T("PriorityHighest")</option>
+            <option value="PriorityLowest">@LanguageService.T("PriorityLowest")</option>
+            <option value="Status">@LanguageService.T("TicketStatus")</option>
+            <option value="ServerRoomAscending">@LanguageService.T("ServerRoomAscending")</option>
+            <option value="ServerRoomDescending">@LanguageService.T("ServerRoomDescending")</option>
+        </select>
+    </div>
+    <button class="btn btn-outline-secondary list-control-reset" type="button" @onclick="ResetFilters">@LanguageService.T("ResetFilters")</button>
+</div>
+
+@{ var visibleItems = VisibleItems; }
 <div class="entity-grid">
     <section class="entity-list">
         @if (isLoading)
@@ -35,9 +86,14 @@
         {
             <p>@LanguageService.T("NoData")</p>
         }
+        else if (visibleItems.Count == 0)
+        {
+            <p>@LanguageService.T("NoMatchingData")</p>
+        }
         else
         {
-            @foreach (var item in items.OrderBy(x => OverviewUiHelper.IsClosedIncident(x) ? 1 : 0).ThenByDescending(x => x.LastOccurredAtUtc ?? x.OpenedAtUtc))
+            <p class="list-result-count">@LanguageService.Tf("ShowingResults", visibleItems.Count, items.Count)</p>
+            @foreach (var item in visibleItems)
             {
                 var ticketLink = item.TicketLinks.FirstOrDefault(x => x.ProviderName == "Redmine")
                     ?? item.TicketLinks.FirstOrDefault();
@@ -88,8 +144,22 @@
     private bool isLoading = true;
     private bool showClosedIncidents;
     private List<IncidentReadDto> items = [];
+    private string incidentSearchText = string.Empty;
+    private IncidentType? incidentTypeFilter;
+    private string ticketPriorityFilter = string.Empty;
+    private string ticketStatusFilter = string.Empty;
+    private IncidentSortOption incidentSort = IncidentSortOption.DateNewest;
     private readonly CancellationTokenSource refreshCancellationTokenSource = new();
     private Task? refreshTask;
+    private static readonly string[] TicketPriorities = ["Low", "Normal", "High", "Urgent", "Immediate"];
+    private static readonly string[] TicketStatuses = ["New", "In Progress", "Resolved", "Feedback", "Closed", "Rejected"];
+    private IReadOnlyList<IncidentReadDto> VisibleItems => OperationalListViewHelper.FilterAndSortIncidents(
+        items,
+        incidentSearchText,
+        incidentTypeFilter,
+        ticketPriorityFilter,
+        ticketStatusFilter,
+        incidentSort);
 
     protected override async Task OnParametersSetAsync()
     {
@@ -131,6 +201,15 @@
     {
         showClosedIncidents = !showClosedIncidents;
         await LoadAsync();
+    }
+
+    private void ResetFilters()
+    {
+        incidentSearchText = string.Empty;
+        incidentTypeFilter = null;
+        ticketPriorityFilter = string.Empty;
+        ticketStatusFilter = string.Empty;
+        incidentSort = IncidentSortOption.DateNewest;
     }
 
     private async Task RefreshPeriodicallyAsync(CancellationToken cancellationToken)

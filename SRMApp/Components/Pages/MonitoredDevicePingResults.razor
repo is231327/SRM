@@ -15,6 +15,38 @@
     </Actions>
 </PageHeader>
 
+<div class="list-controls" aria-label="@LanguageService.T("FilterAndSorting")">
+    <div class="list-control">
+        <label for="ping-reachability-filter">@LanguageService.T("Reachability")</label>
+        <select id="ping-reachability-filter" class="form-select" @bind="reachabilityFilter">
+            <option value="All">@LanguageService.T("All")</option>
+            <option value="Yes">@LanguageService.T("Reachable")</option>
+            <option value="No">@LanguageService.T("PingUnavailable")</option>
+        </select>
+    </div>
+    <div class="list-control">
+        <label for="ping-threshold-filter">@LanguageService.T("ThresholdReached")</label>
+        <select id="ping-threshold-filter" class="form-select" @bind="thresholdFilter">
+            <option value="All">@LanguageService.T("All")</option>
+            <option value="Yes">@LanguageService.T("Yes")</option>
+            <option value="No">@LanguageService.T("No")</option>
+        </select>
+    </div>
+    <div class="list-control">
+        <label for="ping-sort">@LanguageService.T("SortBy")</label>
+        <select id="ping-sort" class="form-select" @bind="sortOption">
+            <option value="RecordedNewest">@LanguageService.T("DateNewest")</option>
+            <option value="RecordedOldest">@LanguageService.T("DateOldest")</option>
+            <option value="RoundtripFastest">@LanguageService.T("RoundtripFastest")</option>
+            <option value="RoundtripSlowest">@LanguageService.T("RoundtripSlowest")</option>
+            <option value="FailureCountHighest">@LanguageService.T("FailureCountHighest")</option>
+            <option value="FailureCountLowest">@LanguageService.T("FailureCountLowest")</option>
+        </select>
+    </div>
+    <button class="btn btn-outline-secondary list-control-reset" type="button" @onclick="ResetFilters">@LanguageService.T("ResetFilters")</button>
+</div>
+
+@{ var visibleItems = VisibleItems; }
 <section class="entity-list">
     @if (isLoading)
     {
@@ -24,9 +56,14 @@
     {
         <p>@LanguageService.T("NoData")</p>
     }
+    else if (visibleItems.Count == 0)
+    {
+        <p>@LanguageService.T("NoMatchingData")</p>
+    }
     else
     {
-        @foreach (var item in items.OrderByDescending(x => x.RecordedAtUtc))
+        <p class="list-result-count">@LanguageService.Tf("ShowingResults", visibleItems.Count, items.Count)</p>
+        @foreach (var item in visibleItems)
         {
             <article class="entity-card">
                 <div class="entity-card-header">
@@ -51,11 +88,23 @@
 
     private bool isLoading = true;
     private List<MonitoredDevicePingResultReadDto> items = [];
+    private TernaryFilter reachabilityFilter = TernaryFilter.All;
+    private TernaryFilter thresholdFilter = TernaryFilter.All;
+    private PingResultSortOption sortOption = PingResultSortOption.RecordedNewest;
+    private IReadOnlyList<MonitoredDevicePingResultReadDto> VisibleItems
+        => OperationalListViewHelper.FilterAndSortPingResults(items, reachabilityFilter, thresholdFilter, sortOption);
 
     protected override async Task OnParametersSetAsync()
     {
         isLoading = true;
         items = (await CrudPageDataService.GetMonitoredDevicePingResultPageDataAsync(monitoredDeviceId)).Items.ToList();
         isLoading = false;
+    }
+
+    private void ResetFilters()
+    {
+        reachabilityFilter = TernaryFilter.All;
+        thresholdFilter = TernaryFilter.All;
+        sortOption = PingResultSortOption.RecordedNewest;
     }
 }

@@ -7,6 +7,32 @@
 
 <PageHeader Title="@LanguageService.T("SensorReadings")" Description="@LanguageService.T("AgentChildren")" />
 
+<div class="list-controls" aria-label="@LanguageService.T("FilterAndSorting")">
+    <div class="list-control">
+        <label for="sensor-door-filter">@LanguageService.T("Door")</label>
+        <select id="sensor-door-filter" class="form-select" @bind="doorFilter">
+            <option value="All">@LanguageService.T("All")</option>
+            <option value="Yes">@LanguageService.T("Open")</option>
+            <option value="No">@LanguageService.T("Closed")</option>
+        </select>
+    </div>
+    <div class="list-control">
+        <label for="sensor-sort">@LanguageService.T("SortBy")</label>
+        <select id="sensor-sort" class="form-select" @bind="sortOption">
+            <option value="RecordedNewest">@LanguageService.T("DateNewest")</option>
+            <option value="RecordedOldest">@LanguageService.T("DateOldest")</option>
+            <option value="TemperatureHighest">@LanguageService.T("TemperatureHighest")</option>
+            <option value="TemperatureLowest">@LanguageService.T("TemperatureLowest")</option>
+            <option value="BatteryHighest">@LanguageService.T("BatteryHighest")</option>
+            <option value="BatteryLowest">@LanguageService.T("BatteryLowest")</option>
+            <option value="BrightnessHighest">@LanguageService.T("BrightnessHighest")</option>
+            <option value="BrightnessLowest">@LanguageService.T("BrightnessLowest")</option>
+        </select>
+    </div>
+    <button class="btn btn-outline-secondary list-control-reset" type="button" @onclick="ResetFilters">@LanguageService.T("ResetFilters")</button>
+</div>
+
+@{ var visibleItems = VisibleItems; }
 <section class="entity-list">
     @if (isLoading)
     {
@@ -16,9 +42,14 @@
     {
         <p>@LanguageService.T("NoData")</p>
     }
+    else if (visibleItems.Count == 0)
+    {
+        <p>@LanguageService.T("NoMatchingData")</p>
+    }
     else
     {
-        @foreach (var item in items.OrderByDescending(x => x.RecordedAtUtc))
+        <p class="list-result-count">@LanguageService.Tf("ShowingResults", visibleItems.Count, items.Count)</p>
+        @foreach (var item in visibleItems)
         {
             <article class="entity-card">
                 <div class="entity-card-header">
@@ -38,11 +69,21 @@
 
     private bool isLoading = true;
     private List<SensorReadingReadDto> items = [];
+    private TernaryFilter doorFilter = TernaryFilter.All;
+    private SensorReadingSortOption sortOption = SensorReadingSortOption.RecordedNewest;
+    private IReadOnlyList<SensorReadingReadDto> VisibleItems
+        => OperationalListViewHelper.FilterAndSortSensorReadings(items, doorFilter, sortOption);
 
     protected override async Task OnParametersSetAsync()
     {
         isLoading = true;
         items = (await CrudPageDataService.GetSensorReadingPageDataAsync(shellyDeviceId)).Items.ToList();
         isLoading = false;
+    }
+
+    private void ResetFilters()
+    {
+        doorFilter = TernaryFilter.All;
+        sortOption = SensorReadingSortOption.RecordedNewest;
     }
 }
