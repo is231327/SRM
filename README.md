@@ -90,6 +90,8 @@ dotnet test SRMIntegrationTests/SRMIntegrationTests.csproj --no-build
 
 Integration tests create and delete dedicated test databases. Their SQL credentials and database names come from `ContainerServices/.env.development` or explicit `ConnectionStrings__SrmAuthDatabase` and `ConnectionStrings__SrmCoreDatabase` environment variables.
 
+CI also runs TruffleHog against every commit introduced by a push or pull request. Verified secrets and findings whose verification could not be completed fail the workflow. The action and scanner version are pinned; update both together when upgrading TruffleHog.
+
 ## Documentation
 
 - [Technical documentation](TECHNICAL_DOCUMENTATION.md)
