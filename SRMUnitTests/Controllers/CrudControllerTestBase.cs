@@ -1,4 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
+using SRMCore.Controllers;
 
 namespace SRMUnitTests.Controllers;
 
@@ -9,6 +11,22 @@ public abstract class CrudControllerTestBase<TCreateDto, TReadDto>
     protected abstract Task<ActionResult<IEnumerable<TReadDto>>> ExecuteGetAllAsync();
     protected abstract Task<IActionResult> ExecuteDeleteAsync(Guid id);
     protected abstract TCreateDto CreateDto();
+
+    [Test]
+    public void MutationEndpoints_ShouldBeRestrictedToInternalRoles()
+    {
+        var mutationMethods = typeof(CrudControllerBase<,,,>)
+            .GetMethods()
+            .Where(method => method.Name is "Create" or "Update" or "Delete");
+
+        foreach (var method in mutationMethods)
+        {
+            var authorize = method.GetCustomAttributes(typeof(AuthorizeAttribute), inherit: true)
+                .Cast<AuthorizeAttribute>()
+                .Single();
+            Assert.That(authorize.Roles, Is.EqualTo("SystemAdmin,Employee"), method.Name);
+        }
+    }
 
     [Test]
     public async Task Create_ShouldReturnCreatedAtActionWithReadDto()

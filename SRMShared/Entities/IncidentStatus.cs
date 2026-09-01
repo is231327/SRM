@@ -2,7 +2,10 @@ namespace SRMShared.Entities;
 
 public enum IncidentStatus
 {
-    Open = 1,
-    Resolved = 2,
-    Closed = 3
+    New = 1,
+    InProgress = 2,
+    Resolved = 3,
+    Feedback = 4,
+    Closed = 5,
+    Rejected = 6
 }

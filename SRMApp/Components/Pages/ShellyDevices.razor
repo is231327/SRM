@@ -3,12 +3,12 @@
 @inherits LocalizedComponentBase
 @inject ICoreApiClient ApiClient
 @inject ICrudPageDataService CrudPageDataService
+@inject AuthSessionService AuthSessionService
 
 <PageTitle>@LanguageService.T("ShellyDevices")</PageTitle>
 
 <PageHeader Title="@LanguageService.T("ShellyDevices")" Description="@LanguageService.T("ShellyDevicesOverviewDescription")">
     <Actions>
-        <a class="btn btn-primary" href="@GetCreateHref()">@LanguageService.T("CreateShellyDevice")</a>
         @if (agentId is not null)
         {
             <a class="btn btn-outline-primary" href="/agents">@LanguageService.T("BackToAgents")</a>
@@ -20,6 +20,10 @@
         else if (customerId is not null)
         {
             <a class="btn btn-outline-primary" href="/customers/@customerId/details">@LanguageService.T("BackToCustomerOverview")</a>
+        }
+        @if (AuthSessionService.CanManageConfiguration)
+        {
+            <a class="btn btn-primary" href="@GetCreateHref()">@LanguageService.T("CreateShellyDevice")</a>
         }
     </Actions>
 </PageHeader>
@@ -33,7 +37,6 @@ else if (items.Count == 0)
     <div class="empty-state">
         <h3>@LanguageService.T("NoData")</h3>
         <p class="subtle">@LanguageService.T("ShellyDevicesOverviewDescription")</p>
-        <a class="btn btn-primary" href="@GetCreateHref()">@LanguageService.T("CreateShellyDevice")</a>
     </div>
 }
 else
@@ -44,7 +47,7 @@ else
             <SummaryStatCard CardClass="@(item.IsActive ? "alert-ok" : "alert-warning")"
                              IconClass="stat-icon-sensors"
                              Title="@item.Name"
-                             Value="@(item.IsVirtual ? LanguageService.T("Virtual") : LanguageService.T("Active"))"
+                             Value="@(!item.IsActive ? LanguageService.T("Inactive") : item.IsVirtual ? LanguageService.T("Virtual") : LanguageService.T("Active"))"
                              SummaryText="@GetShellySummaryText(item)"
                              SummaryTextClass="@OverviewUiHelper.GetStatusTextClass(item.IsActive ? "alert-ok" : "alert-warning")"
                              SecondaryText="@item.BaseUrl">
@@ -53,8 +56,11 @@ else
                     <div>@item.MacAddress</div>
                 </Details>
                 <Actions>
-                    <a class="btn btn-outline-primary btn-sm" href="@GetEditHref(item.Id)">@LanguageService.T("Edit")</a>
-                    <button class="btn btn-outline-danger btn-sm" @onclick="() => DeleteAsync(item.Id)">@LanguageService.T("Delete")</button>
+                    @if (AuthSessionService.CanManageConfiguration)
+                    {
+                        <a class="btn btn-outline-primary btn-sm" href="@GetEditHref(item.Id)">@LanguageService.T("Edit")</a>
+                        <button class="btn btn-outline-danger btn-sm" @onclick="() => DeleteAsync(item.Id)">@LanguageService.T("Delete")</button>
+                    }
                     <a class="btn btn-primary btn-sm" href="/sensor-readings?shellyDeviceId=@item.Id">@LanguageService.T("SensorReadings")</a>
                     <a class="btn btn-outline-primary btn-sm" href="/incidents?shellyDeviceId=@item.Id">@LanguageService.T("Incidents")</a>
                 </Actions>

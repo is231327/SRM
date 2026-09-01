@@ -117,6 +117,18 @@ public class SrmCoreDbContext(DbContextOptions<SrmCoreDbContext> options) : DbCo
         modelBuilder.Entity<TicketLink>()
             .Property(ticketLink => ticketLink.ProviderName)
             .HasMaxLength(64);
+
+        modelBuilder.Entity<TicketLink>()
+            .Property(ticketLink => ticketLink.ExternalStatusName)
+            .HasMaxLength(64);
+
+        modelBuilder.Entity<TicketLink>()
+            .Property(ticketLink => ticketLink.ExternalPriorityName)
+            .HasMaxLength(64);
+
+        modelBuilder.Entity<TicketLink>()
+            .HasIndex(ticketLink => new { ticketLink.IncidentId, ticketLink.ProviderName })
+            .IsUnique();
     }
 
     public override int SaveChanges()

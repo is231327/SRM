@@ -4,6 +4,7 @@
 @inherits LocalizedComponentBase
 @inject ICoreApiClient ApiClient
 @inject ICrudPageDataService CrudPageDataService
+@inject AuthSessionService AuthSessionService
 @inject NavigationManager NavigationManager
 
 <PageTitle>@(IsEditMode ? LanguageService.T("EditMonitoredDevice") : LanguageService.T("CreateMonitoredDevice"))</PageTitle>
@@ -79,6 +80,8 @@ else
     }
     private async Task SaveAsync()
     {
+        if (!AuthSessionService.CanManageConfiguration) return;
+
         if (IsEditMode)
         {
             await ApiClient.UpdateMonitoredDeviceAsync(MonitoredDeviceId!.Value, new MonitoredDeviceUpdateDto

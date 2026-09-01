@@ -51,17 +51,13 @@ public class SrmAuthDbContext(DbContextOptions<SrmAuthDbContext> options) : DbCo
 
         modelBuilder.Entity<CustomerUser>(entity =>
         {
-            entity.HasIndex(x => new { x.UserId, x.CustomerId }).IsUnique();
+            entity.HasIndex(x => x.UserId).IsUnique();
 
             entity.HasOne(x => x.User)
                 .WithMany(x => x.CustomerUsers)
                 .HasForeignKey(x => x.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
 
-            entity.HasOne(x => x.Customer)
-                .WithMany()
-                .HasForeignKey(x => x.CustomerId)
-                .OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<AgentCredential>(entity =>

@@ -113,6 +113,11 @@ public class AgentMonitoringOrchestrator(
 
         foreach (var monitoredDevice in configuration.MonitoredDevices.Where(x => x.IsActive))
         {
+            if (!runtimeCache.TryBeginPing(monitoredDevice.Id, monitoredDevice.IntervalSeconds))
+            {
+                continue;
+            }
+
             var pingResult = await monitoredDevicePingService.PingAsync(monitoredDevice, cancellationToken);
             pingResult.ConsecutiveFailureCount = runtimeCache.RegisterPingOutcome(monitoredDevice.Id, pingResult.IsReachable);
             pingResult.FailureThresholdReached = !pingResult.IsReachable && pingResult.ConsecutiveFailureCount >= monitoredDevice.FailureThreshold;

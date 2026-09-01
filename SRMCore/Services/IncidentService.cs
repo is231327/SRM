@@ -9,6 +9,10 @@ public class IncidentService(
     SrmCoreDbContext dbContext,
     ITicketDispatchService ticketDispatchService) : IIncidentService
 {
+    private static readonly string[] TerminalTicketStatuses = ["Resolved", "Rejected", "Closed"];
+    private static readonly IncidentStatus[] ActiveIncidentStatuses =
+        [IncidentStatus.New, IncidentStatus.InProgress, IncidentStatus.Feedback];
+
     public async Task EvaluateSensorReadingAsync(SensorReading sensorReading, CancellationToken cancellationToken = default)
     {
         var context = await dbContext.SensorReadings
@@ -147,86 +151,142 @@ public class IncidentService(
         ShellyDevice shellyDevice,
         CancellationToken cancellationToken)
     {
-        var warningKey = BuildCorrelationKey(IncidentType.TemperatureWarningThresholdExceeded, serverRoom.Id, shellyDevice.Id, null);
-        var criticalKey = BuildCorrelationKey(IncidentType.TemperatureCriticalThresholdExceeded, serverRoom.Id, shellyDevice.Id, null);
+        var correlationKey = $"Temperature:{serverRoom.Id}";
 
         if (sensorReading.TemperatureCelsius >= serverRoom.TemperatureCriticalThreshold)
         {
-            var warningIncident = await FindOpenIncidentAsync(warningKey, cancellationToken);
-            if (warningIncident is not null)
-            {
-                warningIncident.Status = IncidentStatus.Resolved;
-                warningIncident.ResolvedAtUtc = sensorReading.RecordedAtUtc;
-            }
-
-            var incident = await OpenOrUpdateIncidentAsync(
+            await OpenOrUpdateTemperatureIncidentAsync(
+                sensorReading,
+                serverRoom,
+                shellyDevice,
                 IncidentType.TemperatureCriticalThresholdExceeded,
                 IncidentSeverity.Critical,
-                serverRoom.Id,
-                shellyDevice.Id,
-                null,
-                criticalKey,
                 $"Critical temperature detected in server room {serverRoom.Name}",
                 $"Shelly device {shellyDevice.Name} reported {sensorReading.TemperatureCelsius} C, exceeding the critical threshold of {serverRoom.TemperatureCriticalThreshold} C.",
-                sensorReading.RecordedAtUtc,
+                correlationKey,
                 cancellationToken);
-
-            await dbContext.SaveChangesAsync(cancellationToken);
-            await AppendIncidentEventAsync(incident.Id, "Trigger", $"Critical temperature {sensorReading.TemperatureCelsius} C reported by {shellyDevice.Name}.", sensorReading.RecordedAtUtc, cancellationToken);
-            await ticketDispatchService.QueueCreateAsync(incident, cancellationToken);
             return;
         }
 
         if (sensorReading.TemperatureCelsius >= serverRoom.TemperatureWarningThreshold)
         {
-            var criticalIncident = await FindOpenIncidentAsync(criticalKey, cancellationToken);
-            if (criticalIncident is not null)
-            {
-                criticalIncident.Status = IncidentStatus.Resolved;
-                criticalIncident.ResolvedAtUtc = sensorReading.RecordedAtUtc;
-                await dbContext.SaveChangesAsync(cancellationToken);
-                await AppendIncidentEventAsync(criticalIncident.Id, "Resolved", $"Temperature fell below critical threshold at {sensorReading.TemperatureCelsius} C.", sensorReading.RecordedAtUtc, cancellationToken);
-                await ticketDispatchService.QueueResolutionCommentAsync(criticalIncident, $"Temperature fell below critical threshold at {sensorReading.RecordedAtUtc:O}.", cancellationToken);
-            }
-
-            var incident = await OpenOrUpdateIncidentAsync(
+            await OpenOrUpdateTemperatureIncidentAsync(
+                sensorReading,
+                serverRoom,
+                shellyDevice,
                 IncidentType.TemperatureWarningThresholdExceeded,
                 IncidentSeverity.Warning,
-                serverRoom.Id,
-                shellyDevice.Id,
-                null,
-                warningKey,
                 $"Temperature warning detected in server room {serverRoom.Name}",
                 $"Shelly device {shellyDevice.Name} reported {sensorReading.TemperatureCelsius} C, exceeding the warning threshold of {serverRoom.TemperatureWarningThreshold} C.",
-                sensorReading.RecordedAtUtc,
+                correlationKey,
                 cancellationToken);
-
-            await AppendIncidentEventAsync(incident.Id, "Trigger", $"Warning temperature {sensorReading.TemperatureCelsius} C reported by {shellyDevice.Name}.", sensorReading.RecordedAtUtc, cancellationToken);
-            await ticketDispatchService.QueueCreateAsync(incident, cancellationToken);
             return;
         }
 
-        var warningOpen = await FindOpenIncidentAsync(warningKey, cancellationToken);
-        if (warningOpen is not null)
+        var openIncident = await FindOpenIncidentAsync(correlationKey, cancellationToken);
+        if (openIncident is not null)
         {
-            warningOpen.Status = IncidentStatus.Resolved;
-            warningOpen.ResolvedAtUtc = sensorReading.RecordedAtUtc;
-            warningOpen.LastOccurredAtUtc = sensorReading.RecordedAtUtc;
+            openIncident.Status = IncidentStatus.Resolved;
+            openIncident.ResolvedAtUtc = sensorReading.RecordedAtUtc;
+            openIncident.LastOccurredAtUtc = sensorReading.RecordedAtUtc;
             await dbContext.SaveChangesAsync(cancellationToken);
-            await AppendIncidentEventAsync(warningOpen.Id, "Resolved", $"Temperature returned to normal at {sensorReading.TemperatureCelsius} C.", sensorReading.RecordedAtUtc, cancellationToken);
-            await ticketDispatchService.QueueResolutionCommentAsync(warningOpen, $"Temperature returned to normal at {sensorReading.RecordedAtUtc:O}.", cancellationToken);
+            await AppendIncidentEventAsync(openIncident.Id, "Resolved", $"Temperature returned to normal at {sensorReading.TemperatureCelsius} C.", sensorReading.RecordedAtUtc, cancellationToken);
+            await ticketDispatchService.QueueResolutionCommentAsync(openIncident, $"Temperature returned to normal at {sensorReading.RecordedAtUtc:O}.", cancellationToken);
+        }
+    }
+
+    private async Task OpenOrUpdateTemperatureIncidentAsync(
+        SensorReading sensorReading,
+        ServerRoom serverRoom,
+        ShellyDevice shellyDevice,
+        IncidentType type,
+        IncidentSeverity severity,
+        string summary,
+        string description,
+        string correlationKey,
+        CancellationToken cancellationToken)
+    {
+        var incident = await FindReusableTemperatureIncidentAsync(correlationKey, cancellationToken);
+        var isNew = incident is null;
+        var severityChanged = incident is not null && incident.Severity != severity;
+
+        if (incident is null)
+        {
+            incident = new Incident
+            {
+                ServerRoomId = serverRoom.Id,
+                ShellyDeviceId = shellyDevice.Id,
+                Type = type,
+                Severity = severity,
+                Status = IncidentStatus.New,
+                CorrelationKey = correlationKey,
+                Summary = summary,
+                Description = description,
+                OpenedAtUtc = sensorReading.RecordedAtUtc,
+                LastOccurredAtUtc = sensorReading.RecordedAtUtc
+            };
+            dbContext.Incidents.Add(incident);
+        }
+        else
+        {
+            incident.ShellyDeviceId = shellyDevice.Id;
+            incident.Type = type;
+            incident.Severity = severity;
+            incident.Status = GetActiveStatus(incident);
+            incident.ResolvedAtUtc = null;
+            incident.ClosedAtUtc = null;
+            incident.Summary = summary;
+            incident.Description = description;
+            incident.LastOccurredAtUtc = sensorReading.RecordedAtUtc;
+            incident.UpdatedAtUtc = DateTime.UtcNow;
         }
 
-        var criticalOpen = await FindOpenIncidentAsync(criticalKey, cancellationToken);
-        if (criticalOpen is not null)
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        var eventType = severityChanged ? "PriorityChanged" : "Trigger";
+        await AppendIncidentEventAsync(
+            incident.Id,
+            eventType,
+            $"{severity} temperature {sensorReading.TemperatureCelsius} C reported by {shellyDevice.Name}.",
+            sensorReading.RecordedAtUtc,
+            cancellationToken);
+
+        await ticketDispatchService.QueueCreateAsync(incident, cancellationToken);
+        if (!isNew && severityChanged)
         {
-            criticalOpen.Status = IncidentStatus.Resolved;
-            criticalOpen.ResolvedAtUtc = sensorReading.RecordedAtUtc;
-            criticalOpen.LastOccurredAtUtc = sensorReading.RecordedAtUtc;
-            await dbContext.SaveChangesAsync(cancellationToken);
-            await AppendIncidentEventAsync(criticalOpen.Id, "Resolved", $"Temperature returned to normal at {sensorReading.TemperatureCelsius} C.", sensorReading.RecordedAtUtc, cancellationToken);
-            await ticketDispatchService.QueueResolutionCommentAsync(criticalOpen, $"Temperature returned to normal at {sensorReading.RecordedAtUtc:O}.", cancellationToken);
+            await ticketDispatchService.QueuePriorityUpdateAsync(incident, cancellationToken);
         }
+    }
+
+    private async Task<Incident?> FindReusableTemperatureIncidentAsync(
+        string correlationKey,
+        CancellationToken cancellationToken)
+    {
+        var openIncident = await dbContext.Incidents
+            .Include(x => x.TicketLinks)
+            .FirstOrDefaultAsync(
+                x => x.CorrelationKey == correlationKey && ActiveIncidentStatuses.Contains(x.Status),
+                cancellationToken);
+
+        if (openIncident is not null
+            && !openIncident.TicketLinks.Any(x => TerminalTicketStatuses.Contains(x.ExternalStatusName)))
+        {
+            return openIncident;
+        }
+
+        if (openIncident is not null)
+        {
+            openIncident.Status = IncidentStatus.Closed;
+            openIncident.ClosedAtUtc = DateTime.UtcNow;
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
+
+        return await dbContext.Incidents
+            .Include(x => x.TicketLinks)
+            .Where(x => x.CorrelationKey == correlationKey && x.Status == IncidentStatus.Resolved)
+            .Where(x => !x.TicketLinks.Any(t => TerminalTicketStatuses.Contains(t.ExternalStatusName)))
+            .OrderByDescending(x => x.LastOccurredAtUtc)
+            .FirstOrDefaultAsync(cancellationToken);
     }
 
     private async Task<Incident> OpenOrUpdateIncidentAsync(
@@ -251,7 +311,7 @@ public class IncidentService(
                 MonitoredDeviceId = monitoredDeviceId,
                 Type = type,
                 Severity = severity,
-                Status = IncidentStatus.Open,
+                Status = IncidentStatus.New,
                 CorrelationKey = correlationKey,
                 Summary = summary,
                 Description = description,
@@ -277,7 +337,12 @@ public class IncidentService(
     private Task<Incident?> FindOpenIncidentAsync(string correlationKey, CancellationToken cancellationToken)
     {
         return dbContext.Incidents
-            .FirstOrDefaultAsync(x => x.CorrelationKey == correlationKey && x.Status == IncidentStatus.Open, cancellationToken);
+            .FirstOrDefaultAsync(
+                x => x.CorrelationKey == correlationKey
+                    && ActiveIncidentStatuses.Contains(x.Status)
+                    && !x.ResolvedAtUtc.HasValue
+                    && !x.ClosedAtUtc.HasValue,
+                cancellationToken);
     }
 
     private async Task AppendIncidentEventAsync(Guid incidentId, string eventType, string message, DateTime occurredAtUtc, CancellationToken cancellationToken)
@@ -291,6 +356,20 @@ public class IncidentService(
         });
 
         await dbContext.SaveChangesAsync(cancellationToken);
+    }
+
+    private static IncidentStatus GetActiveStatus(Incident incident)
+    {
+        var externalStatus = incident.TicketLinks
+            .Select(x => x.ExternalStatusName)
+            .FirstOrDefault(x => !string.IsNullOrWhiteSpace(x));
+
+        return externalStatus switch
+        {
+            "In Progress" => IncidentStatus.InProgress,
+            "Feedback" => IncidentStatus.Feedback,
+            _ => IncidentStatus.New
+        };
     }
 
     private static string BuildCorrelationKey(IncidentType type, Guid serverRoomId, Guid? shellyDeviceId, Guid? monitoredDeviceId)

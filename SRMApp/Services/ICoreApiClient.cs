@@ -39,9 +39,6 @@ public interface ICoreApiClient
     Task<bool> DeleteMonitoredDeviceAsync(Guid id);
 
     Task<List<MonitoredDevicePingResultReadDto>> GetMonitoredDevicePingResultsAsync();
-    Task<MonitoredDevicePingResultReadDto?> CreateMonitoredDevicePingResultAsync(MonitoredDevicePingResultCreateDto dto);
-    Task<MonitoredDevicePingResultReadDto?> UpdateMonitoredDevicePingResultAsync(Guid id, MonitoredDevicePingResultUpdateDto dto);
-    Task<bool> DeleteMonitoredDevicePingResultAsync(Guid id);
 
     Task<List<MaintenanceWindowReadDto>> GetMaintenanceWindowsAsync();
     Task<MaintenanceWindowReadDto?> CreateMaintenanceWindowAsync(MaintenanceWindowCreateDto dto);
@@ -49,10 +46,6 @@ public interface ICoreApiClient
     Task<bool> DeleteMaintenanceWindowAsync(Guid id);
 
     Task<List<SensorReadingReadDto>> GetSensorReadingsAsync();
-    Task<SensorReadingReadDto?> CreateSensorReadingAsync(SensorReadingCreateDto dto);
-    Task<SensorReadingReadDto?> UpdateSensorReadingAsync(Guid id, SensorReadingUpdateDto dto);
-    Task<bool> DeleteSensorReadingAsync(Guid id);
 
-    Task<List<IncidentReadDto>> GetIncidentsAsync();
-    Task<IncidentReadDto?> GetIncidentAsync(Guid id);
+    Task<List<IncidentReadDto>> GetIncidentsAsync(bool includeClosed = false);
 }

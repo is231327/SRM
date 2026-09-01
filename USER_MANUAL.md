@@ -2,269 +2,88 @@
 
 ## Purpose
 
-This manual explains how to use the Server Room Monitoring application from a user perspective.
+SRM shows server-room temperature, door state, network reachability, incidents, and Redmine synchronization. Available actions depend on your role.
 
-The system helps you:
+## Roles
 
-- manage customers
-- manage server rooms
-- manage monitoring devices
-- review collected monitoring data
-- manage your own profile and password
+| Role | Monitoring access | Configuration | User administration |
+|---|---|---|---|
+| SystemAdmin | All customers | All | All users and Agent credentials |
+| Employee | All customers | All | Customer users and Agent credentials |
+| CustomerAdmin | Own customer, read-only | None | Users of own customer |
+| Customer | Own customer, read-only | None | None |
 
-## What You Can Do
+Customers never receive another customer's data. Configuration buttons are hidden for customer roles, and Core rejects direct mutation requests from those roles.
 
-Depending on your role, you can use the application to:
+## Sign in and profile
 
-- sign in
-- switch between English and German
-- open the home page and dashboard
-- manage customers
-- manage server rooms
-- manage agents
-- manage Shelly devices
-- manage monitored devices
-- review ping results
-- review sensor readings
-- review incidents and ticket synchronization status
-- manage maintenance windows
-- manage users
-- manage agent credentials
-- update your own contact details
-- change your own password
+1. Open `Login` and enter your username and password.
+2. If an administrator reset the password, open `Profile` and choose a new one before using normal navigation.
+3. Use `Profile` to update contact details or change the password.
+4. Use `Logout` to revoke the current refresh token and access token.
 
-The application can be started as a full local environment with Docker. This setup step is handled through the provided project configuration and does not require manual editing of the application itself during normal use.
+Passwords require at least 12 characters with uppercase, lowercase, digit, and special characters.
 
 ## Navigation
 
-The application uses a hierarchical structure.
+The operational hierarchy is:
 
-The usual path is:
+1. customer
+2. server room
+3. Agent appliance
+4. Shelly or monitored network device
+5. sensor readings, ping results, and incidents
 
-1. Open `Customers`
-2. Choose a customer
-3. Open the related server rooms
-4. Open the related agents
-5. Open the related Shelly devices or monitored devices
-6. Review the collected monitoring data
+The dashboard and overview cards provide shortcuts into that hierarchy. Language switching changes visible UI text between English and German.
 
-You can usually move from the business context to the technical details step by step.
+## Internal configuration
 
-Create and edit actions open dedicated forms instead of inline forms on the overview pages.
+`SystemAdmin` and `Employee` can create, edit, and delete:
 
-## Login
-
-To sign in:
-
-1. Open the login page.
-2. Enter your username and password.
-3. Confirm the login.
-
-After login, you will see only the areas that are allowed for your role.
-
-## Language Switching
-
-You can switch the application language between:
-
-- English
-- German
-
-The language switch affects the visible page texts in the frontend.
-
-## Dashboard
-
-The dashboard gives you a quick overview of the current system.
-
-It is intended as a starting point for navigation and a quick status check.
-
-## Managing Customers
-
-On the customer page, you can:
-
-- create customers
-- edit customers
-- delete customers
-
-From a customer entry, you can continue to the related server rooms.
-
-## Managing Server Rooms
-
-On the server room page, you can:
-
-- create server rooms
-- edit server rooms
-- delete server rooms
-
-From a server room entry, you can continue to:
-
-- agents
+- customers
+- server rooms and temperature thresholds
+- Agent records
+- Shelly devices and their local base URLs
+- monitored network devices, ping intervals, timeouts, and failure thresholds
 - maintenance windows
-- incidents
 
-## Managing Agents
+Disabling monitoring for a room stops Core from returning monitoring targets to its Agent. Deactivating an individual Agent or device excludes it from runtime monitoring.
 
-On the agent page, you can:
+Sensor readings and ping results come from the Agent and are read-only in the web UI for every role.
 
-- create agents
-- edit agents
-- delete agents
+## Monitoring views
 
-When entering the agent address, you may use either an IP address or a host name, depending on how the agent is reached in your environment.
+### Sensor readings
 
-From an agent entry, you can continue to:
+Each reading shows temperature, battery percentage, brightness, door state, and time. Browser-local time is used in the monitoring result views. Battery and brightness are collected but do not currently create incidents.
 
-- Shelly devices
-- monitored devices
+### Ping results
 
-## Managing Shelly Devices
+Each result shows reachability, round-trip time, consecutive failures, threshold state, error information, and browser-local recorded time. The Agent honors each target's configured interval and timeout. It refreshes configuration every 30 seconds and immediately resets the target's ping schedule and failure counter when ping-relevant settings such as its IP address change.
 
-On the Shelly device page, you can:
+### Incidents
 
-- create Shelly devices
-- edit Shelly devices
-- delete Shelly devices
+The incident overview shows the incident type, mapped Redmine priority, source, Redmine ticket status, and initial ticket-creation status. Ticket changes must be made in Redmine. Terminal Redmine statuses (`Resolved`, `Closed`, and `Rejected`) are hidden by default. Use **Show Closed Incidents** to display them as grey cards.
 
-From a Shelly device entry, you can open the related sensor readings.
+### Maintenance windows
 
-You can also open related incidents for the selected Shelly device.
+Maintenance windows define planned work for a server room. A door-open reading inside an active window does not create a door incident.
 
-## Managing Monitored Devices
+## User administration
 
-On the monitored device page, you can:
+- SystemAdmin can manage all supported human roles.
+- Employee can manage customer-scoped users.
+- CustomerAdmin can manage `Customer` and `CustomerAdmin` users assigned to the same customer.
+- Customer cannot manage users.
 
-- create monitored devices
-- edit monitored devices
-- delete monitored devices
+Administrators can activate/deactivate accounts and reset passwords. A reset forces a password change at the next login.
 
-From a monitored device entry, you can open the related ping results.
+Agent credentials are available only to SystemAdmin and Employee. The secret is hashed by Auth; rotating it also requires updating the corresponding Agent's private configuration.
 
-You can also open related incidents for the selected monitored device.
+## Ticket system
 
-## Reviewing Incidents
+Redmine is a separate on-premise web application. SRM automatically creates tickets for qualifying door, temperature, and connectivity incidents, retries temporary failures, and comments when the condition clears. SRM does not automatically close the Redmine issue. Closing and reopening a door starts a new incident and ticket. Recurring temperature warnings continue to use the same nonterminal Redmine ticket; warning/critical changes update its priority.
 
-The incident pages show problems derived from monitoring data.
+## Known limitations
 
-Typical information includes:
-
-- incident type
-- severity
-- current status
-- server room and source device
-- open and resolution times
-- event history
-- ticket synchronization status
-
-The application shows ticket-related information for visibility only. Ticket changes remain managed in the ticket system itself.
-
-## Reviewing Sensor Readings
-
-Sensor readings show the monitoring values reported from a Shelly device.
-
-Typical values include:
-
-- temperature
-- battery value
-- brightness
-- door status
-- recording time
-
-## Reviewing Ping Results
-
-Ping results show whether a monitored device was reachable.
-
-Typical values include:
-
-- reachable or not reachable
-- response time
-- failure count
-- time of the check
-- possible error message
-
-## Maintenance Windows
-
-Maintenance windows are used to record planned work periods.
-
-You can:
-
-- create maintenance windows
-- edit maintenance windows
-- delete maintenance windows
-
-These entries help distinguish planned work from unexpected events.
-
-## User Management
-
-If your role allows it, you can manage users.
-
-Typical actions are:
-
-- create users
-- edit users
-- reset passwords
-- activate or deactivate users
-
-Customer-related user management depends on your role.
-
-## Agent Credentials
-
-If your role allows it, you can manage agent credentials.
-
-These credentials are used by monitoring agents to connect to the system.
-
-Typical actions are:
-
-- create agent credentials
-- review existing agent credentials
-- update existing agent credentials
-
-These credentials are technical access data for monitoring agents. They are not intended for interactive user login.
-
-## Profile and Password
-
-On the profile page, you can:
-
-- update your contact details
-- change your password
-
-If an administrator resets your password, you must set a new password after your next login before you can continue normal work.
-
-## Password Rules
-
-Passwords currently must contain:
-
-- at least 12 characters
-- at least one uppercase letter
-- at least one lowercase letter
-- at least one digit
-- at least one special character
-
-## Help and Contact
-
-The application contains:
-
-- a help page
-- a contact page
-
-These pages provide orientation and project-related contact information.
-
-## Current Limitations
-
-At the current stage:
-
-- ticket synchronization to Redmine requires separate Redmine configuration before it can work end to end
-- the application is still being expanded and improved
-- secure login sessions are handled through the dedicated authentication service and its supporting infrastructure
-
-## Test Reminder
-
-When testing the application, also check:
-
-- login
-- language switching
-- password change
-- password reset
-- profile update
-- sensor readings
-- ping results
-- incidents and ticket synchronization status
-
+Production-readiness and optional functionality gaps are listed in [TODO.md](TODO.md). The most user-visible omissions are optional battery/brightness alerts, pagination on large lists, and incident acknowledgement workflows.

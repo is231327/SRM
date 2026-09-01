@@ -3,24 +3,47 @@
 
 <PageTitle>@LanguageService.T("Help")</PageTitle>
 
-<div class="page-header">
-    <div>
-        <h1>@LanguageService.T("Help")</h1>
-        <p>@LanguageService.T("HelpText")</p>
-    </div>
-</div>
+<PageHeader Title="@LanguageService.T("Help")" Description="@LanguageService.T("HelpText")" />
 
 <div class="help-grid">
-    <div class="panel-card">
-        <h3>@LanguageService.T("Customers")</h3>
-        <p class="subtle">Start with customers, then move into server rooms, then continue into agents and their devices.</p>
-    </div>
-    <div class="panel-card">
-        <h3>@LanguageService.T("Dashboard")</h3>
-        <p class="subtle">Use the dashboard for a quick status summary and direct entry points into the hierarchy.</p>
-    </div>
-    <div class="panel-card">
-        <h3>Validation</h3>
-        <p class="subtle">The forms follow the DTO validation rules from the backend contract. Invalid payloads are rejected by the API.</p>
-    </div>
+    <section class="panel-card">
+        <h3>@LanguageService.T("HelpGettingStartedTitle")</h3>
+        <p class="subtle">@LanguageService.T("HelpGettingStartedText")</p>
+    </section>
+    <section class="panel-card">
+        <h3>@LanguageService.T("HelpDashboardTitle")</h3>
+        <p class="subtle">@LanguageService.T("HelpDashboardText")</p>
+    </section>
+    <section class="panel-card">
+        <h3>@LanguageService.T("HelpIncidentsTitle")</h3>
+        <p class="subtle">@LanguageService.T("HelpIncidentsText")</p>
+    </section>
+    <section class="panel-card">
+        <h3>@LanguageService.T("HelpMaintenanceTitle")</h3>
+        <p class="subtle">@LanguageService.T("HelpMaintenanceText")</p>
+    </section>
 </div>
+
+<section class="panel-card faq-section">
+    <h2>@LanguageService.T("FrequentlyAskedQuestions")</h2>
+    <details>
+        <summary>@LanguageService.T("FaqDashboardQuestion")</summary>
+        <p>@LanguageService.T("FaqDashboardAnswer")</p>
+    </details>
+    <details>
+        <summary>@LanguageService.T("FaqIncidentQuestion")</summary>
+        <p>@LanguageService.T("FaqIncidentAnswer")</p>
+    </details>
+    <details>
+        <summary>@LanguageService.T("FaqTicketQuestion")</summary>
+        <p>@LanguageService.T("FaqTicketAnswer")</p>
+    </details>
+    <details>
+        <summary>@LanguageService.T("FaqMissingDataQuestion")</summary>
+        <p>@LanguageService.T("FaqMissingDataAnswer")</p>
+    </details>
+    <details>
+        <summary>@LanguageService.T("FaqConfigurationQuestion")</summary>
+        <p>@LanguageService.T("FaqConfigurationAnswer")</p>
+    </details>
+</section>

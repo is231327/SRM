@@ -3,13 +3,13 @@
 @inherits LocalizedComponentBase
 @inject ICoreApiClient ApiClient
 @inject ICrudPageDataService CrudPageDataService
+@inject AuthSessionService AuthSessionService
 @using SRMShared.DTOs.MonitoredDevicePingResult
 
 <PageTitle>@LanguageService.T("MonitoredDevices")</PageTitle>
 
 <PageHeader Title="@LanguageService.T("MonitoredDevices")" Description="@LanguageService.T("MonitoredDevicesOverviewDescription")">
     <Actions>
-        <a class="btn btn-primary" href="@GetCreateHref()">@LanguageService.T("CreateMonitoredDevice")</a>
         @if (agentId is not null)
         {
             <a class="btn btn-outline-primary" href="/agents">@LanguageService.T("BackToAgents")</a>
@@ -21,6 +21,10 @@
         @if (customerId is not null)
         {
             <a class="btn btn-outline-primary" href="/customers/@customerId/details">@LanguageService.T("BackToCustomerOverview")</a>
+        }
+        @if (AuthSessionService.CanManageConfiguration)
+        {
+            <a class="btn btn-primary" href="@GetCreateHref()">@LanguageService.T("CreateMonitoredDevice")</a>
         }
     </Actions>
 </PageHeader>
@@ -34,7 +38,6 @@ else if (items.Count == 0)
     <div class="empty-state">
         <h3>@LanguageService.T("NoData")</h3>
         <p class="subtle">@LanguageService.T("MonitoredDevicesOverviewDescription")</p>
-        <a class="btn btn-primary" href="@GetCreateHref()">@LanguageService.T("CreateMonitoredDevice")</a>
     </div>
 }
 else
@@ -46,7 +49,7 @@ else
             <SummaryStatCard CardClass="@cardClass"
                              IconClass="stat-icon-network-card"
                              Title="@item.DisplayName"
-                             Value="@(latestPingByDeviceId.TryGetValue(item.Id, out var ping) ? (ping.IsReachable ? LanguageService.T("Reachable") : LanguageService.T("Unavailable")) : LanguageService.T("Unknown"))"
+                             Value="@(!item.IsActive ? LanguageService.T("Inactive") : latestPingByDeviceId.TryGetValue(item.Id, out var ping) ? (ping.IsReachable ? LanguageService.T("Reachable") : LanguageService.T("Unavailable")) : LanguageService.T("Unknown"))"
                              SummaryText="@GetMonitoredSummaryText(item.Id)"
                              SummaryTextClass="@OverviewUiHelper.GetStatusTextClass(cardClass)"
                              SecondaryText="@item.IpAddress">
@@ -56,8 +59,11 @@ else
                 <Actions>
                     <a class="btn btn-primary btn-sm" href="/monitored-device-ping-results?monitoredDeviceId=@item.Id">@LanguageService.T("MonitoredDevicePingResults")</a>
                     <a class="btn btn-outline-primary btn-sm" href="/incidents?monitoredDeviceId=@item.Id">@LanguageService.T("Incidents")</a>
-                    <a class="btn btn-outline-primary btn-sm" href="@GetEditHref(item.Id)">@LanguageService.T("Edit")</a>
-                    <button class="btn btn-outline-danger btn-sm" @onclick="() => DeleteAsync(item.Id)">@LanguageService.T("Delete")</button>
+                    @if (AuthSessionService.CanManageConfiguration)
+                    {
+                        <a class="btn btn-outline-primary btn-sm" href="@GetEditHref(item.Id)">@LanguageService.T("Edit")</a>
+                        <button class="btn btn-outline-danger btn-sm" @onclick="() => DeleteAsync(item.Id)">@LanguageService.T("Delete")</button>
+                    }
                 </Actions>
             </SummaryStatCard>
         }
@@ -106,6 +112,8 @@ else
 
     private string GetMonitoredDeviceCardClass(Guid monitoredDeviceId)
     {
+        var monitoredDevice = items.First(x => x.Id == monitoredDeviceId);
+        if (!monitoredDevice.IsActive) return "alert-warning";
         if (openCriticalIncidentDeviceIds.Contains(monitoredDeviceId)) return "alert-critical";
         if (!latestPingByDeviceId.TryGetValue(monitoredDeviceId, out var latestPing)) return "alert-info";
         if (latestPing.FailureThresholdReached) return "alert-critical";
@@ -115,9 +123,10 @@ else
 
     private string GetMonitoredSummaryText(Guid monitoredDeviceId)
     {
+        if (!items.First(x => x.Id == monitoredDeviceId).IsActive) return LanguageService.T("MonitoringDisabled");
         if (!latestPingByDeviceId.TryGetValue(monitoredDeviceId, out var latestPing)) return LanguageService.T("NoPingYet");
         if (latestPing.FailureThresholdReached) return LanguageService.T("MonitoredDeviceThresholdDown");
-        if (!latestPing.IsReachable) return LanguageService.T("MonitoredDeviceUnreachable");
-        return LanguageService.T("MonitoredDevicesReachable");
+        if (!latestPing.IsReachable) return LanguageService.T("MonitoredDeviceUnreachableSingular");
+        return LanguageService.T("MonitoredDeviceReachable");
     }
 }

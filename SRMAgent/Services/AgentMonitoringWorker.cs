@@ -37,12 +37,23 @@ public class AgentMonitoringWorker(
                     result.Result.SubmittedSensorReadings.Count,
                     result.Result.PingResults.Count);
             }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+                break;
+            }
             catch (Exception ex)
             {
                 logger.LogError(ex, "Agent monitoring cycle failed.");
             }
 
-            await Task.Delay(pollingDelay, stoppingToken);
+            try
+            {
+                await Task.Delay(pollingDelay, stoppingToken);
+            }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+                break;
+            }
         }
     }
 }

@@ -100,7 +100,7 @@ public sealed class CrudPageDataService(ICoreApiClient apiClient) : ICrudPageDat
             .GroupBy(x => x.MonitoredDeviceId)
             .ToDictionary(x => x.Key, x => x.OrderByDescending(y => y.RecordedAtUtc).First());
         var openCriticalIncidentDeviceIds = incidents
-            .Where(x => x.MonitoredDeviceId.HasValue && x.Status.ToString() == "Open" && x.Severity.ToString() == "Critical")
+            .Where(x => x.MonitoredDeviceId.HasValue && OverviewUiHelper.IsOpenIncident(x) && x.Severity.ToString() == "Critical")
             .Select(x => x.MonitoredDeviceId!.Value)
             .ToHashSet();
 
@@ -132,21 +132,17 @@ public sealed class CrudPageDataService(ICoreApiClient apiClient) : ICrudPageDat
     public async Task<SensorReadingPageData> GetSensorReadingPageDataAsync(Guid? shellyDeviceId)
     {
         var sensorReadings = await apiClient.GetSensorReadingsAsync();
-        var shellyDevices = await apiClient.GetShellyDevicesAsync();
 
         return new SensorReadingPageData(
-            shellyDeviceId is null ? sensorReadings : sensorReadings.Where(x => x.ShellyDeviceId == shellyDeviceId).ToList(),
-            shellyDevices);
+            shellyDeviceId is null ? sensorReadings : sensorReadings.Where(x => x.ShellyDeviceId == shellyDeviceId).ToList());
     }
 
     public async Task<MonitoredDevicePingResultPageData> GetMonitoredDevicePingResultPageDataAsync(Guid? monitoredDeviceId)
     {
         var pingResults = await apiClient.GetMonitoredDevicePingResultsAsync();
-        var monitoredDevices = await apiClient.GetMonitoredDevicesAsync();
 
         return new MonitoredDevicePingResultPageData(
-            monitoredDeviceId is null ? pingResults : pingResults.Where(x => x.MonitoredDeviceId == monitoredDeviceId).ToList(),
-            monitoredDevices);
+            monitoredDeviceId is null ? pingResults : pingResults.Where(x => x.MonitoredDeviceId == monitoredDeviceId).ToList());
     }
 }
 
@@ -173,9 +169,7 @@ public sealed record MaintenanceWindowPageData(
     IReadOnlyList<ServerRoomReadDto> ServerRoomsForSelection);
 
 public sealed record SensorReadingPageData(
-    IReadOnlyList<SensorReadingReadDto> Items,
-    IReadOnlyList<ShellyDeviceReadDto> ShellyDevicesForSelection);
+    IReadOnlyList<SensorReadingReadDto> Items);
 
 public sealed record MonitoredDevicePingResultPageData(
-    IReadOnlyList<MonitoredDevicePingResultReadDto> Items,
-    IReadOnlyList<MonitoredDeviceReadDto> MonitoredDevicesForSelection);
+    IReadOnlyList<MonitoredDevicePingResultReadDto> Items);

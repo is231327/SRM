@@ -1,7 +1,25 @@
 namespace SRMApp.Services;
 
+using SRMShared.DTOs.Incident;
+using SRMShared.Entities;
+
 public static class OverviewUiHelper
 {
+    public static bool IsClosedIncident(IncidentReadDto incident)
+    {
+        var ticketStatus = incident.TicketLinks
+            .FirstOrDefault(x => x.ProviderName == "Redmine")?.ExternalStatusName;
+        if (!string.IsNullOrWhiteSpace(ticketStatus))
+        {
+            return ticketStatus is "Resolved" or "Closed" or "Rejected";
+        }
+
+        return incident.Status is IncidentStatus.Resolved or IncidentStatus.Closed or IncidentStatus.Rejected;
+    }
+
+    public static bool IsOpenIncident(IncidentReadDto incident)
+        => !IsClosedIncident(incident);
+
     public static string FormatTemperatureCelsius(double value, int decimals = 1)
         => $"{Math.Round(value, decimals).ToString($"F{decimals}")} C";
 

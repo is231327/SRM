@@ -364,6 +364,7 @@ resource core 'Microsoft.App/containerApps@2024-03-01' = if (deployApplications)
           { name: 'Jwt__SigningKey', secretRef: 'jwt-signing-key' }
           { name: 'Redmine__Enabled', value: runtimeConfiguration['REDMINE_ENABLED'] }
           { name: 'Redmine__BaseUrl', value: 'http://${redmineName}' }
+          { name: 'Redmine__PublicBaseUrl', value: 'https://${redmineName}.${environment.properties.defaultDomain}' }
           { name: 'Redmine__ApiKey', secretRef: 'redmine-api-key' }
           { name: 'Redmine__ProjectIdentifier', value: runtimeConfiguration['REDMINE_PROJECT_IDENTIFIER'] }
           { name: 'Redmine__TrackerId', value: runtimeConfiguration['REDMINE_TRACKER_ID'] }

@@ -1,350 +1,122 @@
 # Technical Documentation
 
-## Project Status
+## Scope
 
-This document describes the current backend and frontend architecture for the Server Room Monitoring project.
+SRM is a .NET 10 microservice solution for monitoring server rooms. It separates on-site collection, central business logic, authentication, presentation, and ticketing.
 
-As of Saturday, July 18, 2026, the project contains:
+| Project | Responsibility |
+|---|---|
+| `SRMAgent` | Poll Shelly devices, receive immediate Shelly webhooks, run per-device ICMP checks, submit telemetry |
+| `SRMCore` | Own business data, authorization scope, incident rules, and Redmine dispatch |
+| `SRMAuth` | Own users, roles, Agent credentials, JWT issuance, refresh, and revocation |
+| `SRMApp` | Blazor Server UI for monitoring and administration |
+| `SRMShared` | Shared entities, DTOs, validation attributes, roles, and token-store contract |
+| `SRMUnitTests` | Fast service/controller/validation tests |
+| `SRMIntegrationTests` | SQL Server integration tests using dedicated databases |
+| `SRMDemoSeeder` | Optional repeatable demo records for a full deployment |
 
-- `SRMCore` as the main backend API
-- `SRMAuth` as the authentication and user-management API
-- `SRMApp` as the Blazor frontend
-- `SRMAgent` as the customer-side monitoring agent
+## Runtime communication
 
-Ticket system integration is partially implemented. Incidents, queued ticket synchronization, and the Redmine worker exist, but local Redmine still requires manual project and API-key setup before end-to-end synchronization will succeed.
+The customer appliance is expected to sit behind a firewall. It initiates HTTPS calls to Auth and Core; Core never calls the Agent. Inside the local Docker environment, service-to-service HTTP stays on Docker networks. Azure exposes App and Redmine through HTTPS ingress while Auth and Core use internal ingress.
 
-The current deployment target is Docker-based local hosting for all application components. Secrets and environment-specific connection values are no longer intended to live in tracked JSON configuration files.
+Agent monitoring behavior:
 
-The local Docker stack also includes three virtual Shelly simulator containers built from `Python-Shelly-main`, exposed on ports `5000`, `5001`, and `5002`.
+1. Authenticate with an `AgentCredential`.
+2. Refresh runtime configuration every 30 seconds. Ping-relevant target changes reset that target's cached schedule and consecutive-failure count.
+3. Poll active Shelly devices on the global monitoring cycle.
+4. Accept a Shelly webhook for immediate door-state ingestion.
+5. Ping each active monitored target only when its own `IntervalSeconds` is due.
+6. Track consecutive failures and submit results to Core.
+7. Core persists each report before incident evaluation and ticket queuing.
 
-## Backend Scope
+If `ServerRoom.MonitoringEnabled` is false, Core returns no active Shelly or ping targets for that room.
 
-The Core API is responsible for:
+## Class diagram
 
-- managing customers
-- managing server rooms and deployed agents
-- managing Shelly device registration data
-- managing monitored devices configured per agent
-- storing monitored-device ping result history reported by agents
-- managing maintenance windows
-- storing sensor readings reported from Shelly devices
-- persisting incidents derived from monitoring data
-- persisting queued ticket synchronization state for Redmine integration
+```mermaid
+classDiagram
+    class AgentMonitoringWorker
+    class AgentMonitoringOrchestrator
+    class AgentRuntimeCache
+    class IAgentAuthApiClient
+    class IAgentRuntimeApiClient
+    class IAgentCoreApiClient
+    class IVirtualShellyClient
+    class IMonitoredDevicePingService
+    class AgentReportingService
+    class IncidentService
+    class TicketDispatchService
+    class RedmineTicketWorker
+    class IRedmineTicketingClient
+    class AuthService
+    class IJwtTokenService
+    class ITokenStateStore
 
-The Core API exposes RESTful CRUD endpoints for each current domain entity and is documented through OpenAPI and Scalar.
+    AgentMonitoringWorker --> AgentMonitoringOrchestrator
+    AgentMonitoringWorker --> AgentRuntimeCache
+    AgentMonitoringOrchestrator --> IAgentAuthApiClient
+    AgentMonitoringOrchestrator --> IAgentRuntimeApiClient
+    AgentMonitoringOrchestrator --> IAgentCoreApiClient
+    AgentMonitoringOrchestrator --> IVirtualShellyClient
+    AgentMonitoringOrchestrator --> IMonitoredDevicePingService
+    AgentMonitoringOrchestrator --> AgentRuntimeCache
+    AgentReportingService --> IncidentService
+    IncidentService --> TicketDispatchService
+    RedmineTicketWorker --> IRedmineTicketingClient
+    AuthService --> IJwtTokenService
+    AuthService --> ITokenStateStore
+```
 
-The shared domain entities are implemented in `SRMShared` and reused by the backend services.
-DTOs are implemented in `SRMShared/DTOs` with one folder per entity and a `BaseDto`, `CreateDto`, `UpdateDto`, and `ReadDto` structure.
-
-`SRMCore` exposes CRUD controllers for all current domain entities using Entity Framework Core with SQL Server persistence.
-
-The internal backend flow is structured as follows:
-
-- controllers expose the REST API
-- controllers expose DTO-based request and response contracts
-- controllers share common CRUD flow through a DTO-aware generic `CrudControllerBase`
-- DTO conversion is delegated to typed mapper services implementing `ICrudDtoMapper<TEntity, TCreateDto, TUpdateDto, TReadDto>`
-- service classes contain the application-facing CRUD logic
-- Entity Framework Core handles database access through `SrmCoreDbContext`
-
-## Validation
-
-DTO validation is defined on the DTO contracts through data annotations and small custom validation attributes.
-
-The current validation scope includes:
-
-- required fields
-- email format
-- IP address format
-- host name or IP address format for agent reachability metadata
-- URL format
-- MAC address format
-- numeric ranges
-- non-empty GUID checks
-- cross-field checks for server room temperature thresholds
-- cross-field checks for maintenance window start and end times
-
-For authentication-related password operations, the backend enforces a shared password policy in application logic:
-
-- minimum length: 12 characters
-- at least one uppercase letter
-- at least one lowercase letter
-- at least one digit
-- at least one special character
-
-The `SRMAuth` API returns explicit `400 Bad Request` responses for password-policy violations and invalid password-change attempts such as an incorrect current password or reusing the current password as the new password.
-
-## Authentication and Authorization
-
-The current authentication implementation includes:
-
-- `SRMAuth` issues JWT bearer tokens for human users and agents
-- `SRMAuth` issues refresh tokens for human users
-- `SRMCore` validates JWT bearer tokens issued by `SRMAuth`
-- `SRMApp` performs login against `SRMAuth` and forwards bearer tokens to `SRMCore`
-- `SRMAgent` performs machine login against `SRMAuth` and calls dedicated agent endpoints in `SRMCore`
-- machine principals are represented by `AgentCredential` records instead of human user accounts
-- `AgentCredential.AgentId` is stored in `SRMAuth` as an external reference to the corresponding agent in `SRMCore`, without a database-level foreign key across service boundaries
-- access-token revocation is enforced in both `SRMAuth` and `SRMCore` through Redis-backed revoked token JTIs
-
-The current dedicated agent reporting path is:
-
-- `POST /api/auth/agent/login` in `SRMAuth`
-- `GET /api/agent-runtime/configuration` in `SRMCore`
-- `POST /api/agent-reporting/sensor-readings` in `SRMCore`
-- `POST /api/agent-reporting/ping-results` in `SRMCore`
-
-The runtime configuration endpoint returns the authenticated agent together with its active Shelly devices and monitored devices.
-The reporting service accepts only Shelly devices and monitored devices that belong to the authenticated agent claim.
-
-The current human-authentication flow also includes:
-
-- `POST /api/auth/refresh` in `SRMAuth`
-- `POST /api/auth/logout` in `SRMAuth`
-
-Refresh tokens are currently persisted in the auth SQL database.
-On logout, the active refresh token is revoked and the current JWT access token JTI is stored as revoked so it cannot be reused until expiry.
-
-This current implementation is operational, but it is still a transitional implementation.
-The required target architecture from the project specification is:
-
-- SQL Server for durable auth identity data
-- Redis for auth token state
-
-That means refresh tokens and access-token revocation state still need to be moved from SQL Server to Redis.
-
-## Frontend Scope
-
-`SRMApp` is a Blazor web application that provides the current management UI over the Core API.
-
-The current frontend structure includes:
-
-- a home page
-- a dashboard page
-- a login page
-- a role-aware user management page with create, list, and edit capabilities
-- a dedicated agent credential management page for machine credentials
-- a self-service profile page for human users
-- a customer management page
-- a server room management page
-- a server room detail page for hierarchical navigation
-- a read-only incident list and incident detail flow
-- dedicated pages for agents, Shelly devices, monitored devices, monitored-device ping results, maintenance windows, and sensor readings
-- a help page
-- a contact page
-- a client-side language switch between English and German
-
-The current navigation model is hierarchical:
-
-- customers are the entry point
-- server rooms can be managed from the customer context
-- agents can be managed from the server room context
-- Shelly devices and monitored devices can be managed from the agent context
-- monitored-device ping results can be managed from the monitored device context
-- maintenance windows remain managed from the server room context
-- sensor readings can be managed from the Shelly device context
-- incidents can be reviewed from the server room context and from the relevant Shelly device or monitored device context
-
-`SRMApp` accesses backend data through typed HTTP clients and DTO contracts from `SRMShared`.
-It does not access `SRMCore` controllers or services directly in-process.
-
-The current frontend authentication uses a scoped server-side auth session inside the Blazor Server application and forwards bearer tokens to `SRMAuth` and `SRMCore`.
-The UI supports:
-
-- direct login against `SRMAuth`
-- self-service profile update and password change
-- user creation, listing, editing, deactivation, and administrative password reset for authorized user managers
-- agent credential creation, listing, editing, and secret rotation for authorized administrators and employees
-
-After an administrative password reset, the affected user is forced to change the password on the next login before normal navigation is available again.
-
-## Agent Scope
-
-`SRMAgent` contains the current authenticated monitoring flow for backend communication.
-
-The implementation includes:
-
-- typed HTTP clients for `SRMAuth` and `SRMCore`
-- agent login through `POST /api/auth/agent/login`
-- runtime configuration loading through `GET /api/agent-runtime/configuration`
-- a monitoring orchestrator that exchanges agent credentials for a bearer token
-- polling of configured virtual Shelly devices through the configured Shelly status endpoint
-- sensor reading submission to `SRMCore`
-- ICMP ping execution for configured monitored devices
-- ping result submission to `SRMCore`
-- exponential retry/backoff for transient auth, Core API, and Shelly communication failures
-- local tracking of consecutive ping failures with failure-threshold evaluation per monitored device
-- a hosted background worker that runs the monitoring cycle repeatedly
-- a local trigger endpoint in `SRMAgent` for manually running a monitoring cycle
-- a local Shelly webhook endpoint for immediate status ingestion
-
-The current agent implementation does not yet perform:
-
-- richer webhook hardening if the final Shelly delivery model requires it
-
-## Test Status
-
-`SRMUnitTests` currently contains NUnit-based unit tests for:
-
-- `CustomerService`
-- `ServerRoomService`
-- `AgentService`
-- `ShellyDeviceService`
-- `MonitoredDeviceService`
-- `MonitoredDevicePingResultService`
-- `MaintenanceWindowService`
-- `SensorReadingService`
-- `AgentReportingService`
-- `AgentRuntimeService`
-- `CustomersController`
-- `ServerRoomsController`
-- `AgentsController`
-- `ShellyDevicesController`
-- `MonitoredDevicesController`
-- `MonitoredDevicePingResultsController`
-- `MaintenanceWindowsController`
-- `SensorReadingsController`
-- `AgentReportingController`
-- `AgentRuntimeController`
-
-The service tests use the Entity Framework Core in-memory provider to verify CRUD behavior and audit timestamp handling.
-DTO validation rules are verified through dedicated unit tests in `SRMUnitTests`.
-`SRMUnitTests` also contain auth-focused unit coverage for password-policy validation, password-change failure behavior, and user-management authorization scope in `SRMAuth`.
-`SRMUnitTests` also verify that authenticated agents:
-
-- may submit sensor readings only for Shelly devices that belong to their own agent identity
-- may retrieve only their own runtime configuration from `SRMCore`
-- may submit persisted ping-result reports only for their own monitored devices
-
-`SRMIntegrationTests` is a separate NUnit project for real SQL Server-backed integration tests.
-These tests require the Docker SQL Server container to be running and use dedicated integration test databases for `SRMCore` and `SRMAuth`.
-
-The frontend has been verified at build level through `dotnet build SRMApp\SRMApp.csproj`.
-
-## Persistence Strategy
-
-- primary relational database: Microsoft SQL Server
-- SQL Server runs in a Docker container
-- `SRMCore` uses SQL Server through Entity Framework Core
-- `SRMAuth` uses SQL Server for identity data and Redis for refresh-token and access-token revocation state
-- local Redmine can run in Docker through `docker-compose.yml`
-- Redis is now part of the implemented runtime architecture for `SRMAuth` and `SRMCore` token validation
-- the current implementation initializes the schema through `Database.EnsureCreated()`
-- database schema changes require the SQL Server Docker data volume or database to be recreated unless the project is later switched to EF Core migrations
-- no secrets must be stored directly in source code
-- tracked `appsettings*.json` files now contain only non-secret defaults and structure
-- secret values such as SQL connection strings, JWT signing keys, bootstrap admin credentials, Redmine credentials, and agent credentials are expected through environment variables
-- local container startup is orchestrated through the root `.env` file together with `docker-compose.yml`
-- `SRMAuth` bootstraps the first `SystemAdmin` user from the `BootstrapAdmin` configuration section, which is expected to be populated through environment variables
-- development-only demo data seeding has been removed
-- the application services can be started together with one `docker compose up --build` command
-
-## Initial Data Model
-
-### ER Diagram
+## Core data model
 
 ```mermaid
 erDiagram
-    CUSTOMER ||--o{ SERVER_ROOM : has
-    SERVER_ROOM ||--o{ AGENT : uses
-    SERVER_ROOM ||--o{ MAINTENANCE_WINDOW : defines
-    AGENT ||--o{ SHELLY_DEVICE : monitors_with
-    AGENT ||--o{ MONITORED_DEVICE : monitors
-    MONITORED_DEVICE ||--o{ MONITORED_DEVICE_PING_RESULT : produces
-    SHELLY_DEVICE ||--o{ SENSOR_READING : sources
+    CUSTOMER ||--o{ SERVER_ROOM : owns
+    SERVER_ROOM ||--o{ AGENT : contains
+    SERVER_ROOM ||--o{ MAINTENANCE_WINDOW : schedules
+    AGENT ||--o{ SHELLY_DEVICE : connects
+    AGENT ||--o{ MONITORED_DEVICE : checks
+    SHELLY_DEVICE ||--o{ SENSOR_READING : reports
+    MONITORED_DEVICE ||--o{ PING_RESULT : reports
     SERVER_ROOM ||--o{ INCIDENT : raises
-    SHELLY_DEVICE ||--o{ INCIDENT : may_source
-    MONITORED_DEVICE ||--o{ INCIDENT : may_source
+    SHELLY_DEVICE o|--o{ INCIDENT : sources
+    MONITORED_DEVICE o|--o{ INCIDENT : sources
     INCIDENT ||--o{ INCIDENT_EVENT : records
-    INCIDENT ||--o{ TICKET_LINK : syncs_to
+    INCIDENT ||--o| TICKET_LINK : synchronizes
 
     CUSTOMER {
         uuid Id PK
         string ExternalReference
         string Name
-        string ContactEmail
-        string ContactPhone
         bool IsActive
-        datetime CreatedAtUtc
-        datetime UpdatedAtUtc
     }
-
     SERVER_ROOM {
         uuid Id PK
         uuid CustomerId FK
-        string Name
-        string LocationDescription
         float TemperatureWarningThreshold
         float TemperatureCriticalThreshold
         bool MonitoringEnabled
-        datetime CreatedAtUtc
-        datetime UpdatedAtUtc
     }
-
     AGENT {
         uuid Id PK
         uuid ServerRoomId FK
         string Name
-        string ApiKeyReference
-        string Version
-        string LastKnownIpAddress
-        datetime LastSeenAtUtc
         bool IsActive
-        datetime CreatedAtUtc
-        datetime UpdatedAtUtc
     }
-
     SHELLY_DEVICE {
         uuid Id PK
         uuid AgentId FK
-        string Name
-        string DeviceType
         string BaseUrl
-        string MacAddress
-        string FirmwareVersion
-        bool IsVirtual
         bool IsActive
-        datetime CreatedAtUtc
-        datetime UpdatedAtUtc
     }
-
     MONITORED_DEVICE {
         uuid Id PK
         uuid AgentId FK
-        string DisplayName
         string IpAddress
         int IntervalSeconds
         int TimeoutMilliseconds
         int FailureThreshold
-        bool IsActive
-        datetime CreatedAtUtc
-        datetime UpdatedAtUtc
     }
-
-    MONITORED_DEVICE_PING_RESULT {
-        uuid Id PK
-        uuid MonitoredDeviceId FK
-        bool IsReachable
-        long RoundtripTimeMilliseconds
-        int ConsecutiveFailureCount
-        bool FailureThresholdReached
-        string ErrorMessage
-        datetime RecordedAtUtc
-        datetime CreatedAtUtc
-        datetime UpdatedAtUtc
-    }
-
-    MAINTENANCE_WINDOW {
-        uuid Id PK
-        uuid ServerRoomId FK
-        string Title
-        datetime StartUtc
-        datetime EndUtc
-        string Description
-        datetime CreatedAtUtc
-        datetime UpdatedAtUtc
-    }
-
     SENSOR_READING {
         uuid Id PK
         uuid ShellyDeviceId FK
@@ -353,9 +125,21 @@ erDiagram
         float Brightness
         bool DoorOpen
         datetime RecordedAtUtc
-        datetime CreatedAtUtc
     }
-
+    PING_RESULT {
+        uuid Id PK
+        uuid MonitoredDeviceId FK
+        bool IsReachable
+        int ConsecutiveFailureCount
+        bool FailureThresholdReached
+        datetime RecordedAtUtc
+    }
+    MAINTENANCE_WINDOW {
+        uuid Id PK
+        uuid ServerRoomId FK
+        datetime StartUtc
+        datetime EndUtc
+    }
     INCIDENT {
         uuid Id PK
         uuid ServerRoomId FK
@@ -365,106 +149,70 @@ erDiagram
         int Severity
         int Status
         string CorrelationKey
-        string Summary
-        string Description
-        datetime OpenedAtUtc
-        datetime ResolvedAtUtc
-        datetime ClosedAtUtc
-        datetime LastOccurredAtUtc
-        datetime CreatedAtUtc
-        datetime UpdatedAtUtc
     }
-
     INCIDENT_EVENT {
         uuid Id PK
         uuid IncidentId FK
         string EventType
-        string Message
         datetime OccurredAtUtc
-        datetime CreatedAtUtc
-        datetime UpdatedAtUtc
     }
-
     TICKET_LINK {
         uuid Id PK
-        uuid IncidentId FK
-        string ProviderName
+        uuid IncidentId FK,UK
+        string ProviderName UK
         string ExternalTicketId
         string ExternalTicketUrl
+        string ExternalStatusName
+        string ExternalPriorityName
+        datetime ExternalDataSynchronizedAtUtc
         int SyncStatus
-        string LastErrorMessage
-        datetime LastSyncAttemptAtUtc
-        datetime CreatedInExternalSystemAtUtc
-        datetime LastCommentedAtUtc
-        datetime CreatedAtUtc
-        datetime UpdatedAtUtc
+        string PendingComment
+        bool PriorityUpdatePending
+        int SyncAttemptCount
+        datetime NextSyncAttemptAtUtc
     }
 ```
 
-## Table Descriptions
+All Core entities inherit `BaseEntity` and receive UTC creation/update timestamps in `SrmCoreDbContext`. DTO annotations enforce required values, lengths, ranges, non-empty IDs, IP/host formats, temperature threshold ordering, and maintenance-window ordering.
 
-### `Customer`
+## API and authorization
 
-Represents a customer account in the system. A customer can own one or more server rooms and contains the business contact information needed for administration.
+- Human read endpoints: `SystemAdmin`, `Employee`, `CustomerAdmin`, `Customer`.
+- Generic mutation endpoints: `SystemAdmin`, `Employee` only.
+- Customer reads are filtered through the object chain back to `CustomerId`.
+- Customer administration endpoints themselves are internal-only.
+- `GET /api/agent-runtime/configuration`: Agent-only and scoped to the token's `agent_id`.
+- `POST /api/agent-reporting/sensor-readings`: Agent-only and validates Shelly assignment.
+- `POST /api/agent-reporting/ping-results`: Agent-only and validates monitored-device assignment.
+- Incident endpoints are read-only and customer-filtered.
 
-### `ServerRoom`
+Detailed identity rules are in [AUTHENTICATION_AUTHORIZATION_CONCEPT.md](AUTHENTICATION_AUTHORIZATION_CONCEPT.md).
 
-Represents one monitored server room at a customer site. This table is the central aggregate for room-specific monitoring configuration and monitoring data.
+## Incident rules
 
-### `Agent`
+Core evaluates persisted reports for:
 
-Represents the on-site appliance or virtual agent responsible for ping checks and communication with the Core API. It stores operational metadata such as version, last known IP address, and last contact time.
+- door open outside a maintenance window (`Critical`)
+- warning temperature threshold (`Warning`)
+- critical temperature threshold (`Critical`)
+- monitored-device failure threshold (`Major`)
 
-The agent is the local gateway inside the customer network. It communicates with the Shelly device, executes ICMP checks against configured network devices, and sends the collected data to the Core API over outbound HTTPS.
+Correlation keys suppress duplicate incidents while a physical condition remains active. Clearing a condition resolves the incident and queues a Redmine comment. A door reopening creates a new incident and ticket. A recurring temperature condition reuses its existing ticket while that Redmine ticket remains nonterminal; warning/critical transitions update its priority. Ticket details and retry behavior are defined in [TICKET_INTEGRATION_SPECIFICATION.md](TICKET_INTEGRATION_SPECIFICATION.md).
 
-The agent is the technical parent for both Shelly devices and other monitored devices. The server room remains the business context through the agent's assignment to the room.
+## Persistence and deployment
 
-### `ShellyDevice`
+- Core and Auth use separate SQL Server databases.
+- Redis stores refresh-token state and revoked access-token JTIs.
+- Redmine uses PostgreSQL.
+- `Database.EnsureCreated()` currently creates SQL schemas; there are no migrations.
+- Docker Compose separates data, service, ticket, and customer-site traffic into `srm-data`, `srm-services`, `srm-ticket`, and `srm-site` networks. App joins the data network because its server-side Data Protection key ring is stored in Redis; it is not exposed to the customer-site network.
+- Runtime secrets are generated from ignored environment files into service-specific environment files.
+- Tracked `appsettings*.json` files contain no deployable credentials.
 
-Represents the Shelly sensor device assigned to an agent. It stores connection and identification data needed to integrate with either a physical or virtual Shelly device.
+Any entity-model change requires new test databases and currently requires recreation of existing local application databases. Do not delete volumes unless data loss is intentional.
 
-### `MonitoredDevice`
+## Verification
 
-Represents one network endpoint that the agent must monitor by ICMP ping. It includes the configuration required to control the monitoring interval, timeout, and failure threshold.
+Unit tests cover CRUD, ownership, DTO validation, Auth behavior, Agent reporting/runtime configuration, incident creation/resolution, ticket idempotency, and per-device ping scheduling. Integration tests exercise Core/Auth services against SQL Server.
 
-### `MonitoredDevicePingResult`
-
-Represents one persisted ICMP check result reported by the agent for a configured monitored device.
-
-It stores reachability, response time, consecutive failure count, and whether the configured failure threshold has been reached at the time of reporting.
-
-### `MaintenanceWindow`
-
-Represents an approved maintenance period for a server room. It is used to distinguish expected operational changes, such as an opened door during planned work, from alert-worthy incidents.
-
-### `SensorReading`
-
-Represents a measured monitoring snapshot reported by the agent and originating from the Shelly device. It stores temperature and optional telemetry fields together with the reported door state at the time of capture.
-
-This table intentionally keeps the door state together with the other Shelly data in one record. That matches the current payload structure and keeps future ticket integration simple because incidents can later be derived from sensor readings and maintenance windows without introducing a separate door event table.
-
-`SensorReading` only references `ShellyDevice`. The related `Agent` and `ServerRoom` can be derived through `ShellyDevice -> Agent -> ServerRoom`, which avoids redundant foreign keys and inconsistency risk.
-
-### `Incident`
-
-Represents an active or resolved monitoring problem derived from raw monitoring data. It is the backend business object that sits between telemetry persistence and future external Redmine ticket synchronization.
-
-### `IncidentEvent`
-
-Represents one state-relevant event within an incident lifecycle, for example a trigger or a resolution. It is used to retain a backend-side history of how the incident evolved over time.
-
-### `TicketLink`
-
-Represents the synchronization state between a backend incident and the external ticket system. In the current implementation it is used as queued persistence state for the active Redmine worker.
-
-## Notes and Open Design Decisions
-
-- The authentication and authorization design is documented in `AUTHENTICATION_AUTHORIZATION_CONCEPT.md`.
-- Agents are authenticated through `AgentCredential` machine credentials instead of `AuthUser` human accounts.
-- The implemented auth persistence follows the target architecture: SQL Server stores identity data and Redis stores short-lived token state.
-- Ticket integration is specified in `TICKET_INTEGRATION_SPECIFICATION.md`; incident persistence, queue-state persistence, and the Redmine worker are implemented, but local Redmine still requires manual project and API-key setup before end-to-end ticket synchronization will succeed.
-- The current model treats `ServerRoom` as the aggregate root for `Agent` and `MaintenanceWindow`.
-- The current model treats `Agent` as the technical parent for `ShellyDevice` and `MonitoredDevice`.
-- The current frontend pages provide CRUD-oriented management structure, but deeper UX polish, richer validation feedback, and production-grade navigation behavior still need further iteration.
-- For local Docker-based operation, HTTP is used between containers and HTTPS redirection is disabled through environment-based configuration inside the containerized services.
-
+Known production and coverage gaps are maintained only in [TODO.md](TODO.md).

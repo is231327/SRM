@@ -39,7 +39,7 @@ public static class AuthDbSeeder
         await dbContext.SaveChangesAsync(cancellationToken);
 
         var bootstrapAdmin = BuildBootstrapAdmin(configuration);
-        if(bootstrapAdmin == null)
+        if (bootstrapAdmin == null)
         {
             throw new InvalidOperationException("SRMAuth-ERROR: BootstrapAdmin configuration is missing or invalid. Please provide valid BootstrapAdmin settings in the configuration.");
         }
@@ -130,7 +130,7 @@ public static class AuthDbSeeder
             MustChangePassword = bool.TryParse(configuration["BootstrapAdmin:MustChangePassword"], out var mustChangePassword)
                 ? mustChangePassword
                 : false,
-            Roles = [ "SystemAdmin" ]
+            Roles = ["SystemAdmin"]
         };
     }
 }

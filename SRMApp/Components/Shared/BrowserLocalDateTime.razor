@@ -1,0 +1,38 @@
+@inject IJSRuntime JsRuntime
+
+<span>@formattedValue</span>
+
+@code {
+    [Parameter, EditorRequired]
+    public DateTime Value { get; set; }
+
+    private string formattedValue = string.Empty;
+    private DateTime? formattedForValue;
+
+    protected override void OnParametersSet()
+    {
+        var utcValue = EnsureUtc(Value);
+        if (formattedForValue != utcValue)
+        {
+            formattedValue = utcValue.ToString("u");
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        var utcValue = EnsureUtc(Value);
+        if (formattedForValue == utcValue)
+        {
+            return;
+        }
+
+        formattedValue = await JsRuntime.InvokeAsync<string>(
+            "srmBrowserTime.format",
+            utcValue.ToString("O"));
+        formattedForValue = utcValue;
+        StateHasChanged();
+    }
+
+    private static DateTime EnsureUtc(DateTime value)
+        => value.Kind == DateTimeKind.Utc ? value : DateTime.SpecifyKind(value, DateTimeKind.Utc);
+}

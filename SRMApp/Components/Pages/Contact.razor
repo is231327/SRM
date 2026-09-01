@@ -3,23 +3,46 @@
 
 <PageTitle>@LanguageService.T("Contact")</PageTitle>
 
-<div class="page-header">
-    <div>
-        <h1>@LanguageService.T("Contact")</h1>
-        <p>@LanguageService.T("ContactText")</p>
-    </div>
-</div>
+<PageHeader Title="@LanguageService.T("Contact")" Description="@LanguageService.T("ContactText")" />
 
 <div class="panel-grid">
-    <div class="panel-card">
-        <h3>Project Coordination</h3>
-        <div class="info-list">
-            <div class="info-item"><strong>Email</strong><span>srm-support@example.local</span></div>
-            <div class="info-item"><strong>Issue Tracker</strong><span>Use the internal project tracker for incidents and change requests.</span></div>
-        </div>
-    </div>
-    <div class="panel-card">
-        <h3>Operational Notes</h3>
-        <p class="subtle">Coordinate backend changes, Docker lifecycle actions, and integration test execution through the development team.</p>
-    </div>
+    <section class="panel-card">
+        <h3>@LanguageService.T("ContactCompanyTitle")</h3>
+        <dl class="contact-details">
+            <div>
+                <dt>@LanguageService.T("Company")</dt>
+                <dd>Serverraum Monitoring GmbH</dd>
+            </div>
+            <div>
+                <dt>@LanguageService.T("ContactPerson")</dt>
+                <dd>Mara Hoffmann</dd>
+            </div>
+        </dl>
+    </section>
+    <section class="panel-card">
+        <h3>@LanguageService.T("ContactChannelsTitle")</h3>
+        <dl class="contact-details">
+            <div>
+                <dt>@LanguageService.T("Email")</dt>
+                <dd><a href="mailto:support@srm-monitoring.example">support@srm-monitoring.example</a></dd>
+            </div>
+            <div>
+                <dt>@LanguageService.T("Phone")</dt>
+                <dd><a href="tel:+493055501842">+49 30 5550 1842</a></dd>
+            </div>
+            <div>
+                <dt>@LanguageService.T("SupportHours")</dt>
+                <dd>@LanguageService.T("ContactSupportHoursValue")</dd>
+            </div>
+        </dl>
+    </section>
+    <section class="panel-card">
+        <h3>@LanguageService.T("Address")</h3>
+        <address>
+            Serverraum Monitoring GmbH<br />
+            Beispielweg 42<br />
+            10115 Berlin<br />
+            @LanguageService.T("Germany")
+        </address>
+    </section>
 </div>

@@ -4,6 +4,7 @@
 @inject IOverviewDataService OverviewDataService
 @inject ICoreApiClient ApiClient
 @inject NavigationManager NavigationManager
+@inject AuthSessionService AuthSessionService
 @using SRMShared.DTOs.MonitoredDevicePingResult
 
 <PageTitle>@LanguageService.T("ServerRoomChildren")</PageTitle>
@@ -26,8 +27,11 @@ else
         </div>
         <div class="hero-actions">
             <a class="btn btn-light" href="@GetBackHref()">@GetBackText()</a>
-            <a class="btn btn-outline-light" href="@GetEditHref()">@LanguageService.T("Edit")</a>
-            <button type="button" class="btn btn-outline-light" @onclick="DeleteServerRoomAsync">@LanguageService.T("Delete")</button>
+            @if (AuthSessionService.CanManageConfiguration)
+            {
+                <a class="btn btn-outline-light" href="@GetEditHref()">@LanguageService.T("Edit")</a>
+                <button type="button" class="btn btn-outline-light" @onclick="DeleteServerRoomAsync">@LanguageService.T("Delete")</button>
+            }
         </div>
     </section>
 
@@ -113,8 +117,8 @@ else
     private string GetIncidentsSummaryClass()
     {
         if (incidents.Count == 0) return string.Empty;
-        if (incidents.Any(x => x.Status.ToString() == "Open" && x.Severity.ToString() == "Critical")) return "alert-critical";
-        if (incidents.Any(x => x.Status.ToString() == "Open")) return "alert-warning";
+        if (incidents.Any(x => OverviewUiHelper.IsOpenIncident(x) && x.Severity.ToString() == "Critical")) return "alert-critical";
+        if (incidents.Any(OverviewUiHelper.IsOpenIncident)) return "alert-warning";
         return "alert-ok";
     }
 
@@ -145,14 +149,19 @@ else
 
     private string GetShellyCardClass(Guid shellyDeviceId)
     {
+        if (incidents.Any(x => x.ShellyDeviceId == shellyDeviceId && OverviewUiHelper.IsOpenIncident(x) && x.Severity.ToString() == "Critical"))
+        {
+            return "alert-critical";
+        }
+
+        if (!shellyDevices.First(x => x.Id == shellyDeviceId).IsActive)
+        {
+            return "alert-warning";
+        }
+
         if (!latestSensorReadingByShellyId.TryGetValue(shellyDeviceId, out var reading))
         {
             return "alert-info";
-        }
-
-        if (incidents.Any(x => x.ShellyDeviceId == shellyDeviceId && x.Status.ToString() == "Open" && x.Severity.ToString() == "Critical"))
-        {
-            return "alert-critical";
         }
 
         if (reading.DoorOpen)
@@ -165,6 +174,11 @@ else
 
     private string GetMonitoredDeviceCardClass(Guid monitoredDeviceId)
     {
+        if (!monitoredDevices.First(x => x.Id == monitoredDeviceId).IsActive)
+        {
+            return "alert-warning";
+        }
+
         if (!latestPingResultByMonitoredDeviceId.TryGetValue(monitoredDeviceId, out var result))
         {
             return "alert-info";
@@ -185,12 +199,12 @@ else
 
     private string BuildServerRoomLead()
     {
-        if (incidents.Any(x => x.Status.ToString() == "Open" && x.Severity.ToString() == "Critical"))
+        if (incidents.Any(x => OverviewUiHelper.IsOpenIncident(x) && x.Severity.ToString() == "Critical"))
         {
             return LanguageService.T("ServerRoomLeadCritical");
         }
 
-        if (incidents.Any(x => x.Status.ToString() == "Open"))
+        if (incidents.Any(OverviewUiHelper.IsOpenIncident))
         {
             return LanguageService.T("ServerRoomLeadOpen");
         }
@@ -205,15 +219,17 @@ else
                 ? LanguageService.T("InactiveAgentsPresent")
                 : agents.Any(x => !x.LastSeenAtUtc.HasValue)
                     ? LanguageService.T("AgentsNotReportedYet")
-                    : LanguageService.T("AllAgentsActive");
+                    : LanguageService.T("AllAgentsHaveReported");
 
     private string GetShellySummaryText()
         => shellyDevices.Count == 0
             ? LanguageService.T("NoData")
             : shellyDevices.Any(x => GetShellyCardClass(x.Id) == "alert-critical")
                 ? LanguageService.T("ShellyCriticalIncidentOpen")
-                : shellyDevices.Any(x => GetShellyCardClass(x.Id) == "alert-warning")
-                    ? LanguageService.T("ShellyDoorOpen")
+            : shellyDevices.Any(x => GetShellyCardClass(x.Id) == "alert-warning")
+                    ? shellyDevices.Any(x => !x.IsActive)
+                        ? LanguageService.T("InactiveShellyDevicesPresent")
+                        : LanguageService.T("ShellyDoorOpen")
                     : shellyDevices.Any(x => GetShellyCardClass(x.Id) == "alert-info")
                         ? LanguageService.T("ShellyNoReadingsYet")
                         : LanguageService.T("ShellyReportingNormally");
@@ -223,8 +239,10 @@ else
             ? LanguageService.T("NoData")
             : monitoredDevices.Any(x => GetMonitoredDeviceCardClass(x.Id) == "alert-critical")
                 ? LanguageService.T("MonitoredDeviceThresholdDown")
-                : monitoredDevices.Any(x => GetMonitoredDeviceCardClass(x.Id) == "alert-warning")
-                    ? LanguageService.T("MonitoredDeviceUnreachableShort")
+            : monitoredDevices.Any(x => GetMonitoredDeviceCardClass(x.Id) == "alert-warning")
+                    ? monitoredDevices.Any(x => !x.IsActive)
+                        ? LanguageService.T("InactiveMonitoredDevicesPresent")
+                        : LanguageService.T("MonitoredDeviceUnreachableShort")
                     : monitoredDevices.Any(x => GetMonitoredDeviceCardClass(x.Id) == "alert-info")
                         ? LanguageService.T("NoPingResultsReceivedYet")
                         : LanguageService.T("MonitoredDevicesReachable");
@@ -232,9 +250,9 @@ else
     private string GetIncidentSummaryText()
         => incidents.Count == 0
             ? LanguageService.T("NoData")
-            : incidents.Any(x => x.Status.ToString() == "Open" && x.Severity.ToString() == "Critical")
+            : incidents.Any(x => OverviewUiHelper.IsOpenIncident(x) && x.Severity.ToString() == "Critical")
                 ? LanguageService.T("CriticalIncidentsImmediateReview")
-                : incidents.Any(x => x.Status.ToString() == "Open")
+                : incidents.Any(OverviewUiHelper.IsOpenIncident)
                     ? LanguageService.T("OpenIncidentsUnresolved")
                     : LanguageService.T("NoOpenIncidentsRemain");
 

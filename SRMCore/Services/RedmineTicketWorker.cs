@@ -12,6 +12,7 @@ public class RedmineTicketWorker(
     IOptions<RedmineOptions> options,
     ILogger<RedmineTicketWorker> logger) : BackgroundService
 {
+    private static readonly TimeSpan MaximumRetryDelay = TimeSpan.FromMinutes(15);
     private readonly RedmineOptions _options = options.Value;
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -43,14 +44,22 @@ public class RedmineTicketWorker(
         var dbContext = scope.ServiceProvider.GetRequiredService<SrmCoreDbContext>();
         var redmineClient = scope.ServiceProvider.GetRequiredService<IRedmineTicketingClient>();
 
+        await RepairPublicTicketUrlsAsync(dbContext, cancellationToken);
+        await RefreshExternalTicketDataAsync(dbContext, redmineClient, cancellationToken);
+
         var pendingLinks = await dbContext.TicketLinks
             .Include(x => x.Incident)
                 .ThenInclude(x => x!.ServerRoom)
+                    .ThenInclude(x => x!.Customer)
             .Include(x => x.Incident)
                 .ThenInclude(x => x!.ShellyDevice)
             .Include(x => x.Incident)
                 .ThenInclude(x => x!.MonitoredDevice)
-            .Where(x => x.SyncStatus == TicketSyncStatus.PendingCreate || x.SyncStatus == TicketSyncStatus.PendingComment)
+            .Where(x => (!x.NextSyncAttemptAtUtc.HasValue || x.NextSyncAttemptAtUtc <= DateTime.UtcNow)
+                && ((x.ExternalTicketId == string.Empty
+                        && (x.SyncStatus == TicketSyncStatus.PendingCreate || x.SyncStatus == TicketSyncStatus.Error))
+                    || (x.ExternalTicketId != string.Empty
+                        && (x.PriorityUpdatePending || x.PendingComment != string.Empty))))
             .OrderBy(x => x.CreatedAtUtc)
             .Take(20)
             .ToListAsync(cancellationToken);
@@ -61,58 +70,78 @@ public class RedmineTicketWorker(
             {
                 if (ticketLink.Incident is null)
                 {
-                    ticketLink.SyncStatus = TicketSyncStatus.Failed;
+                    ticketLink.SyncStatus = string.IsNullOrWhiteSpace(ticketLink.ExternalTicketId)
+                        ? TicketSyncStatus.Error
+                        : TicketSyncStatus.Created;
                     ticketLink.LastErrorMessage = "Missing related incident.";
                     ticketLink.LastSyncAttemptAtUtc = DateTime.UtcNow;
+                    ticketLink.SyncAttemptCount++;
+                    ticketLink.NextSyncAttemptAtUtc = DateTime.UtcNow.Add(CalculateRetryDelay(ticketLink.SyncAttemptCount));
                     continue;
                 }
 
-                if (ticketLink.SyncStatus == TicketSyncStatus.PendingCreate)
+                var shouldCreate = string.IsNullOrWhiteSpace(ticketLink.ExternalTicketId);
+                if (shouldCreate)
                 {
                     var created = await redmineClient.CreateIssueAsync(ticketLink.Incident, cancellationToken);
                     ticketLink.ExternalTicketId = created.ExternalTicketId;
                     ticketLink.ExternalTicketUrl = created.ExternalTicketUrl;
                     ticketLink.CreatedInExternalSystemAtUtc = DateTime.UtcNow;
                     ticketLink.LastSyncAttemptAtUtc = DateTime.UtcNow;
+                    ticketLink.SyncAttemptCount = 0;
+                    ticketLink.NextSyncAttemptAtUtc = null;
+                    ticketLink.PriorityUpdatePending = false;
+                    ticketLink.SyncStatus = TicketSyncStatus.Created;
+                    ticketLink.ExternalDataSynchronizedAtUtc = null;
 
-                    if (ticketLink.Incident.Status == IncidentStatus.Resolved)
+                    if (!string.IsNullOrWhiteSpace(ticketLink.PendingComment)
+                        || ticketLink.Incident.Status == IncidentStatus.Resolved)
                     {
                         var resolutionComment = BuildResolutionComment(ticketLink);
                         await redmineClient.AddCommentAsync(ticketLink.ExternalTicketId, resolutionComment, cancellationToken);
-                        ticketLink.SyncStatus = TicketSyncStatus.Commented;
                         ticketLink.LastCommentedAtUtc = DateTime.UtcNow;
-                        ticketLink.LastErrorMessage = string.Empty;
+                        ticketLink.PendingComment = string.Empty;
                     }
-                    else
-                    {
-                        ticketLink.SyncStatus = TicketSyncStatus.Created;
-                        ticketLink.LastErrorMessage = string.Empty;
-                    }
+
+                    ticketLink.LastErrorMessage = string.Empty;
                 }
-                else if (ticketLink.SyncStatus == TicketSyncStatus.PendingComment)
+                else
                 {
-                    if (string.IsNullOrWhiteSpace(ticketLink.ExternalTicketId))
+                    if (ticketLink.PriorityUpdatePending)
                     {
-                        ticketLink.SyncStatus = TicketSyncStatus.PendingCreate;
-                        ticketLink.LastSyncAttemptAtUtc = DateTime.UtcNow;
+                        await redmineClient.UpdatePriorityAsync(
+                            ticketLink.ExternalTicketId,
+                            ticketLink.Incident.Severity,
+                            cancellationToken);
+                        ticketLink.PriorityUpdatePending = false;
+                        ticketLink.ExternalDataSynchronizedAtUtc = null;
                     }
-                    else
+
+                    if (!string.IsNullOrWhiteSpace(ticketLink.PendingComment))
                     {
                         var comment = BuildResolutionComment(ticketLink);
 
                         await redmineClient.AddCommentAsync(ticketLink.ExternalTicketId, comment, cancellationToken);
-                        ticketLink.SyncStatus = TicketSyncStatus.Commented;
                         ticketLink.LastCommentedAtUtc = DateTime.UtcNow;
-                        ticketLink.LastSyncAttemptAtUtc = DateTime.UtcNow;
-                        ticketLink.LastErrorMessage = string.Empty;
+                        ticketLink.PendingComment = string.Empty;
                     }
+
+                    ticketLink.SyncStatus = TicketSyncStatus.Created;
+                    ticketLink.LastSyncAttemptAtUtc = DateTime.UtcNow;
+                    ticketLink.SyncAttemptCount = 0;
+                    ticketLink.NextSyncAttemptAtUtc = null;
+                    ticketLink.LastErrorMessage = string.Empty;
                 }
             }
             catch (Exception exception)
             {
-                ticketLink.SyncStatus = TicketSyncStatus.Failed;
+                ticketLink.SyncStatus = string.IsNullOrWhiteSpace(ticketLink.ExternalTicketId)
+                    ? TicketSyncStatus.Error
+                    : TicketSyncStatus.Created;
                 ticketLink.LastErrorMessage = exception.Message;
                 ticketLink.LastSyncAttemptAtUtc = DateTime.UtcNow;
+                ticketLink.SyncAttemptCount++;
+                ticketLink.NextSyncAttemptAtUtc = DateTime.UtcNow.Add(CalculateRetryDelay(ticketLink.SyncAttemptCount));
                 logger.LogError(exception, "Failed to synchronize incident {IncidentId} with Redmine.", ticketLink.IncidentId);
             }
         }
@@ -120,11 +149,97 @@ public class RedmineTicketWorker(
         await dbContext.SaveChangesAsync(cancellationToken);
     }
 
+    private async Task RepairPublicTicketUrlsAsync(SrmCoreDbContext dbContext, CancellationToken cancellationToken)
+    {
+        var publicIssuePrefix = _options.BuildPublicIssueUrl(string.Empty);
+        var ticketLinks = await dbContext.TicketLinks
+            .Include(x => x.Incident)
+            .Where(x => x.ExternalTicketId != string.Empty
+                && !x.ExternalTicketUrl.StartsWith(publicIssuePrefix))
+            .OrderBy(x => x.CreatedAtUtc)
+            .Take(100)
+            .ToListAsync(cancellationToken);
+
+        foreach (var ticketLink in ticketLinks)
+        {
+            var expectedUrl = _options.BuildPublicIssueUrl(ticketLink.ExternalTicketId);
+            if (!string.Equals(ticketLink.ExternalTicketUrl, expectedUrl, StringComparison.Ordinal))
+            {
+                ticketLink.ExternalTicketUrl = expectedUrl;
+            }
+        }
+    }
+
+    private async Task RefreshExternalTicketDataAsync(
+        SrmCoreDbContext dbContext,
+        IRedmineTicketingClient redmineClient,
+        CancellationToken cancellationToken)
+    {
+        var refreshBefore = DateTime.UtcNow.AddSeconds(-Math.Max(15, _options.IssueRefreshIntervalSeconds));
+        var ticketLinks = await dbContext.TicketLinks
+            .Where(x => x.ExternalTicketId != string.Empty
+                && (!x.ExternalDataSynchronizedAtUtc.HasValue || x.ExternalDataSynchronizedAtUtc <= refreshBefore))
+            .OrderBy(x => x.ExternalDataSynchronizedAtUtc)
+            .Take(20)
+            .ToListAsync(cancellationToken);
+
+        foreach (var ticketLink in ticketLinks)
+        {
+            try
+            {
+                var details = await redmineClient.GetIssueAsync(ticketLink.ExternalTicketId, cancellationToken);
+                ticketLink.ExternalStatusName = details.StatusName;
+                ticketLink.ExternalPriorityName = details.PriorityName;
+                ticketLink.ExternalDataSynchronizedAtUtc = DateTime.UtcNow;
+                var incidentStatus = MapIncidentStatus(details.StatusName);
+                if (ticketLink.Incident is not null && incidentStatus.HasValue)
+                {
+                    ticketLink.Incident.Status = incidentStatus.Value;
+                    ticketLink.Incident.UpdatedAtUtc = DateTime.UtcNow;
+                    if (incidentStatus is IncidentStatus.Closed or IncidentStatus.Rejected)
+                    {
+                        ticketLink.Incident.ClosedAtUtc ??= DateTime.UtcNow;
+                    }
+                }
+            }
+            catch (Exception exception)
+            {
+                ticketLink.ExternalDataSynchronizedAtUtc = DateTime.UtcNow;
+                logger.LogWarning(
+                    exception,
+                    "Could not refresh Redmine issue {ExternalTicketId} for incident {IncidentId}.",
+                    ticketLink.ExternalTicketId,
+                    ticketLink.IncidentId);
+            }
+        }
+    }
+
+    private static TimeSpan CalculateRetryDelay(int attemptCount)
+    {
+        var exponent = Math.Min(Math.Max(0, attemptCount - 1), 10);
+        var delay = TimeSpan.FromSeconds(5 * Math.Pow(2, exponent));
+        return delay <= MaximumRetryDelay ? delay : MaximumRetryDelay;
+    }
+
+    private static IncidentStatus? MapIncidentStatus(string externalStatusName)
+    {
+        return externalStatusName switch
+        {
+            "New" => IncidentStatus.New,
+            "In Progress" => IncidentStatus.InProgress,
+            "Resolved" => IncidentStatus.Resolved,
+            "Feedback" => IncidentStatus.Feedback,
+            "Closed" => IncidentStatus.Closed,
+            "Rejected" => IncidentStatus.Rejected,
+            _ => null
+        };
+    }
+
     private static string BuildResolutionComment(TicketLink ticketLink)
     {
-        if (!string.IsNullOrWhiteSpace(ticketLink.LastErrorMessage))
+        if (!string.IsNullOrWhiteSpace(ticketLink.PendingComment))
         {
-            return ticketLink.LastErrorMessage;
+            return ticketLink.PendingComment;
         }
 
         var resolvedAt = ticketLink.Incident?.ResolvedAtUtc ?? DateTime.UtcNow;

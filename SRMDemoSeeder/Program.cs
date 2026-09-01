@@ -119,7 +119,11 @@ IF NOT EXISTS (SELECT 1 FROM MonitoredDevices WHERE Id = '10000000-0000-0000-000
 
 IF NOT EXISTS (SELECT 1 FROM MonitoredDevices WHERE Id = '10000000-0000-0000-0000-000000000042')
   INSERT MonitoredDevices (Id, AgentId, DisplayName, IpAddress, IntervalSeconds, TimeoutMilliseconds, FailureThreshold, IsActive, CreatedAtUtc, UpdatedAtUtc)
-  VALUES ('10000000-0000-0000-0000-000000000042', '10000000-0000-0000-0000-000000000021', 'Backup Router BER-02', '192.0.2.10', 30, 1000, 3, 1, @now, @now);
+  VALUES ('10000000-0000-0000-0000-000000000042', '10000000-0000-0000-0000-000000000021', 'Agent Loopback Check', '127.0.0.1', 30, 1000, 3, 1, @now, @now);
+
+UPDATE MonitoredDevices
+SET DisplayName = 'Agent Loopback Check', IpAddress = '127.0.0.1', IsActive = 1, UpdatedAtUtc = @now
+WHERE Id = '10000000-0000-0000-0000-000000000042';
 
 IF NOT EXISTS (SELECT 1 FROM MaintenanceWindows WHERE Id = '10000000-0000-0000-0000-000000000051')
   INSERT MaintenanceWindows (Id, ServerRoomId, Title, StartUtc, EndUtc, Description, CreatedAtUtc, UpdatedAtUtc)

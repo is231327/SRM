@@ -21,7 +21,6 @@ else if (!customers.Any())
     <div class="empty-state">
         <h3>@LanguageService.T("NoData")</h3>
         <p class="subtle">@LanguageService.T("CustomersOverviewDescription")</p>
-        <a class="btn btn-primary" href="/customers/create">@LanguageService.T("CreateCustomer")</a>
     </div>
 }
 else
@@ -59,6 +58,7 @@ else
     private IReadOnlyList<AgentReadDto> agents => overview?.Agents ?? [];
     private IReadOnlyList<IncidentReadDto> incidents => overview?.Incidents ?? [];
     private IReadOnlyDictionary<Guid, int> incidentCountByCustomerId => overview?.IncidentCountByCustomerId ?? new Dictionary<Guid, int>();
+    private IReadOnlyDictionary<Guid, int> openIncidentCountByCustomerId => overview?.OpenIncidentCountByCustomerId ?? new Dictionary<Guid, int>();
     private IReadOnlyDictionary<Guid, DateTime?> lastActivityByCustomerId => overview?.LastActivityByCustomerId ?? new Dictionary<Guid, DateTime?>();
     private IReadOnlyDictionary<Guid, string> cardClassByCustomerId => overview?.CardClassByCustomerId ?? new Dictionary<Guid, string>();
 
@@ -85,7 +85,7 @@ else
 
     private string GetCustomerSummaryText(CustomerReadDto customer)
     {
-        var openCount = incidentCountByCustomerId.GetValueOrDefault(customer.Id);
+        var openCount = openIncidentCountByCustomerId.GetValueOrDefault(customer.Id);
         var cardClass = GetCustomerCardClass(customer.Id);
 
         return cardClass switch

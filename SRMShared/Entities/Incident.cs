@@ -7,7 +7,7 @@ public class Incident : BaseEntity
     public Guid? MonitoredDeviceId { get; set; }
     public IncidentType Type { get; set; }
     public IncidentSeverity Severity { get; set; }
-    public IncidentStatus Status { get; set; } = IncidentStatus.Open;
+    public IncidentStatus Status { get; set; } = IncidentStatus.New;
     public string CorrelationKey { get; set; } = string.Empty;
     public string Summary { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;

@@ -39,13 +39,21 @@ public class AgentRuntimeService(
 
         var shellyDevices = await dbContext.ShellyDevices
             .AsNoTracking()
-            .Where(x => x.AgentId == agentId && x.IsActive)
+            .Where(x => x.AgentId == agentId
+                && x.IsActive
+                && x.Agent != null
+                && x.Agent.ServerRoom != null
+                && x.Agent.ServerRoom.MonitoringEnabled)
             .OrderBy(x => x.Name)
             .ToListAsync();
 
         var monitoredDevices = await dbContext.MonitoredDevices
             .AsNoTracking()
-            .Where(x => x.AgentId == agentId && x.IsActive)
+            .Where(x => x.AgentId == agentId
+                && x.IsActive
+                && x.Agent != null
+                && x.Agent.ServerRoom != null
+                && x.Agent.ServerRoom.MonitoringEnabled)
             .OrderBy(x => x.DisplayName)
             .ToListAsync();
 

@@ -10,14 +10,19 @@
         <h1>@LanguageService.T("Incidents")</h1>
         <p>@LanguageService.T("IncidentsPageDescription")</p>
     </div>
-    @if (serverRoomId is not null)
-    {
-        <a class="btn btn-outline-primary" href="/serverrooms/@serverRoomId/details">@LanguageService.T("BackToServerRooms")</a>
-    }
-    else if (customerId is not null)
-    {
-        <a class="btn btn-outline-primary" href="/customers/@customerId/details">@LanguageService.T("BackToCustomerOverview")</a>
-    }
+    <div class="page-header-actions">
+        @if (serverRoomId is not null)
+        {
+            <a class="btn btn-outline-primary" href="/serverrooms/@serverRoomId/details">@LanguageService.T("BackToServerRooms")</a>
+        }
+        else if (customerId is not null)
+        {
+            <a class="btn btn-outline-primary" href="/customers/@customerId/details">@LanguageService.T("BackToCustomerOverview")</a>
+        }
+        <button class="btn btn-outline-secondary" @onclick="ToggleClosedIncidentsAsync">
+            @LanguageService.T(showClosedIncidents ? "HideClosedIncidents" : "ShowClosedIncidents")
+        </button>
+    </div>
 </div>
 
 <div class="entity-grid">
@@ -32,15 +37,19 @@
         }
         else
         {
-            @foreach (var item in items)
+            @foreach (var item in items.OrderBy(x => OverviewUiHelper.IsClosedIncident(x) ? 1 : 0).ThenByDescending(x => x.LastOccurredAtUtc ?? x.OpenedAtUtc))
             {
+                var ticketLink = item.TicketLinks.FirstOrDefault(x => x.ProviderName == "Redmine")
+                    ?? item.TicketLinks.FirstOrDefault();
+                var ticketUrl = string.IsNullOrWhiteSpace(ticketLink?.ExternalTicketUrl)
+                    ? null
+                    : ticketLink.ExternalTicketUrl;
                 <article class="entity-card @GetIncidentCardClass(item)">
                     <div class="entity-card-header">
                         <div>
-                            <h3>@item.Summary</h3>
-                            <div class="subtle">@LanguageService.T("IncidentType"): @LanguageService.T(item.Type.ToString())</div>
-                            <div class="@GetIncidentStatusClass(item)">@LanguageService.T("Severity"): @LanguageService.T(item.Severity.ToString()) | @LanguageService.T("Status"): @LanguageService.T(item.Status.ToString())</div>
-                            <div class="subtle">@LanguageService.T("OpenedAt"): @item.OpenedAtUtc.ToLocalTime()</div>
+                            <h3>@GetIncidentTitle(item, ticketLink)</h3>
+                            <div class="@GetIncidentStatusClass(item)">@LanguageService.T("TicketPriority"): @GetTicketPriority(item, ticketLink) | @LanguageService.T("TicketStatus"): @GetTicketStatus(ticketLink)</div>
+                            <div class="subtle">@LanguageService.T("OpenedAt"): <BrowserLocalDateTime Value="@item.OpenedAtUtc" /></div>
                             <div class="subtle">@LanguageService.T("ServerRoom"): @item.ServerRoomName</div>
                             @if (!string.IsNullOrWhiteSpace(item.ShellyDeviceName))
                             {
@@ -50,15 +59,19 @@
                             {
                                 <div class="subtle">@LanguageService.T("MonitoredDevice"): @item.MonitoredDeviceName</div>
                             }
-                            @if (item.TicketLinks.Count > 0)
-                            {
-                                <div class="subtle">@LanguageService.T("TicketSyncStatus"): @LanguageService.T(item.TicketLinks[0].SyncStatus.ToString())</div>
-                            }
+                            <div class="subtle">@LanguageService.T("TicketSyncStatus"): @GetTicketSyncStatus(ticketLink)</div>
                         </div>
                     </div>
                     <div class="child-links">
                         <span class="@GetIncidentBadgeClass(item)">@LanguageService.T(item.Type.ToString())</span>
-                        <a class="btn btn-primary btn-sm" href="/incidents/@item.Id">@LanguageService.T("Details")</a>
+                        @if (ticketUrl is not null)
+                        {
+                            <a class="btn btn-primary btn-sm" href="@ticketUrl" target="_blank" rel="noopener noreferrer">@LanguageService.T("RedmineTicket")</a>
+                        }
+                        else
+                        {
+                            <button class="btn btn-primary btn-sm" disabled>@LanguageService.T("RedmineTicket")</button>
+                        }
                     </div>
                 </article>
             }
@@ -73,17 +86,34 @@
     [SupplyParameterFromQuery] public Guid? monitoredDeviceId { get; set; }
 
     private bool isLoading = true;
+    private bool showClosedIncidents;
     private List<IncidentReadDto> items = [];
+    private readonly CancellationTokenSource refreshCancellationTokenSource = new();
+    private Task? refreshTask;
 
     protected override async Task OnParametersSetAsync()
     {
         await LoadAsync();
     }
 
-    private async Task LoadAsync()
+    protected override Task OnAfterRenderAsync(bool firstRender)
     {
-        isLoading = true;
-        var all = await ApiClient.GetIncidentsAsync();
+        if (firstRender)
+        {
+            refreshTask = RefreshPeriodicallyAsync(refreshCancellationTokenSource.Token);
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private async Task LoadAsync(bool showLoading = true)
+    {
+        if (showLoading)
+        {
+            isLoading = true;
+        }
+
+        var all = await ApiClient.GetIncidentsAsync(showClosedIncidents);
         var serverRooms = await ApiClient.GetServerRoomsAsync();
         var customerRoomIds = customerId is null
             ? null
@@ -97,8 +127,40 @@
         isLoading = false;
     }
 
+    private async Task ToggleClosedIncidentsAsync()
+    {
+        showClosedIncidents = !showClosedIncidents;
+        await LoadAsync();
+    }
+
+    private async Task RefreshPeriodicallyAsync(CancellationToken cancellationToken)
+    {
+        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(15));
+        try
+        {
+            while (await timer.WaitForNextTickAsync(cancellationToken))
+            {
+                await InvokeAsync(async () =>
+                {
+                    await LoadAsync(showLoading: false);
+                    StateHasChanged();
+                });
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+        }
+    }
+
+    private static string GetIncidentTitle(IncidentReadDto incident, TicketLinkReadDto? ticketLink)
+        => string.IsNullOrWhiteSpace(ticketLink?.ExternalTicketId)
+            ? incident.Summary
+            : $"{ticketLink.ExternalTicketId} - {incident.Summary}";
+
     private string GetIncidentCardClass(IncidentReadDto incident)
-        => incident.Severity.ToString() switch
+        => OverviewUiHelper.IsClosedIncident(incident)
+            ? "incident-closed"
+            : incident.Severity.ToString() switch
         {
             "Critical" => "alert-critical",
             "Major" => "alert-warning",
@@ -114,10 +176,52 @@
         };
 
     private string GetIncidentStatusClass(IncidentReadDto incident)
-        => incident.Severity.ToString() switch
+        => OverviewUiHelper.IsClosedIncident(incident)
+            ? "subtle"
+            : incident.Severity.ToString() switch
         {
             "Critical" => "status-line-critical",
             "Major" => "status-line-warning",
             _ => "subtle"
         };
+
+    private string GetTicketPriority(IncidentReadDto incident, TicketLinkReadDto? ticketLink)
+    {
+        if (!string.IsNullOrWhiteSpace(ticketLink?.ExternalPriorityName))
+        {
+            return LanguageService.T(ticketLink.ExternalPriorityName);
+        }
+
+        return LanguageService.T(incident.Severity switch
+        {
+            IncidentSeverity.Warning => "High",
+            IncidentSeverity.Major => "Urgent",
+            IncidentSeverity.Critical => "Immediate",
+            _ => "Unknown"
+        });
+    }
+
+    private string GetTicketStatus(TicketLinkReadDto? ticketLink)
+        => string.IsNullOrWhiteSpace(ticketLink?.ExternalStatusName)
+            ? "-"
+            : LanguageService.T(ticketLink.ExternalStatusName);
+
+    private string GetTicketSyncStatus(TicketLinkReadDto? ticketLink)
+    {
+        if (ticketLink is null || ticketLink.SyncStatus == TicketSyncStatus.PendingCreate)
+        {
+            return LanguageService.T("PendingCreate");
+        }
+
+        return string.IsNullOrWhiteSpace(ticketLink.ExternalTicketId)
+            ? LanguageService.T("Error")
+            : LanguageService.T("Created");
+    }
+
+    public override void Dispose()
+    {
+        refreshCancellationTokenSource.Cancel();
+        refreshCancellationTokenSource.Dispose();
+        base.Dispose();
+    }
 }

@@ -10,27 +10,38 @@ public class IncidentQueryService(
     SrmCoreDbContext dbContext,
     ICurrentUserContext currentUserContext) : IIncidentQueryService
 {
-    public async Task<List<Incident>> GetAllAsync(CancellationToken cancellationToken = default)
+    private static readonly string[] HiddenTicketStatuses = ["Resolved", "Rejected", "Closed"];
+
+    public async Task<List<Incident>> GetAllAsync(bool includeClosed = false, CancellationToken cancellationToken = default)
     {
-        return await ApplyOwnershipFilter(dbContext.Incidents)
+        var query = includeClosed ? dbContext.Incidents : ApplyVisibleTicketFilter(dbContext.Incidents);
+        return await ApplyOwnershipFilter(query)
             .Include(x => x.ServerRoom)
             .Include(x => x.ShellyDevice)
             .Include(x => x.MonitoredDevice)
             .Include(x => x.Events)
             .Include(x => x.TicketLinks)
+            .AsSplitQuery()
             .OrderByDescending(x => x.OpenedAtUtc)
             .ToListAsync(cancellationToken);
     }
 
     public async Task<Incident?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        return await ApplyOwnershipFilter(dbContext.Incidents)
+        return await ApplyOwnershipFilter(ApplyVisibleTicketFilter(dbContext.Incidents))
             .Include(x => x.ServerRoom)
             .Include(x => x.ShellyDevice)
             .Include(x => x.MonitoredDevice)
             .Include(x => x.Events)
             .Include(x => x.TicketLinks)
+            .AsSplitQuery()
             .FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
+    }
+
+    private static IQueryable<Incident> ApplyVisibleTicketFilter(IQueryable<Incident> query)
+    {
+        return query.Where(x => !x.TicketLinks.Any(
+            ticketLink => HiddenTicketStatuses.Contains(ticketLink.ExternalStatusName)));
     }
 
     private IQueryable<Incident> ApplyOwnershipFilter(IQueryable<Incident> query)

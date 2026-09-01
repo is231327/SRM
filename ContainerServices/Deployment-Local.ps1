@@ -141,6 +141,32 @@ puts token.value
     Write-Host 'Local Redmine defaults, administrator, REST API, project, and integration configuration are ready.' -ForegroundColor Green
 }
 
+function Test-LocalRedmineInitialized {
+    param(
+        [Parameter(Mandatory)][string]$ProjectName,
+        [Parameter(Mandatory)][hashtable]$Configuration
+    )
+
+    if ([string]$Configuration['REDMINE_ENABLED'] -ne 'true' -or
+        [string]::IsNullOrWhiteSpace([string]$Configuration['REDMINE_API_KEY'])) {
+        return $false
+    }
+
+    $containerName = "$ProjectName-srm-redmine-1"
+    $railsCode = @'
+project = Project.find_by(identifier: ENV.fetch('PROJECT_IDENTIFIER'))
+admin = User.where(admin: true).order(:id).first
+token = admin && Token.find_by(user: admin, action: 'api')
+exit(project && token && token.value == ENV.fetch('EXPECTED_API_KEY') ? 0 : 1)
+'@
+
+    & docker exec `
+        --env "PROJECT_IDENTIFIER=$($Configuration['REDMINE_PROJECT_IDENTIFIER'])" `
+        --env "EXPECTED_API_KEY=$($Configuration['REDMINE_API_KEY'])" `
+        $containerName bundle exec rails runner $railsCode *> $null
+    return $LASTEXITCODE -eq 0
+}
+
 $configurationFileName = if ($Mode -eq 'Full') { '.env.local' } else { '.env.development' }
 $exampleFileName = "$configurationFileName.example"
 $envPath = Join-Path $PSScriptRoot $configurationFileName
@@ -205,10 +231,12 @@ if ($Mode -eq 'Full') {
     $authHost = Get-RequiredValue -Values $values -Key 'AUTH_HOST'
     $coreHost = Get-RequiredValue -Values $values -Key 'CORE_HOST'
     $values['REDMINE_BASE_URL'] = "http://${redmineHost}:${redminePort}/"
+    $values['REDMINE_PUBLIC_BASE_URL'] = "http://localhost:$(Get-PortValue -Key 'REDMINE_HOST_PORT')/"
     $values['AUTH_API_BASE_URL'] = "http://${authHost}:${servicePort}/"
     $values['CORE_API_BASE_URL'] = "http://${coreHost}:${servicePort}/"
     $values['AGENT_AUTH_BASE_URL'] = $values['AUTH_API_BASE_URL']
     $values['AGENT_CORE_BASE_URL'] = $values['CORE_API_BASE_URL']
+    $values['DEMO_SHELLY_BASE_URL'] = "http://shelly1:$($values['SHELLY_PORT'])"
 }
 
 $overrideLines = @(
@@ -277,7 +305,8 @@ Write-ServiceEnvironmentFile -Name 'srm-core' -Variables ([ordered]@{
     SqlServer__Password = 'SQL_PASSWORD'; SqlServer__CoreDatabase = 'SQL_CORE_DATABASE'
     Redis__ConnectionString = 'REDIS_CONNECTION_STRING'
     Jwt__Issuer = 'JWT_ISSUER'; Jwt__Audience = 'JWT_AUDIENCE'; Jwt__SigningKey = 'JWT_SIGNING_KEY'
-    Redmine__Enabled = 'REDMINE_ENABLED'; Redmine__BaseUrl = 'REDMINE_BASE_URL'; Redmine__ApiKey = 'REDMINE_API_KEY'
+    Redmine__Enabled = 'REDMINE_ENABLED'; Redmine__BaseUrl = 'REDMINE_BASE_URL'
+    Redmine__PublicBaseUrl = 'REDMINE_PUBLIC_BASE_URL'; Redmine__ApiKey = 'REDMINE_API_KEY'
     Redmine__ProjectIdentifier = 'REDMINE_PROJECT_IDENTIFIER'; Redmine__TrackerId = 'REDMINE_TRACKER_ID'
     Redmine__StatusId = 'REDMINE_STATUS_ID'; Redmine__PollIntervalSeconds = 'REDMINE_POLL_INTERVAL_SECONDS'
     Redmine__WarningPriorityId = 'REDMINE_WARNING_PRIORITY_ID'; Redmine__MajorPriorityId = 'REDMINE_MAJOR_PRIORITY_ID'
@@ -287,6 +316,12 @@ Write-ServiceEnvironmentFile -Name 'srm-app' -Variables ([ordered]@{
     ASPNETCORE_ENVIRONMENT = 'DOTNET_ENVIRONMENT'; ASPNETCORE_HTTP_PORTS = 'DOTNET_HTTP_PORTS'
     CoreApi__BaseUrl = 'CORE_API_BASE_URL'; AuthApi__BaseUrl = 'AUTH_API_BASE_URL'
     Redis__ConnectionString = 'REDIS_CONNECTION_STRING'
+})
+Write-ServiceEnvironmentFile -Name 'srm-demo-seeder' -Variables ([ordered]@{
+    SQL_HOST = 'SQL_HOST'; SQL_PORT = 'SQL_PORT'; SQL_USERNAME = 'SQL_USERNAME'
+    SQL_PASSWORD = 'SQL_PASSWORD'; SQL_CORE_DATABASE = 'SQL_CORE_DATABASE'; SQL_AUTH_DATABASE = 'SQL_AUTH_DATABASE'
+    AGENT_CLIENT_IDENTIFIER = 'AGENT_CLIENT_IDENTIFIER'; AGENT_CLIENT_SECRET = 'AGENT_CLIENT_SECRET'
+    SHELLY_BASE_URL = 'DEMO_SHELLY_BASE_URL'
 })
 Write-ServiceEnvironmentFile -Name 'srm-agent' -Variables ([ordered]@{
     ASPNETCORE_ENVIRONMENT = 'DOTNET_ENVIRONMENT'; ASPNETCORE_HTTP_PORTS = 'DOTNET_HTTP_PORTS'
@@ -324,7 +359,7 @@ finally {
     Pop-Location
 }
 
-if ([string]$values['REDMINE_ENABLED'] -ne 'true') {
+if (-not (Test-LocalRedmineInitialized -ProjectName $ProjectName -Configuration $values)) {
     Write-Host 'Initializing the fresh local Redmine instance...' -ForegroundColor Cyan
     Initialize-LocalRedmine `
         -ProjectName $ProjectName `

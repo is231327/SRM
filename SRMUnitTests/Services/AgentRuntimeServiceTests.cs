@@ -47,4 +47,33 @@ public class AgentRuntimeServiceTests
         Assert.That(configuration.ShellyDevices.Count, Is.EqualTo(1));
         Assert.That(configuration.MonitoredDevices.Count, Is.EqualTo(1));
     }
+
+    [Test]
+    public async Task GetRuntimeConfigurationAsync_ShouldReturnNoMonitoringTargets_WhenRoomMonitoringIsDisabled()
+    {
+        using var context = DbContextFactory.CreateContext();
+        var customer = new Customer { Id = Guid.NewGuid(), Name = "Customer" };
+        var serverRoom = new ServerRoom { Id = Guid.NewGuid(), CustomerId = customer.Id, Name = "Room", MonitoringEnabled = false };
+        var agent = new Agent { Id = Guid.NewGuid(), ServerRoomId = serverRoom.Id, Name = "Agent", IsActive = true };
+        context.AddRange(
+            customer,
+            serverRoom,
+            agent,
+            new ShellyDevice { Id = Guid.NewGuid(), AgentId = agent.Id, Name = "Shelly", BaseUrl = "http://shelly", IsActive = true },
+            new MonitoredDevice { Id = Guid.NewGuid(), AgentId = agent.Id, DisplayName = "Switch", IpAddress = "192.168.1.10", IntervalSeconds = 30, TimeoutMilliseconds = 1000, FailureThreshold = 3, IsActive = true });
+        await context.SaveChangesAsync();
+
+        var service = new AgentRuntimeService(
+            context,
+            new FakeCoreCurrentUserContext { IsAgent = true, AgentId = agent.Id },
+            new AgentDtoMapper(),
+            new ShellyDeviceDtoMapper(),
+            new MonitoredDeviceDtoMapper());
+
+        var configuration = await service.GetRuntimeConfigurationAsync();
+
+        Assert.That(configuration, Is.Not.Null);
+        Assert.That(configuration!.ShellyDevices, Is.Empty);
+        Assert.That(configuration.MonitoredDevices, Is.Empty);
+    }
 }

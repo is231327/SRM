@@ -31,6 +31,7 @@ public abstract class CrudControllerBase<TEntity, TCreateDto, TUpdateDto, TReadD
     }
 
     [HttpPost]
+    [Authorize(Roles = "SystemAdmin,Employee")]
     public virtual async Task<ActionResult<TReadDto>> Create(TCreateDto dto)
     {
         var entity = await Service.CreateAsync(Mapper.ToEntity(dto));
@@ -38,6 +39,7 @@ public abstract class CrudControllerBase<TEntity, TCreateDto, TUpdateDto, TReadD
     }
 
     [HttpPut("{id:guid}")]
+    [Authorize(Roles = "SystemAdmin,Employee")]
     public virtual async Task<ActionResult<TReadDto>> Update(Guid id, TUpdateDto dto)
     {
         var entity = await Service.UpdateAsync(id, Mapper.ToEntity(dto));
@@ -45,6 +47,7 @@ public abstract class CrudControllerBase<TEntity, TCreateDto, TUpdateDto, TReadD
     }
 
     [HttpDelete("{id:guid}")]
+    [Authorize(Roles = "SystemAdmin,Employee")]
     public virtual async Task<IActionResult> Delete(Guid id)
     {
         return await Service.DeleteAsync(id) ? NoContent() : NotFound();

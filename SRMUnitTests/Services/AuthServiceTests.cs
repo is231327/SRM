@@ -136,10 +136,6 @@ public class AuthServiceTests
 
         var ownCustomerId = Guid.NewGuid();
         var otherCustomerId = Guid.NewGuid();
-        context.Set<Customer>().AddRange(
-            new Customer { Id = ownCustomerId, Name = "Own Customer", ContactEmail = "own@example.com", ContactPhone = "1", ExternalReference = "OWN", IsActive = true },
-            new Customer { Id = otherCustomerId, Name = "Other Customer", ContactEmail = "other@example.com", ContactPhone = "2", ExternalReference = "OTHER", IsActive = true });
-
         var ownCustomerUser = CreateUserWithoutPassword("owncustomer");
         var otherCustomerUser = CreateUserWithoutPassword("othercustomer");
         context.Users.AddRange(ownCustomerUser, otherCustomerUser);
@@ -161,6 +157,57 @@ public class AuthServiceTests
         var users = await service.GetUsersAsync();
 
         Assert.That(users.Select(x => x.Username), Is.EquivalentTo(new[] { "owncustomer" }));
+    }
+
+    [Test]
+    public async Task CreateUserAsync_ShouldAllowExternalCoreCustomerReference()
+    {
+        using var context = AuthDbContextFactory.CreateContext();
+        SeedRoles(context);
+        var customerId = Guid.NewGuid();
+        var service = CreateService(context, new FakeCurrentUserContext
+        {
+            IsSystemAdmin = true,
+            CanManageUsers = true
+        });
+
+        var created = await service.CreateUserAsync(new CreateUserRequestDto
+        {
+            Username = "customer-user",
+            Email = "customer-user@example.com",
+            FirstName = "Customer",
+            LastName = "User",
+            Password = "ValidPassword1!",
+            Roles = [AuthRoles.ToName(AuthRoleType.Customer)],
+            CustomerId = customerId
+        });
+
+        Assert.That(created, Is.Not.Null);
+        Assert.That(created!.CustomerId, Is.EqualTo(customerId));
+    }
+
+    [Test]
+    public void CreateUserAsync_ShouldRejectUnknownRole()
+    {
+        using var context = AuthDbContextFactory.CreateContext();
+        SeedRoles(context);
+        var service = CreateService(context, new FakeCurrentUserContext
+        {
+            IsSystemAdmin = true,
+            CanManageUsers = true
+        });
+
+        var action = async () => await service.CreateUserAsync(new CreateUserRequestDto
+        {
+            Username = "invalid-role-user",
+            Email = "invalid-role-user@example.com",
+            FirstName = "Invalid",
+            LastName = "Role",
+            Password = "ValidPassword1!",
+            Roles = ["UnknownRole"]
+        });
+
+        Assert.That(action, Throws.TypeOf<UnauthorizedAccessException>());
     }
 
     private static AuthService CreateService(SRMAuth.Data.SrmAuthDbContext context, FakeCurrentUserContext? currentUserContext = null)

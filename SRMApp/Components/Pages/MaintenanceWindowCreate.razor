@@ -4,6 +4,7 @@
 @inherits LocalizedComponentBase
 @inject ICoreApiClient ApiClient
 @inject ICrudPageDataService CrudPageDataService
+@inject AuthSessionService AuthSessionService
 @inject NavigationManager NavigationManager
 
 <PageTitle>@(IsEditMode ? LanguageService.T("EditMaintenanceWindow") : LanguageService.T("CreateMaintenanceWindow"))</PageTitle>
@@ -75,6 +76,8 @@ else
     }
     private async Task SaveAsync()
     {
+        if (!AuthSessionService.CanManageConfiguration) return;
+
         if (IsEditMode)
         {
             await ApiClient.UpdateMaintenanceWindowAsync(MaintenanceWindowId!.Value, new MaintenanceWindowUpdateDto

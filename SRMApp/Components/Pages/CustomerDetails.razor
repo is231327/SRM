@@ -85,10 +85,10 @@ else
     }
 
     private int GetOpenIncidentCount()
-        => incidents.Count(x => x.Status.ToString() == "Open");
+        => incidents.Count(OverviewUiHelper.IsOpenIncident);
 
     private int GetOpenCriticalIncidentCount()
-        => incidents.Count(x => x.Status.ToString() == "Open" && x.Severity.ToString() == "Critical");
+        => incidents.Count(x => OverviewUiHelper.IsOpenIncident(x) && x.Severity.ToString() == "Critical");
 
     private string GetServerRoomsSummaryClass()
     {
@@ -206,12 +206,12 @@ else
     private string GetServerRoomCardClass(Guid serverRoomId)
     {
         var roomIncidents = incidents.Where(x => x.ServerRoomId == serverRoomId).ToList();
-        if (roomIncidents.Any(x => x.Status.ToString() == "Open" && x.Severity.ToString() == "Critical"))
+        if (roomIncidents.Any(x => OverviewUiHelper.IsOpenIncident(x) && x.Severity.ToString() == "Critical"))
         {
             return "alert-critical";
         }
 
-        if (roomIncidents.Any(x => x.Status.ToString() == "Open"))
+        if (roomIncidents.Any(OverviewUiHelper.IsOpenIncident))
         {
             return "alert-warning";
         }
@@ -224,6 +224,17 @@ else
 
     private string GetShellyCardClass(Guid shellyDeviceId)
     {
+        var criticalIncident = incidents.Any(x => x.ShellyDeviceId == shellyDeviceId && OverviewUiHelper.IsOpenIncident(x) && x.Severity.ToString() == "Critical");
+        if (criticalIncident)
+        {
+            return "alert-critical";
+        }
+
+        if (!shellyDevices.First(x => x.Id == shellyDeviceId).IsActive)
+        {
+            return "alert-warning";
+        }
+
         if (!latestSensorReadingByShellyId.TryGetValue(shellyDeviceId, out var reading))
         {
             return "alert-info";
@@ -234,17 +245,16 @@ else
             return "alert-warning";
         }
 
-        var criticalIncident = incidents.Any(x => x.ShellyDeviceId == shellyDeviceId && x.Status.ToString() == "Open" && x.Severity.ToString() == "Critical");
-        if (criticalIncident)
-        {
-            return "alert-critical";
-        }
-
         return "alert-ok";
     }
 
     private string GetMonitoredDeviceCardClass(Guid monitoredDeviceId)
     {
+        if (!monitoredDevices.First(x => x.Id == monitoredDeviceId).IsActive)
+        {
+            return "alert-warning";
+        }
+
         if (!latestPingResultByMonitoredDeviceId.TryGetValue(monitoredDeviceId, out var result))
         {
             return "alert-info";
@@ -297,15 +307,17 @@ else
                 ? LanguageService.T("InactiveAgentsPresent")
                 : agents.Any(x => GetAgentCardClass(x) == "alert-info")
                     ? LanguageService.T("AgentsNotReportedYet")
-                    : LanguageService.T("AllAgentsActive");
+                    : LanguageService.T("AllAgentsHaveReported");
 
     private string GetShellySummaryText()
         => shellyDevices.Count == 0
             ? LanguageService.T("NoData")
             : shellyDevices.Any(x => GetShellyCardClass(x.Id) == "alert-critical")
                 ? LanguageService.T("ShellyCriticalIncidentOpen")
-                : shellyDevices.Any(x => GetShellyCardClass(x.Id) == "alert-warning")
-                    ? LanguageService.T("ShellyDoorOpen")
+            : shellyDevices.Any(x => GetShellyCardClass(x.Id) == "alert-warning")
+                    ? shellyDevices.Any(x => !x.IsActive)
+                        ? LanguageService.T("InactiveShellyDevicesPresent")
+                        : LanguageService.T("ShellyDoorOpen")
                     : shellyDevices.Any(x => GetShellyCardClass(x.Id) == "alert-info")
                         ? LanguageService.T("ShellyNoReadingsYet")
                         : LanguageService.T("ShellyReportingNormally");
@@ -315,8 +327,10 @@ else
             ? LanguageService.T("NoData")
             : monitoredDevices.Any(x => GetMonitoredDeviceCardClass(x.Id) == "alert-critical")
                 ? LanguageService.T("MonitoredDeviceThresholdDown")
-                : monitoredDevices.Any(x => GetMonitoredDeviceCardClass(x.Id) == "alert-warning")
-                    ? LanguageService.T("MonitoredDeviceUnreachable")
+            : monitoredDevices.Any(x => GetMonitoredDeviceCardClass(x.Id) == "alert-warning")
+                    ? monitoredDevices.Any(x => !x.IsActive)
+                        ? LanguageService.T("InactiveMonitoredDevicesPresent")
+                        : LanguageService.T("MonitoredDeviceUnreachable")
                     : monitoredDevices.Any(x => GetMonitoredDeviceCardClass(x.Id) == "alert-info")
                         ? LanguageService.T("MonitoredDeviceNoHistory")
                         : LanguageService.T("MonitoredDevicesReachable");

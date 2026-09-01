@@ -4,6 +4,13 @@ x-shelly-build: &shelly-build
   context: ../PythonShelly
   dockerfile: Dockerfile
 
+x-dotnet-healthcheck: &dotnet-healthcheck
+  test: ["CMD", "/usr/bin/bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET /health HTTP/1.0\\r\\nHost: localhost\\r\\n\\r\\n' >&3 && grep -q '200 OK' <&3"]
+  interval: 5s
+  timeout: 3s
+  retries: 20
+  start_period: 10s
+
 services:
   srm-sqlserver:
     image: mcr.microsoft.com/mssql/server:2022-latest
@@ -18,7 +25,7 @@ services:
       retries: 20
       start_period: 30s
     volumes: ["srm-sqlserver-data:/var/opt/mssql"]
-    networks: [srm-shared]
+    networks: [srm-data]
 
   srm-redis:
     image: redis:7-alpine
@@ -30,7 +37,7 @@ services:
       timeout: 3s
       retries: 20
     volumes: ["srm-redis-data:/data"]
-    networks: [srm-shared]
+    networks: [srm-data]
 
   srm-redmine-db:
     image: postgres:16
@@ -44,7 +51,7 @@ services:
       timeout: 5s
       retries: 20
     volumes: ["srm-redmine-db-data:/var/lib/postgresql/data"]
-    networks: [srm-shared]
+    networks: [srm-ticket]
 
   srm-redmine:
     image: redmine:6.0
@@ -56,7 +63,7 @@ services:
       - path: .runtime-env/srm-redmine.env
         format: raw
     volumes: ["srm-redmine-data:/usr/src/redmine/files"]
-    networks: [srm-shared]
+    networks: [srm-ticket]
 
   srm-auth:
     profiles: [apps]
@@ -71,7 +78,8 @@ services:
     env_file:
       - path: .runtime-env/srm-auth.env
         format: raw
-    networks: [srm-shared]
+    healthcheck: *dotnet-healthcheck
+    networks: [srm-data, srm-services]
 
   srm-core:
     profiles: [apps]
@@ -87,7 +95,8 @@ services:
     env_file:
       - path: .runtime-env/srm-core.env
         format: raw
-    networks: [srm-shared]
+    healthcheck: *dotnet-healthcheck
+    networks: [srm-data, srm-services, srm-ticket]
 
   srm-app:
     profiles: [apps]
@@ -96,11 +105,30 @@ services:
       dockerfile: SRMApp/Dockerfile
     image: srm-app:local
     restart: unless-stopped
-    depends_on: [srm-auth, srm-core]
+    depends_on:
+      srm-redis: { condition: service_healthy }
+      srm-auth: { condition: service_healthy }
+      srm-core: { condition: service_healthy }
     env_file:
       - path: .runtime-env/srm-app.env
         format: raw
-    networks: [srm-shared]
+    healthcheck: *dotnet-healthcheck
+    networks: [srm-data, srm-services]
+
+  srm-demo-seeder:
+    profiles: [apps]
+    build:
+      context: ..
+      dockerfile: SRMDemoSeeder/Dockerfile
+    image: srm-demo-seeder:local
+    restart: "no"
+    depends_on:
+      srm-auth: { condition: service_healthy }
+      srm-core: { condition: service_healthy }
+    env_file:
+      - path: .runtime-env/srm-demo-seeder.env
+        format: raw
+    networks: [srm-data, srm-site]
 
   srm-agent:
     profiles: [apps]
@@ -109,30 +137,34 @@ services:
       dockerfile: SRMAgent/Dockerfile
     image: srm-agent:local
     restart: unless-stopped
-    depends_on: [srm-auth, srm-core]
+    depends_on:
+      srm-auth: { condition: service_healthy }
+      srm-core: { condition: service_healthy }
+      srm-demo-seeder: { condition: service_completed_successfully }
     env_file:
       - path: .runtime-env/srm-agent.env
         format: raw
-    networks: [srm-shared]
+    healthcheck: *dotnet-healthcheck
+    networks: [srm-services, srm-site]
 
   shelly1:
     profiles: [simulators]
     build: *shelly-build
     image: srm-shelly:local
     restart: unless-stopped
-    networks: [srm-shared]
+    networks: [srm-site]
 
   shelly2:
     profiles: [simulators]
     image: srm-shelly:local
     restart: unless-stopped
-    networks: [srm-shared]
+    networks: [srm-site]
 
   shelly3:
     profiles: [simulators]
     image: srm-shelly:local
     restart: unless-stopped
-    networks: [srm-shared]
+    networks: [srm-site]
 
 volumes:
   srm-sqlserver-data:
@@ -141,4 +173,7 @@ volumes:
   srm-redmine-data:
 
 networks:
-  srm-shared: {}
+  srm-data: {}
+  srm-services: {}
+  srm-ticket: {}
+  srm-site: {}

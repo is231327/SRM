@@ -28,6 +28,8 @@ public class AuthSessionService(
     public bool IsCustomerScopedUser => IsCustomerAdmin || IsCustomer;
     public bool CanManageUsers => IsSystemAdmin || IsEmployee || IsCustomerAdmin;
     public bool CanManageCustomers => IsSystemAdmin || IsEmployee;
+    public bool CanManageConfiguration => IsSystemAdmin || IsEmployee;
+    public bool CanManageAgentCredentials => IsSystemAdmin || IsEmployee;
     public Guid? CustomerId => CurrentUser?.CustomerId;
     public bool MustChangePassword => CurrentUser?.MustChangePassword == true;
 

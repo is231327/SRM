@@ -12,9 +12,11 @@ namespace SRMCore.Controllers;
 public class IncidentsController(IIncidentQueryService incidentQueryService) : ControllerBase
 {
     [HttpGet]
-    public async Task<ActionResult<List<IncidentReadDto>>> GetAll(CancellationToken cancellationToken)
+    public async Task<ActionResult<List<IncidentReadDto>>> GetAll(
+        [FromQuery] bool includeClosed,
+        CancellationToken cancellationToken)
     {
-        var incidents = await incidentQueryService.GetAllAsync(cancellationToken);
+        var incidents = await incidentQueryService.GetAllAsync(includeClosed, cancellationToken);
         return Ok(incidents.Select(IncidentReadDtoMapper.ToReadDto).ToList());
     }
 

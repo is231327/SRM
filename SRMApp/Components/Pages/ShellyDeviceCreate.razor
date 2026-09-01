@@ -4,6 +4,7 @@
 @inherits LocalizedComponentBase
 @inject ICoreApiClient ApiClient
 @inject ICrudPageDataService CrudPageDataService
+@inject AuthSessionService AuthSessionService
 @inject NavigationManager NavigationManager
 
 <PageTitle>@(IsEditMode ? LanguageService.T("EditShellyDevice") : LanguageService.T("CreateShellyDevice"))</PageTitle>
@@ -82,6 +83,8 @@ else
     }
     private async Task SaveAsync()
     {
+        if (!AuthSessionService.CanManageConfiguration) return;
+
         if (IsEditMode)
         {
             await ApiClient.UpdateShellyDeviceAsync(ShellyDeviceId!.Value, new ShellyDeviceUpdateDto

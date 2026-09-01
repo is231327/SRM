@@ -215,7 +215,7 @@ public class AuthService(
     public async Task<UserProfileDto?> CreateUserAsync(CreateUserRequestDto request, CancellationToken cancellationToken = default)
     {
         EnsureCanManageUsers();
-        await EnsureRequestedAssignmentAllowedAsync(request.Roles, request.CustomerId, cancellationToken);
+        EnsureRequestedAssignmentAllowed(request.Roles, request.CustomerId);
 
         var existingUser = await dbContext.Users.AnyAsync(
             x => x.Username == request.Username || x.Email == request.Email,
@@ -296,7 +296,7 @@ public class AuthService(
     public async Task<UserManagementDto?> UpdateUserAsync(Guid userId, UpdateUserRequestDto request, CancellationToken cancellationToken = default)
     {
         EnsureCanManageUsers();
-        await EnsureRequestedAssignmentAllowedAsync(request.Roles, request.CustomerId, cancellationToken);
+        EnsureRequestedAssignmentAllowed(request.Roles, request.CustomerId);
 
         var user = await ApplyUserManagementScope(
                 dbContext.Users
@@ -562,10 +562,9 @@ public class AuthService(
         return query.Where(_ => false);
     }
 
-    private async Task EnsureRequestedAssignmentAllowedAsync(
+    private void EnsureRequestedAssignmentAllowed(
         IReadOnlyCollection<string> requestedRoles,
-        Guid? requestedCustomerId,
-        CancellationToken cancellationToken)
+        Guid? requestedCustomerId)
     {
         var roles = requestedRoles
             .Where(x => !string.IsNullOrWhiteSpace(x))
@@ -577,42 +576,58 @@ public class AuthService(
             throw new UnauthorizedAccessException("At least one role is required.");
         }
 
+        var humanRoleNames = AuthRoles.HumanRoles
+            .Select(AuthRoles.ToName)
+            .ToHashSet(StringComparer.Ordinal);
+        if (roles.Any(role => !humanRoleNames.Contains(role)))
+        {
+            throw new UnauthorizedAccessException("One or more requested roles are invalid for a human user.");
+        }
+
+        var customerRoleNames = new[]
+        {
+            AuthRoles.ToName(AuthRoleType.CustomerAdmin),
+            AuthRoles.ToName(AuthRoleType.Customer)
+        };
+        var hasCustomerRole = roles.Intersect(customerRoleNames).Any();
+        var hasInternalRole = roles.Except(customerRoleNames).Any();
+
+        if (hasCustomerRole && hasInternalRole)
+        {
+            throw new UnauthorizedAccessException("Internal and customer-scoped roles cannot be combined.");
+        }
+
+        if (hasCustomerRole && !requestedCustomerId.HasValue)
+        {
+            throw new UnauthorizedAccessException("A customer assignment is required for a customer-scoped role.");
+        }
+
+        if (!hasCustomerRole && requestedCustomerId.HasValue)
+        {
+            throw new UnauthorizedAccessException("A customer assignment is only valid for a customer-scoped role.");
+        }
+
         if (currentUserContext.IsSystemAdmin)
         {
             return;
         }
 
-        var allowedRoles = new[]
-        {
-            AuthRoles.ToName(AuthRoleType.CustomerAdmin),
-            AuthRoles.ToName(AuthRoleType.Customer)
-        };
-
-        if (roles.Except(allowedRoles).Any())
+        if (roles.Except(customerRoleNames).Any())
         {
             throw new UnauthorizedAccessException("The current user is not allowed to assign the requested role.");
-        }
-
-        if (!requestedCustomerId.HasValue)
-        {
-            throw new UnauthorizedAccessException("A customer assignment is required for the requested role.");
         }
 
         if (currentUserContext.IsCustomerAdmin)
         {
             var currentCustomerId = currentUserContext.CustomerId
                 ?? throw new UnauthorizedAccessException("Customer administrators require a customer claim.");
+            var targetCustomerId = requestedCustomerId
+                ?? throw new UnauthorizedAccessException("A customer assignment is required for a customer-scoped role.");
 
-            if (requestedCustomerId.Value != currentCustomerId)
+            if (targetCustomerId != currentCustomerId)
             {
                 throw new UnauthorizedAccessException("Customer administrators may only manage users of their own customer.");
             }
-        }
-
-        var customerExists = await dbContext.Set<Customer>().AnyAsync(x => x.Id == requestedCustomerId.Value, cancellationToken);
-        if (!customerExists)
-        {
-            throw new UnauthorizedAccessException("The requested customer does not exist.");
         }
     }
 

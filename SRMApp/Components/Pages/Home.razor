@@ -22,28 +22,6 @@
     </div>
 </section>
 
-<div class="panel-grid">
-    <div class="panel-card">
-        <h3>@LanguageService.T("Overview")</h3>
-        <p class="subtle">@LanguageService.T("HierarchyHint")</p>
-    </div>
-    <div class="panel-card">
-        <h3>@LanguageService.T("QuickActions")</h3>
-        <div class="child-links">
-            @if (AuthSessionService.IsAuthenticated)
-            {
-                <a class="btn btn-primary" href="/customers">@LanguageService.T("Customers")</a>
-                <a class="btn btn-outline-primary" href="/contact">@LanguageService.T("Contact")</a>
-            }
-            else
-            {
-                <a class="btn btn-primary" href="/login">@LanguageService.T("Login")</a>
-                <a class="btn btn-outline-primary" href="/help">@LanguageService.T("Help")</a>
-            }
-        </div>
-    </div>
-</div>
-
 @code {
     protected override void OnInitialized()
     {

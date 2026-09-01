@@ -4,6 +4,7 @@
 @inherits LocalizedComponentBase
 @inject ICoreApiClient ApiClient
 @inject ICrudPageDataService CrudPageDataService
+@inject AuthSessionService AuthSessionService
 @inject NavigationManager NavigationManager
 
 <PageTitle>@(IsEditMode ? LanguageService.T("EditAgent") : LanguageService.T("CreateAgent"))</PageTitle>
@@ -95,6 +96,8 @@ else
 
     private async Task SaveAsync()
     {
+        if (!AuthSessionService.CanManageConfiguration) return;
+
         if (IsEditMode)
         {
             await ApiClient.UpdateAgentAsync(AgentId!.Value, new AgentUpdateDto

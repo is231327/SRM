@@ -6,5 +6,4 @@ public class CustomerUser : BaseEntity
     public Guid CustomerId { get; set; }
 
     public AuthUser? User { get; set; }
-    public Customer? Customer { get; set; }
 }

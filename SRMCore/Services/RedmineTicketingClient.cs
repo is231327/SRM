@@ -41,7 +41,7 @@ public class RedmineTicketingClient : IRedmineTicketingClient
                 StatusId = _options.StatusId,
                 PriorityId = MapPriorityId(incident.Severity),
                 Subject = incident.Summary,
-                Description = incident.Description
+                Description = BuildDescription(incident)
             }
         };
 
@@ -54,7 +54,7 @@ public class RedmineTicketingClient : IRedmineTicketingClient
         return new RedmineTicketCreateResult
         {
             ExternalTicketId = created.Issue.Id.ToString(),
-            ExternalTicketUrl = BuildIssueUrl(created.Issue.Id)
+            ExternalTicketUrl = _options.BuildPublicIssueUrl(created.Issue.Id.ToString())
         };
     }
 
@@ -70,6 +70,35 @@ public class RedmineTicketingClient : IRedmineTicketingClient
 
         using var response = await _httpClient.PutAsJsonAsync($"issues/{externalTicketId}.json", payload, cancellationToken);
         await EnsureSuccessWithDetailsAsync(response, cancellationToken);
+    }
+
+    public async Task UpdatePriorityAsync(
+        string externalTicketId,
+        IncidentSeverity severity,
+        CancellationToken cancellationToken = default)
+    {
+        var payload = new RedminePriorityUpdateRequest
+        {
+            Issue = new RedminePriorityUpdateBody { PriorityId = MapPriorityId(severity) }
+        };
+
+        using var response = await _httpClient.PutAsJsonAsync($"issues/{externalTicketId}.json", payload, cancellationToken);
+        await EnsureSuccessWithDetailsAsync(response, cancellationToken);
+    }
+
+    public async Task<RedmineIssueDetails> GetIssueAsync(string externalTicketId, CancellationToken cancellationToken = default)
+    {
+        using var response = await _httpClient.GetAsync($"issues/{externalTicketId}.json", cancellationToken);
+        await EnsureSuccessWithDetailsAsync(response, cancellationToken);
+
+        var issueResponse = await response.Content.ReadFromJsonAsync<RedmineIssueResponse>(cancellationToken: cancellationToken)
+            ?? throw new InvalidOperationException("Redmine did not return a valid issue response.");
+
+        return new RedmineIssueDetails
+        {
+            StatusName = issueResponse.Issue.Status.Name,
+            PriorityName = issueResponse.Issue.Priority.Name
+        };
     }
 
     private void EnsureConfigured()
@@ -96,9 +125,29 @@ public class RedmineTicketingClient : IRedmineTicketingClient
         };
     }
 
-    private string BuildIssueUrl(int issueId)
+    private static string BuildDescription(Incident incident)
     {
-        return $"{_options.BaseUrl.TrimEnd('/')}/issues/{issueId}";
+        var customerName = incident.ServerRoom?.Customer?.Name ?? "Unknown";
+        var serverRoomName = incident.ServerRoom?.Name ?? "Unknown";
+        var source = incident.ShellyDevice is not null
+            ? $"Shelly device: {incident.ShellyDevice.Name}"
+            : incident.MonitoredDevice is not null
+                ? $"Monitored device: {incident.MonitoredDevice.DisplayName} ({incident.MonitoredDevice.IpAddress})"
+                : "Source device: Unknown";
+
+        return $"""
+            {incident.Description}
+
+            Source system: SRMCore
+            Customer: {customerName}
+            Server room: {serverRoomName}
+            Incident type: {incident.Type}
+            Severity: {incident.Severity}
+            Event timestamp (UTC): {incident.OpenedAtUtc:O}
+            Correlation key: {incident.CorrelationKey}
+            Internal incident ID: {incident.Id}
+            {source}
+            """;
     }
 
     private async Task<int> ResolveProjectIdAsync(CancellationToken cancellationToken)
@@ -214,6 +263,27 @@ public class RedmineTicketingClient : IRedmineTicketingClient
         public int Id { get; set; }
     }
 
+    private sealed class RedmineIssueResponse
+    {
+        [JsonPropertyName("issue")]
+        public RedmineIssue Issue { get; set; } = new();
+    }
+
+    private sealed class RedmineIssue
+    {
+        [JsonPropertyName("status")]
+        public RedmineNamedReference Status { get; set; } = new();
+
+        [JsonPropertyName("priority")]
+        public RedmineNamedReference Priority { get; set; } = new();
+    }
+
+    private sealed class RedmineNamedReference
+    {
+        [JsonPropertyName("name")]
+        public string Name { get; set; } = string.Empty;
+    }
+
     private sealed class RedmineProjectResponse
     {
         [JsonPropertyName("project")]
@@ -236,5 +306,17 @@ public class RedmineTicketingClient : IRedmineTicketingClient
     {
         [JsonPropertyName("notes")]
         public string Notes { get; set; } = string.Empty;
+    }
+
+    private sealed class RedminePriorityUpdateRequest
+    {
+        [JsonPropertyName("issue")]
+        public RedminePriorityUpdateBody Issue { get; set; } = new();
+    }
+
+    private sealed class RedminePriorityUpdateBody
+    {
+        [JsonPropertyName("priority_id")]
+        public int PriorityId { get; set; }
     }
 }

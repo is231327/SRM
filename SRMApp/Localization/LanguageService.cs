@@ -34,18 +34,43 @@ public class LanguageService
         ["German"] = ("German", "Deutsch"),
         ["Loading"] = ("Loading...", "Laden..."),
         ["NoData"] = ("No data available.", "Keine Daten verfuegbar."),
-        ["QuickActions"] = ("Quick Actions", "Schnellzugriff"),
         ["SystemStatus"] = ("System Status", "Systemstatus"),
         ["MonitoringInventory"] = ("Monitoring Inventory", "Monitoring-Bestand"),
-        ["WelcomeHeadline"] = ("Monitor every room. Control every detail.", "Ueberwachen Sie jeden Raum. Steuern Sie jedes Detail."),
-        ["WelcomeText"] = ("Use the dashboard and hierarchical management pages to configure customers, rooms, agents, Shelly devices, monitored devices, maintenance windows, and sensor readings.", "Verwenden Sie das Dashboard und die hierarchischen Verwaltungsseiten, um Kunden, Raeume, Agenten, Shelly-Geraete, ueberwachte Geraete, Wartungsfenster und Sensordaten zu konfigurieren."),
-        ["HelpText"] = ("Use the customer page to start the hierarchy. Navigate deeper through server rooms, agents, and technical devices.", "Verwenden Sie die Kundenseite als Einstieg in die Hierarchie. Navigieren Sie dann tiefer zu Serverraeumen, Agenten und technischen Geraeten."),
-        ["ContactText"] = ("For project support, coordinate through your internal team channels and issue tracker.", "Fuer Projektunterstuetzung koordinieren Sie sich ueber Ihre internen Teamkanaele und den Issue-Tracker."),
+        ["WelcomeHeadline"] = ("Monitor every room. See what matters.", "Ueberwachen Sie jeden Raum. Sehen Sie, was wichtig ist."),
+        ["WelcomeText"] = ("Keep an eye on server rooms, environmental conditions, connected equipment, and current incidents from one place.", "Behalten Sie Serverraeume, Umgebungsbedingungen, angeschlossene Geraete und aktuelle Vorfaelle an einem Ort im Blick."),
+        ["HelpText"] = ("A simple guide to monitoring your server rooms and responding when something needs attention.", "Eine einfache Anleitung zur Ueberwachung Ihrer Serverraeume und zum Umgang mit wichtigen Meldungen."),
+        ["ContactText"] = ("Contact our team if you need help with the server-room monitoring service.", "Kontaktieren Sie unser Team, wenn Sie Hilfe mit dem Serverraum-Monitoring benoetigen."),
+        ["HelpGettingStartedTitle"] = ("Finding your way around", "Orientierung auf der Seite"),
+        ["HelpGettingStartedText"] = ("Start on the dashboard for the overall situation. Open a customer and then a server room when you need a more detailed view.", "Beginnen Sie im Dashboard fuer die Gesamtsituation. Oeffnen Sie einen Kunden und danach einen Serverraum, wenn Sie mehr Details benoetigen."),
+        ["HelpDashboardTitle"] = ("Understanding the dashboard", "Das Dashboard verstehen"),
+        ["HelpDashboardText"] = ("The numbers show all configured records. Colors and supporting text highlight open incidents, inactive monitoring, or missing reports.", "Die Zahlen zeigen alle konfigurierten Eintraege. Farben und Begleittexte weisen auf offene Vorfaelle, inaktives Monitoring oder fehlende Meldungen hin."),
+        ["HelpIncidentsTitle"] = ("Responding to incidents", "Auf Vorfaelle reagieren"),
+        ["HelpIncidentsText"] = ("Open incidents describe conditions that still require attention. Use the Redmine ticket button to open the related support ticket.", "Offene Vorfaelle beschreiben Situationen, die weiterhin Aufmerksamkeit erfordern. Mit der Schaltflaeche Redmine-Ticket oeffnen Sie das zugehoerige Support-Ticket."),
+        ["HelpMaintenanceTitle"] = ("Maintenance windows", "Wartungsfenster"),
+        ["HelpMaintenanceText"] = ("A maintenance window marks an expected period of work. Opening a door during that period does not create a door incident.", "Ein Wartungsfenster kennzeichnet einen geplanten Arbeitszeitraum. Wird die Tuer in diesem Zeitraum geoeffnet, entsteht kein Tuervorfall."),
+        ["FrequentlyAskedQuestions"] = ("Frequently asked questions", "Haeufig gestellte Fragen"),
+        ["FaqDashboardQuestion"] = ("What do the tile colors mean?", "Was bedeuten die Farben der Kacheln?"),
+        ["FaqDashboardAnswer"] = ("Green indicates a normal or resolved state, yellow indicates attention may be needed, red indicates an open critical condition, and blue indicates that information has not arrived yet.", "Gruen steht fuer einen normalen oder geloesten Zustand, Gelb fuer moeglichen Handlungsbedarf, Rot fuer einen offenen kritischen Zustand und Blau fuer noch nicht eingetroffene Informationen."),
+        ["FaqIncidentQuestion"] = ("When is an incident resolved?", "Wann ist ein Vorfall geloest?"),
+        ["FaqIncidentAnswer"] = ("The system resolves an incident after the reported condition returns to normal, for example when a door closes or a device becomes reachable again.", "Das System loest einen Vorfall, sobald sich der gemeldete Zustand normalisiert, zum Beispiel wenn eine Tuer geschlossen oder ein Geraet wieder erreichbar ist."),
+        ["FaqTicketQuestion"] = ("Why can a Redmine ticket still be open after an incident is resolved?", "Warum kann ein Redmine-Ticket nach der Loesung eines Vorfalls noch offen sein?"),
+        ["FaqTicketAnswer"] = ("SRM adds a resolution note to Redmine but does not close the external ticket automatically. The responsible person completes the ticket in Redmine.", "SRM fuegt in Redmine einen Loesungshinweis hinzu, schliesst das externe Ticket aber nicht automatisch. Die verantwortliche Person schliesst das Ticket in Redmine ab."),
+        ["FaqMissingDataQuestion"] = ("Why does a tile say that no data has been received?", "Warum zeigt eine Kachel an, dass keine Daten empfangen wurden?"),
+        ["FaqMissingDataAnswer"] = ("The appliance or device may not have reported yet. If the message remains, contact support and provide the affected customer, server room, and device.", "Die Appliance oder das Geraet hat moeglicherweise noch keine Daten gemeldet. Bleibt die Meldung bestehen, kontaktieren Sie den Support und nennen Sie Kunde, Serverraum und Geraet."),
+        ["FaqConfigurationQuestion"] = ("Why can I view data but not change it?", "Warum kann ich Daten sehen, aber nicht aendern?"),
+        ["FaqConfigurationAnswer"] = ("Customer accounts are read-only. Configuration changes are available only to authorized employees and administrators.", "Kundenkonten haben nur Leserechte. Konfigurationsaenderungen stehen nur berechtigten Mitarbeitern und Administratoren zur Verfuegung."),
+        ["ContactCompanyTitle"] = ("Company and contact", "Unternehmen und Kontakt"),
+        ["ContactChannelsTitle"] = ("Contact details", "Kontaktdaten"),
+        ["Company"] = ("Company", "Unternehmen"),
+        ["ContactPerson"] = ("Contact person", "Ansprechperson"),
+        ["Address"] = ("Address", "Adresse"),
+        ["SupportHours"] = ("Support hours", "Supportzeiten"),
+        ["ContactSupportHoursValue"] = ("Monday to Friday, 08:00–17:00", "Montag bis Freitag, 08:00–17:00 Uhr"),
+        ["Germany"] = ("Germany", "Deutschland"),
         ["CustomersCard"] = ("Customers", "Kunden"),
         ["RoomsCard"] = ("Rooms", "Raeume"),
         ["AgentsCard"] = ("Agents", "Agenten"),
         ["SensorsCard"] = ("Sensor Readings", "Sensordaten"),
-        ["HierarchyHint"] = ("Manage child entities from the parent context for a clearer operational view.", "Verwalten Sie Kind-Entitaeten aus dem Elternkontext fuer eine klarere operative Sicht."),
         ["Name"] = ("Name", "Name"),
         ["Description"] = ("Description", "Beschreibung"),
         ["Actions"] = ("Actions", "Aktionen"),
@@ -111,7 +136,7 @@ public class LanguageService
         ["ServerRoomIncidentsDescription"] = ("Latest incidents for this room.", "Neueste Vorfaelle fuer diesen Raum."),
         ["DashboardIncidentsDescription"] = ("Newest incidents across all customers.", "Neueste Vorfaelle ueber alle Kunden hinweg."),
         ["DashboardCustomersDescription"] = ("Customers with the highest current incident activity.", "Kunden mit der aktuell hoechsten Vorfallaktivitaet."),
-        ["DashboardIncidentSummaryCritical"] = ("{0} critical incidents and {1} open incidents require review.", "{0} kritische Vorfaelle und {1} offene Vorfaelle erfordern Pruefung."),
+        ["DashboardIncidentSummaryCritical"] = ("{0} of {1} open incidents are critical.", "{0} von {1} offenen Vorfaellen sind kritisch."),
         ["DashboardIncidentSummaryOpen"] = ("{0} open incidents are currently unresolved.", "{0} offene Vorfaelle sind aktuell ungeloest."),
         ["CustomerActivity"] = ("Customer Activity", "Kundenaktivitaet"),
         ["OpenIncidents"] = ("Open Incidents", "Offene Vorfaelle"),
@@ -138,7 +163,7 @@ public class LanguageService
         ["ConfiguredMaintenanceWindows"] = ("Configured Maintenance Windows", "Konfigurierte Wartungsfenster"),
         ["MaintenanceTitle"] = ("Title", "Titel"),
         ["RecordedAt"] = ("Recorded At", "Erfasst am"),
-        ["IncidentType"] = ("Incident Type", "Vorfalltyp"),
+        ["IncidentStatus"] = ("Incident Status", "Vorfallstatus"),
         ["Severity"] = ("Severity", "Schweregrad"),
         ["Status"] = ("Status", "Status"),
         ["OpenedAt"] = ("Opened At", "Geoeffnet am"),
@@ -146,17 +171,16 @@ public class LanguageService
         ["LastOccurredAt"] = ("Last Occurred At", "Zuletzt aufgetreten am"),
         ["CorrelationKey"] = ("Correlation Key", "Korrelationsschluessel"),
         ["TicketSyncStatus"] = ("Ticket Sync Status", "Ticket-Sync-Status"),
+        ["TicketStatus"] = ("Ticket Status", "Ticket-Status"),
+        ["TicketPriority"] = ("Ticket Priority", "Ticket-Prioritaet"),
         ["TicketLinks"] = ("Ticket Links", "Ticket-Verknuepfungen"),
         ["IncidentEvents"] = ("Incident Events", "Vorfallereignisse"),
-        ["IncidentDetails"] = ("Incident Details", "Vorfalldetails"),
-        ["IncidentDetailsDescription"] = ("Review incident state, event history, and ticket synchronization status.", "Pruefen Sie Vorfallstatus, Ereignisverlauf und Ticket-Synchronisationsstatus."),
         ["IncidentsPageDescription"] = ("Review incidents created from sensor readings and monitored-device failures.", "Pruefen Sie Vorfaelle aus Sensordaten und Ausfaellen ueberwachter Geraete."),
         ["BackToIncidents"] = ("Back to Incidents", "Zurueck zu Vorfaellen"),
         ["ExternalTicketId"] = ("External Ticket ID", "Externe Ticket-ID"),
         ["LastSyncAttemptAt"] = ("Last Sync Attempt At", "Letzter Sync-Versuch am"),
         ["LastMessage"] = ("Last Message", "Letzte Nachricht"),
-        ["OpenTicket"] = ("Open Ticket", "Ticket oeffnen"),
-        ["Details"] = ("Details", "Details"),
+        ["RedmineTicket"] = ("Redmine Ticket", "Redmine-Ticket"),
         ["ServerRoom"] = ("Server Room", "Serverraum"),
         ["ShellyDevice"] = ("Shelly Device", "Shelly-Geraet"),
         ["MonitoredDevice"] = ("Monitored Device", "Ueberwachtes Geraet"),
@@ -172,9 +196,17 @@ public class LanguageService
         ["Closed"] = ("Closed", "Geschlossen"),
         ["PendingCreate"] = ("Pending Create", "Erstellung ausstehend"),
         ["Created"] = ("Created", "Erstellt"),
-        ["PendingComment"] = ("Pending Comment", "Kommentar ausstehend"),
-        ["Commented"] = ("Commented", "Kommentiert"),
-        ["Failed"] = ("Failed", "Fehlgeschlagen"),
+        ["Error"] = ("Error", "Fehler"),
+        ["Low"] = ("Low", "Niedrig"),
+        ["Normal"] = ("Normal", "Normal"),
+        ["High"] = ("High", "Hoch"),
+        ["Urgent"] = ("Urgent", "Dringend"),
+        ["Immediate"] = ("Immediate", "Sofort"),
+        ["New"] = ("New", "Neu"),
+        ["InProgress"] = ("In Progress", "In Bearbeitung"),
+        ["In Progress"] = ("In Progress", "In Bearbeitung"),
+        ["Feedback"] = ("Feedback", "Rueckmeldung"),
+        ["Rejected"] = ("Rejected", "Abgelehnt"),
         ["Reachable"] = ("Reachable", "Erreichbar"),
         ["Roundtrip"] = ("Roundtrip", "Laufzeit"),
         ["FailureCount"] = ("Failure Count", "Fehleranzahl"),
@@ -259,69 +291,160 @@ public class LanguageService
         ["ManagedPasswordResetSuccess"] = ("The managed user's password was reset.", "Das Passwort des verwalteten Benutzers wurde zurueckgesetzt."),
         ["PasswordPolicyHint"] = ("Password policy: at least 12 characters, including uppercase, lowercase, digit, and special character.", "Passwortrichtlinie: mindestens 12 Zeichen mit Grossbuchstaben, Kleinbuchstaben, Ziffer und Sonderzeichen."),
         ["MustChangePasswordNotice"] = ("Your password was reset by an administrator. You must set a new password before continuing.", "Ihr Passwort wurde von einem Administrator zurueckgesetzt. Sie muessen zuerst ein neues Passwort setzen.")
-        ,["ServerRoomMonitoring"] = ("Server Room Monitoring", "Serverraum-Monitoring")
-        ,["Temperature"] = ("Temperature", "Temperatur")
-        ,["DoorStatus"] = ("Door Status", "Tuerstatus")
-        ,["NetworkDevices"] = ("Network Devices", "Netzwerkgeraete")
-        ,["LastUpdate"] = ("Last Update", "Letzte Aktualisierung")
-        ,["DashboardLeadCritical"] = ("{0} critical incidents and {1} open incidents require attention.", "{0} kritische Vorfaelle und {1} offene Vorfaelle erfordern Aufmerksamkeit.")
-        ,["DashboardLeadOpen"] = ("{0} open incidents are currently being tracked across {1} customers.", "{0} offene Vorfaelle werden aktuell ueber {1} Kunden hinweg verfolgt.")
-        ,["DashboardLeadStable"] = ("Monitoring is active across {0} customers, {1} server rooms, and {2} agents.", "Das Monitoring ist ueber {0} Kunden, {1} Serverraeume und {2} Agenten aktiv.")
-        ,["ActiveCustomerRecords"] = ("{0} active customer records", "{0} aktive Kundeneintraege")
-        ,["RoomSummaryCritical"] = ("At least one room has critical incidents.", "Mindestens ein Raum hat kritische Vorfaelle.")
-        ,["RoomSummaryOpen"] = ("At least one room has open incidents.", "Mindestens ein Raum hat offene Vorfaelle.")
-        ,["RoomSummaryStable"] = ("All rooms currently look stable.", "Alle Raeume wirken aktuell stabil.")
-        ,["MonitoringDisabled"] = ("Monitoring is currently disabled.", "Monitoring ist aktuell deaktiviert.")
-        ,["ServerRoomConfigured"] = ("Server room is configured.", "Serverraum ist konfiguriert.")
-        ,["InactiveAgentsCount"] = ("{0} inactive agent(s)", "{0} inaktive Agent(en)")
-        ,["AllAgentsActive"] = ("All agents are active.", "Alle Agenten sind aktiv.")
-        ,["SensorTelemetryArriving"] = ("Sensor telemetry is arriving.", "Sensortelemetrie trifft ein.")
-        ,["NoOpenIncidents"] = ("No open incidents.", "Keine offenen Vorfaelle.")
-        ,["OpenIncidentsUnresolved"] = ("Open incidents are still unresolved.", "Offene Vorfaelle sind noch nicht geloest.")
-        ,["NoCriticalIncidents"] = ("No critical incidents.", "Keine kritischen Vorfaelle.")
-        ,["CriticalIncidentsImmediateReview"] = ("Critical incidents need immediate review.", "Kritische Vorfaelle muessen sofort geprueft werden.")
-        ,["BatteryUnknown"] = ("Battery: Unknown", "Batterie: Unbekannt")
-        ,["BatteryPercent"] = ("Battery: {0}%", "Batterie: {0}%")
-        ,["VirtualShellyConfigured"] = ("Virtual Shelly is configured.", "Virtueller Shelly ist konfiguriert.")
-        ,["ShellyConfigured"] = ("Shelly device is configured.", "Shelly-Geraet ist konfiguriert.")
-        ,["Upcoming"] = ("Upcoming", "Bevorstehend")
-        ,["Completed"] = ("Completed", "Abgeschlossen")
-        ,["MaintenanceScheduled"] = ("Maintenance window is scheduled.", "Wartungsfenster ist geplant.")
-        ,["MaintenanceInProgress"] = ("Maintenance window is in progress.", "Wartungsfenster laeuft.")
-        ,["MaintenanceFinished"] = ("Maintenance window has finished.", "Wartungsfenster ist beendet.")
-        ,["CustomerLeadCritical"] = ("{0} critical incident(s) are open across {1} server room(s).", "{0} kritische Vorfaelle sind ueber {1} Serverraeume hinweg offen.")
-        ,["CustomerLeadOpen"] = ("{0} open incident(s) are being tracked across this customer environment.", "{0} offene Vorfaelle werden in dieser Kundenumgebung verfolgt.")
-        ,["CustomerLeadStable"] = ("{0} server room(s), {1} agent(s), and {2} Shelly device(s) are currently configured.", "{0} Serverraum/raeume, {1} Agent(en) und {2} Shelly-Geraet(e) sind aktuell konfiguriert.")
-        ,["ServerRoomCriticalIssue"] = ("At least one server room has a critical issue.", "Mindestens ein Serverraum hat ein kritisches Problem.")
-        ,["ServerRoomOpenIssue"] = ("At least one server room has an open issue.", "Mindestens ein Serverraum hat ein offenes Problem.")
-        ,["ServerRoomsStable"] = ("Server rooms currently look stable.", "Serverraeume wirken aktuell stabil.")
-        ,["InactiveAgentsPresent"] = ("There are inactive agents.", "Es gibt inaktive Agenten.")
-        ,["AgentsNotReportedYet"] = ("Some agents have not reported yet.", "Einige Agenten haben noch nicht berichtet.")
-        ,["ShellyCriticalIncidentOpen"] = ("A Shelly-related critical incident is open.", "Ein Shelly-bezogener kritischer Vorfall ist offen.")
-        ,["ShellyDoorOpen"] = ("At least one Shelly currently reports an open door.", "Mindestens ein Shelly meldet aktuell eine offene Tuer.")
-        ,["ShellyNoReadingsYet"] = ("Some Shelly devices have no readings yet.", "Einige Shelly-Geraete haben noch keine Messwerte.")
-        ,["ShellyReportingNormally"] = ("Shelly devices are reporting normally.", "Shelly-Geraete melden normal.")
-        ,["MonitoredDeviceThresholdDown"] = ("A monitored device is down beyond the failure threshold.", "Ein ueberwachtes Geraet ist ueber die Fehlerschwelle hinaus ausgefallen.")
-        ,["MonitoredDeviceUnreachable"] = ("At least one monitored device is currently unreachable.", "Mindestens ein ueberwachtes Geraet ist aktuell nicht erreichbar.")
-        ,["MonitoredDeviceNoHistory"] = ("Some monitored devices have no ping history yet.", "Einige ueberwachte Geraete haben noch keinen Ping-Verlauf.")
-        ,["MonitoredDevicesReachable"] = ("Monitored devices are reachable.", "Ueberwachte Geraete sind erreichbar.")
-        ,["OpenIncidentsTracked"] = ("Open incidents are still being tracked.", "Offene Vorfaelle werden weiterhin verfolgt.")
-        ,["NoOpenIncidentsRemain"] = ("No open incidents remain.", "Es sind keine offenen Vorfaelle mehr vorhanden.")
-        ,["MaintenanceConfigured"] = ("Maintenance windows are configured.", "Wartungsfenster sind konfiguriert.")
-        ,["ServerRoomLeadCritical"] = ("Critical incidents are open in this server room.", "In diesem Serverraum sind kritische Vorfaelle offen.")
-        ,["ServerRoomLeadOpen"] = ("Open incidents are currently being monitored in this server room.", "In diesem Serverraum werden aktuell offene Vorfaelle ueberwacht.")
-        ,["ServerRoomLeadStable"] = ("{0} agent(s), {1} Shelly device(s), and {2} monitored device(s) are configured here.", "{0} Agent(en), {1} Shelly-Geraet(e) und {2} ueberwachte Geraet(e) sind hier konfiguriert.")
-        ,["NoSensorReadingsReceivedYet"] = ("No sensor readings have been received yet.", "Es wurden noch keine Sensormesswerte empfangen.")
-        ,["MonitoredDeviceUnreachableShort"] = ("At least one monitored device is unreachable.", "Mindestens ein ueberwachtes Geraet ist nicht erreichbar.")
-        ,["NoPingResultsReceivedYet"] = ("No ping results have been received yet.", "Es wurden noch keine Ping-Ergebnisse empfangen.")
-        ,["NoTemperatureReadingReceivedYet"] = ("No temperature reading received yet.", "Noch keine Temperaturmessung empfangen.")
-        ,["LatestReadingAt"] = ("Latest reading: {0}", "Letzte Messung: {0}")
-        ,["Unknown"] = ("Unknown", "Unbekannt")
-        ,["DoorOpen"] = ("OPEN", "OFFEN")
-        ,["DoorClosed"] = ("CLOSED", "GESCHLOSSEN")
-        ,["NoDoorStateReceivedYet"] = ("No door state received yet.", "Noch kein Tuerstatus empfangen.")
-        ,["LatestTelemetryOrIncidentActivity"] = ("Latest telemetry or incident activity.", "Neueste Telemetrie- oder Vorfallaktivitaet.")
-        ,["NoActivityRecordedYet"] = ("No activity recorded yet.", "Noch keine Aktivitaet erfasst.")
+        ,
+        ["ServerRoomMonitoring"] = ("Server Room Monitoring", "Serverraum-Monitoring")
+        ,
+        ["Temperature"] = ("Temperature", "Temperatur")
+        ,
+        ["DoorStatus"] = ("Door Status", "Tuerstatus")
+        ,
+        ["NetworkDevices"] = ("Network Devices", "Netzwerkgeraete")
+        ,
+        ["LastUpdate"] = ("Last Update", "Letzte Aktualisierung")
+        ,
+        ["DashboardLeadCritical"] = ("{0} of {1} open incidents are critical and require attention.", "{0} von {1} offenen Vorfaellen sind kritisch und erfordern Aufmerksamkeit.")
+        ,
+        ["DashboardLeadOpen"] = ("{0} open incidents are currently being tracked across {1} customers.", "{0} offene Vorfaelle werden aktuell ueber {1} Kunden hinweg verfolgt.")
+        ,
+        ["DashboardLeadStable"] = ("Monitoring is active across {0} customers, {1} server rooms, and {2} agents.", "Das Monitoring ist ueber {0} Kunden, {1} Serverraeume und {2} Agenten aktiv.")
+        ,
+        ["ConfiguredCustomerRecords"] = ("{0} configured customer record(s)", "{0} konfigurierte Kundeneintraege")
+        ,
+        ["InactiveCustomersCount"] = ("{0} customer record(s) are inactive.", "{0} Kundeneintraege sind inaktiv.")
+        ,
+        ["RoomSummaryCritical"] = ("At least one room has critical incidents.", "Mindestens ein Raum hat kritische Vorfaelle.")
+        ,
+        ["RoomSummaryOpen"] = ("At least one room has open incidents.", "Mindestens ein Raum hat offene Vorfaelle.")
+        ,
+        ["RoomSummaryStable"] = ("All rooms currently look stable.", "Alle Raeume wirken aktuell stabil.")
+        ,
+        ["SomeRoomMonitoringDisabled"] = ("Monitoring is disabled for at least one room.", "Monitoring ist fuer mindestens einen Raum deaktiviert.")
+        ,
+        ["MonitoringDisabled"] = ("Monitoring is currently disabled.", "Monitoring ist aktuell deaktiviert.")
+        ,
+        ["MonitoringEnabled"] = ("Monitoring is enabled.", "Monitoring ist aktiviert.")
+        ,
+        ["ServerRoomConfigured"] = ("Server room is configured.", "Serverraum ist konfiguriert.")
+        ,
+        ["InactiveAgentsCount"] = ("{0} inactive agent(s)", "{0} inaktive Agent(en)")
+        ,
+        ["AllAgentsHaveReported"] = ("All active agents have reported.", "Alle aktiven Agenten haben Daten gemeldet.")
+        ,
+        ["AgentHasReported"] = ("The agent has reported.", "Der Agent hat Daten gemeldet.")
+        ,
+        ["AgentInactive"] = ("The agent is inactive.", "Der Agent ist inaktiv.")
+        ,
+        ["AgentNotReportedYet"] = ("The agent has not reported yet.", "Der Agent hat noch keine Daten gemeldet.")
+        ,
+        ["SensorTelemetryArriving"] = ("Sensor telemetry is arriving.", "Sensortelemetrie trifft ein.")
+        ,
+        ["NoOpenIncidents"] = ("No open incidents.", "Keine offenen Vorfaelle.")
+        ,
+        ["OpenIncidentsUnresolved"] = ("Open incidents are still unresolved.", "Offene Vorfaelle sind noch nicht geloest.")
+        ,
+        ["NoCriticalIncidents"] = ("No critical incidents.", "Keine kritischen Vorfaelle.")
+        ,
+        ["CriticalIncidentsImmediateReview"] = ("Critical incidents need immediate review.", "Kritische Vorfaelle muessen sofort geprueft werden.")
+        ,
+        ["BatteryUnknown"] = ("Battery: Unknown", "Batterie: Unbekannt")
+        ,
+        ["BatteryPercent"] = ("Battery: {0}%", "Batterie: {0}%")
+        ,
+        ["VirtualShellyConfigured"] = ("Virtual Shelly is configured.", "Virtueller Shelly ist konfiguriert.")
+        ,
+        ["ShellyConfigured"] = ("Shelly device is configured.", "Shelly-Geraet ist konfiguriert.")
+        ,
+        ["Upcoming"] = ("Upcoming", "Bevorstehend")
+        ,
+        ["Completed"] = ("Completed", "Abgeschlossen")
+        ,
+        ["MaintenanceScheduled"] = ("Maintenance window is scheduled.", "Wartungsfenster ist geplant.")
+        ,
+        ["MaintenanceInProgress"] = ("Maintenance window is in progress.", "Wartungsfenster laeuft.")
+        ,
+        ["MaintenanceFinished"] = ("Maintenance window has finished.", "Wartungsfenster ist beendet.")
+        ,
+        ["CustomerLeadCritical"] = ("{0} critical incident(s) are open across {1} server room(s).", "{0} kritische Vorfaelle sind ueber {1} Serverraeume hinweg offen.")
+        ,
+        ["CustomerLeadOpen"] = ("{0} open incident(s) are being tracked across this customer environment.", "{0} offene Vorfaelle werden in dieser Kundenumgebung verfolgt.")
+        ,
+        ["CustomerLeadStable"] = ("{0} server room(s), {1} agent(s), and {2} Shelly device(s) are currently configured.", "{0} Serverraum/raeume, {1} Agent(en) und {2} Shelly-Geraet(e) sind aktuell konfiguriert.")
+        ,
+        ["ServerRoomCriticalIssue"] = ("At least one server room has a critical issue.", "Mindestens ein Serverraum hat ein kritisches Problem.")
+        ,
+        ["ServerRoomOpenIssue"] = ("At least one server room has an open issue.", "Mindestens ein Serverraum hat ein offenes Problem.")
+        ,
+        ["ServerRoomsStable"] = ("Server rooms currently look stable.", "Serverraeume wirken aktuell stabil.")
+        ,
+        ["InactiveAgentsPresent"] = ("There are inactive agents.", "Es gibt inaktive Agenten.")
+        ,
+        ["AgentsNotReportedYet"] = ("Some agents have not reported yet.", "Einige Agenten haben noch nicht berichtet.")
+        ,
+        ["ShellyCriticalIncidentOpen"] = ("A Shelly-related critical incident is open.", "Ein Shelly-bezogener kritischer Vorfall ist offen.")
+        ,
+        ["ShellyDoorOpen"] = ("At least one Shelly currently reports an open door.", "Mindestens ein Shelly meldet aktuell eine offene Tuer.")
+        ,
+        ["ShellyNoReadingsYet"] = ("Some Shelly devices have no readings yet.", "Einige Shelly-Geraete haben noch keine Messwerte.")
+        ,
+        ["ShellyReportingNormally"] = ("Shelly devices are reporting normally.", "Shelly-Geraete melden normal.")
+        ,
+        ["InactiveShellyDevicesCount"] = ("{0} Shelly device(s) are inactive.", "{0} Shelly-Geraete sind inaktiv.")
+        ,
+        ["InactiveShellyDevicesPresent"] = ("At least one Shelly device is inactive.", "Mindestens ein Shelly-Geraet ist inaktiv.")
+        ,
+        ["MonitoredDeviceThresholdDown"] = ("A monitored device is down beyond the failure threshold.", "Ein ueberwachtes Geraet ist ueber die Fehlerschwelle hinaus ausgefallen.")
+        ,
+        ["MonitoredDeviceUnreachable"] = ("At least one monitored device is currently unreachable.", "Mindestens ein ueberwachtes Geraet ist aktuell nicht erreichbar.")
+        ,
+        ["MonitoredDeviceUnreachableSingular"] = ("The monitored device is currently unreachable.", "Das ueberwachte Geraet ist aktuell nicht erreichbar.")
+        ,
+        ["MonitoredDeviceNoHistory"] = ("Some monitored devices have no ping history yet.", "Einige ueberwachte Geraete haben noch keinen Ping-Verlauf.")
+        ,
+        ["MonitoredDevicesReachable"] = ("Monitored devices are reachable.", "Ueberwachte Geraete sind erreichbar.")
+        ,
+        ["MonitoredDeviceReachable"] = ("The monitored device is reachable.", "Das ueberwachte Geraet ist erreichbar.")
+        ,
+        ["ShowClosedIncidents"] = ("Show Closed Incidents", "Geschlossene Vorfaelle anzeigen")
+        ,
+        ["HideClosedIncidents"] = ("Hide Closed Incidents", "Geschlossene Vorfaelle ausblenden")
+        ,
+        ["InactiveMonitoredDevicesCount"] = ("{0} monitored device(s) are inactive.", "{0} ueberwachte Geraete sind inaktiv.")
+        ,
+        ["InactiveMonitoredDevicesPresent"] = ("At least one monitored device is inactive.", "Mindestens ein ueberwachtes Geraet ist inaktiv.")
+        ,
+        ["OpenIncidentsTracked"] = ("Open incidents are still being tracked.", "Offene Vorfaelle werden weiterhin verfolgt.")
+        ,
+        ["NoOpenIncidentsRemain"] = ("No open incidents remain.", "Es sind keine offenen Vorfaelle mehr vorhanden.")
+        ,
+        ["MaintenanceConfigured"] = ("Maintenance windows are configured.", "Wartungsfenster sind konfiguriert.")
+        ,
+        ["ServerRoomLeadCritical"] = ("Critical incidents are open in this server room.", "In diesem Serverraum sind kritische Vorfaelle offen.")
+        ,
+        ["ServerRoomLeadOpen"] = ("Open incidents are currently being monitored in this server room.", "In diesem Serverraum werden aktuell offene Vorfaelle ueberwacht.")
+        ,
+        ["ServerRoomLeadStable"] = ("{0} agent(s), {1} Shelly device(s), and {2} monitored device(s) are configured here.", "{0} Agent(en), {1} Shelly-Geraet(e) und {2} ueberwachte Geraet(e) sind hier konfiguriert.")
+        ,
+        ["NoSensorReadingsReceivedYet"] = ("No sensor readings have been received yet.", "Es wurden noch keine Sensormesswerte empfangen.")
+        ,
+        ["MonitoredDeviceUnreachableShort"] = ("At least one monitored device is unreachable.", "Mindestens ein ueberwachtes Geraet ist nicht erreichbar.")
+        ,
+        ["NoPingResultsReceivedYet"] = ("No ping results have been received yet.", "Es wurden noch keine Ping-Ergebnisse empfangen.")
+        ,
+        ["NoTemperatureReadingReceivedYet"] = ("No temperature reading received yet.", "Noch keine Temperaturmessung empfangen.")
+        ,
+        ["LatestReadingAt"] = ("Latest reading: {0}", "Letzte Messung: {0}")
+        ,
+        ["Unknown"] = ("Unknown", "Unbekannt")
+        ,
+        ["DoorOpen"] = ("OPEN", "OFFEN")
+        ,
+        ["DoorClosed"] = ("CLOSED", "GESCHLOSSEN")
+        ,
+        ["NoDoorStateReceivedYet"] = ("No door state received yet.", "Noch kein Tuerstatus empfangen.")
+        ,
+        ["LatestTelemetryOrIncidentActivity"] = ("Latest telemetry or incident activity.", "Neueste Telemetrie- oder Vorfallaktivitaet.")
+        ,
+        ["NoActivityRecordedYet"] = ("No activity recorded yet.", "Noch keine Aktivitaet erfasst.")
     };
 
     public string CurrentLanguage { get; private set; } = "en";

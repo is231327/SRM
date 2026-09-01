@@ -4,15 +4,19 @@
 @inherits LocalizedComponentBase
 @inject ICoreApiClient ApiClient
 @inject ICrudPageDataService CrudPageDataService
+@inject AuthSessionService AuthSessionService
 
 <PageTitle>@LanguageService.T("ServerRooms")</PageTitle>
 
 <PageHeader Title="@LanguageService.T("ServerRooms")" Description="@LanguageService.T("ServerRoomsOverviewDescription")">
     <Actions>
-        <a class="btn btn-primary" href="@GetCreateHref()">@LanguageService.T("CreateServerRoom")</a>
         @if (CustomerId is not null)
         {
             <a class="btn btn-outline-primary" href="/customers/@CustomerId/details">@LanguageService.T("BackToCustomerOverview")</a>
+        }
+        @if (AuthSessionService.CanManageConfiguration)
+        {
+            <a class="btn btn-primary" href="@GetCreateHref()">@LanguageService.T("CreateServerRoom")</a>
         }
     </Actions>
 </PageHeader>
@@ -26,7 +30,6 @@ else if (serverRooms.Count == 0)
     <div class="empty-state">
         <h3>@LanguageService.T("NoData")</h3>
         <p class="subtle">@LanguageService.T("ServerRoomsOverviewDescription")</p>
-        <a class="btn btn-primary" href="@GetCreateHref()">@LanguageService.T("CreateServerRoom")</a>
     </div>
 }
 else
@@ -48,8 +51,11 @@ else
                 </Details>
                 <Actions>
                     <a class="btn btn-primary btn-sm" href="/serverrooms/@room.Id/details">@LanguageService.T("Overview")</a>
-                    <a class="btn btn-outline-primary btn-sm" href="@GetEditHref(room.Id)">@LanguageService.T("Edit")</a>
-                    <button class="btn btn-outline-danger btn-sm" @onclick="() => DeleteAsync(room.Id)">@LanguageService.T("Delete")</button>
+                    @if (AuthSessionService.CanManageConfiguration)
+                    {
+                        <a class="btn btn-outline-primary btn-sm" href="@GetEditHref(room.Id)">@LanguageService.T("Edit")</a>
+                        <button class="btn btn-outline-danger btn-sm" @onclick="() => DeleteAsync(room.Id)">@LanguageService.T("Delete")</button>
+                    }
                 </Actions>
             </SummaryStatCard>
         }
@@ -90,5 +96,5 @@ else
 
     private string GetServerRoomSummaryText(ServerRoomReadDto room)
         => !room.MonitoringEnabled ? LanguageService.T("MonitoringDisabled")
-            : LanguageService.T("ServerRoomConfigured");
+            : LanguageService.T("MonitoringEnabled");
 }

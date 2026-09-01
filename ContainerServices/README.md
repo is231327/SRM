@@ -75,7 +75,7 @@ Compose defines these services:
 
 Important Compose behavior:
 
-- `depends_on` controls startup ordering. Health conditions wait for SQL Server, Redis, and PostgreSQL before dependent containers start.
+- `depends_on` controls startup ordering. Health conditions wait for SQL Server, Redis, PostgreSQL, Auth, and Core before dependent containers start.
 - Named volumes keep local data when containers are recreated.
 - Compose service names provide internal DNS. A container uses names such as the configured SQL host, not `localhost`.
 - Published ports expose selected services to the host for development and testing.
@@ -105,6 +105,8 @@ Replace every placeholder. Use development-only values. In particular, `REDMINE_
 | `Infrastructure` (default) | Yes | No | No | `.env.development` |
 | `Simulators` | Yes | No | Yes | `.env.development` |
 | `Full` | Yes | Yes | Yes | `.env.local` |
+
+`Full` mode runs the idempotent `srm-demo-seeder` before the Agent starts. It creates configuration only: customer, server rooms, Agent and credentials, Shelly and monitored-device definitions, and a maintenance window. It does not create readings, ping results, incidents, or tickets.
 
 Start infrastructure, then run the .NET projects from separate terminals:
 

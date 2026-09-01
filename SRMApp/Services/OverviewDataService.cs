@@ -30,14 +30,17 @@ public sealed class OverviewDataService(ICoreApiClient apiClient) : IOverviewDat
         var sensorReadings = await apiClient.GetSensorReadingsAsync();
         var pingResults = await apiClient.GetMonitoredDevicePingResultsAsync();
         var incidents = await apiClient.GetIncidentsAsync();
-        var openIncidents = incidents.Where(x => x.Status.ToString() == "Open").ToList();
-        var criticalIncidents = incidents.Where(x => x.Severity.ToString() == "Critical").ToList();
+        var openIncidents = incidents.Where(OverviewUiHelper.IsOpenIncident).ToList();
+        var openCriticalIncidents = openIncidents.Where(x => x.Severity.ToString() == "Critical").ToList();
         var roomIdsByCustomerId = serverRooms
             .GroupBy(x => x.CustomerId)
             .ToDictionary(x => x.Key, x => x.Select(y => y.Id).ToHashSet());
         var incidentCountByCustomerId = customers.ToDictionary(
             x => x.Id,
             x => incidents.Count(y => roomIdsByCustomerId.GetValueOrDefault(x.Id)?.Contains(y.ServerRoomId) == true));
+        var openIncidentCountByCustomerId = customers.ToDictionary(
+            x => x.Id,
+            x => openIncidents.Count(y => roomIdsByCustomerId.GetValueOrDefault(x.Id)?.Contains(y.ServerRoomId) == true));
         var lastActivityByCustomerId = customers.ToDictionary(
             x => x.Id,
             x =>
@@ -58,12 +61,12 @@ public sealed class OverviewDataService(ICoreApiClient apiClient) : IOverviewDat
                     .Where(y => roomIdsByCustomerId.GetValueOrDefault(x.Id)?.Contains(y.ServerRoomId) == true)
                     .ToList();
 
-                if (customerIncidents.Any(y => y.Severity.ToString() == "Critical" && y.Status.ToString() == "Open"))
+                if (customerIncidents.Any(y => y.Severity.ToString() == "Critical" && OverviewUiHelper.IsOpenIncident(y)))
                 {
                     return "alert-critical";
                 }
 
-                if (customerIncidents.Any(y => y.Status.ToString() == "Open"))
+                if (customerIncidents.Any(OverviewUiHelper.IsOpenIncident))
                 {
                     return "alert-warning";
                 }
@@ -82,8 +85,9 @@ public sealed class OverviewDataService(ICoreApiClient apiClient) : IOverviewDat
             pingResults,
             incidents,
             openIncidents,
-            criticalIncidents,
+            openCriticalIncidents,
             incidentCountByCustomerId,
+            openIncidentCountByCustomerId,
             lastActivityByCustomerId,
             cardClassByCustomerId);
     }
@@ -211,8 +215,9 @@ public sealed record DashboardOverviewData(
     IReadOnlyList<MonitoredDevicePingResultReadDto> PingResults,
     IReadOnlyList<IncidentReadDto> Incidents,
     IReadOnlyList<IncidentReadDto> OpenIncidents,
-    IReadOnlyList<IncidentReadDto> CriticalIncidents,
+    IReadOnlyList<IncidentReadDto> OpenCriticalIncidents,
     IReadOnlyDictionary<Guid, int> IncidentCountByCustomerId,
+    IReadOnlyDictionary<Guid, int> OpenIncidentCountByCustomerId,
     IReadOnlyDictionary<Guid, DateTime?> LastActivityByCustomerId,
     IReadOnlyDictionary<Guid, string> CardClassByCustomerId);
 

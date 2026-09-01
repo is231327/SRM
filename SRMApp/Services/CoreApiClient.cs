@@ -12,7 +12,11 @@ using SRMShared.DTOs.ShellyDevice;
 
 namespace SRMApp.Services;
 
-public class CoreApiClient(HttpClient httpClient, AuthSessionService authSessionService, IAuthApiClient authApiClient) : ICoreApiClient
+public class CoreApiClient(
+    HttpClient httpClient,
+    AuthSessionService authSessionService,
+    IAuthApiClient authApiClient,
+    ILogger<CoreApiClient> logger) : ICoreApiClient
 {
     private readonly HttpClient _httpClient = httpClient;
 
@@ -43,9 +47,6 @@ public class CoreApiClient(HttpClient httpClient, AuthSessionService authSession
     public async Task<bool> DeleteMonitoredDeviceAsync(Guid id) => await DeleteAsync($"api/monitoreddevices/{id}");
 
     public async Task<List<MonitoredDevicePingResultReadDto>> GetMonitoredDevicePingResultsAsync() => await GetListAsync<MonitoredDevicePingResultReadDto>("api/monitoreddevicepingresults");
-    public async Task<MonitoredDevicePingResultReadDto?> CreateMonitoredDevicePingResultAsync(MonitoredDevicePingResultCreateDto dto) => await PostAsync<MonitoredDevicePingResultCreateDto, MonitoredDevicePingResultReadDto>("api/monitoreddevicepingresults", dto);
-    public async Task<MonitoredDevicePingResultReadDto?> UpdateMonitoredDevicePingResultAsync(Guid id, MonitoredDevicePingResultUpdateDto dto) => await PutAsync<MonitoredDevicePingResultUpdateDto, MonitoredDevicePingResultReadDto>($"api/monitoreddevicepingresults/{id}", dto);
-    public async Task<bool> DeleteMonitoredDevicePingResultAsync(Guid id) => await DeleteAsync($"api/monitoreddevicepingresults/{id}");
 
     public async Task<List<MaintenanceWindowReadDto>> GetMaintenanceWindowsAsync() => await GetListAsync<MaintenanceWindowReadDto>("api/maintenancewindows");
     public async Task<MaintenanceWindowReadDto?> CreateMaintenanceWindowAsync(MaintenanceWindowCreateDto dto) => await PostAsync<MaintenanceWindowCreateDto, MaintenanceWindowReadDto>("api/maintenancewindows", dto);
@@ -53,11 +54,8 @@ public class CoreApiClient(HttpClient httpClient, AuthSessionService authSession
     public async Task<bool> DeleteMaintenanceWindowAsync(Guid id) => await DeleteAsync($"api/maintenancewindows/{id}");
 
     public async Task<List<SensorReadingReadDto>> GetSensorReadingsAsync() => await GetListAsync<SensorReadingReadDto>("api/sensorreadings");
-    public async Task<SensorReadingReadDto?> CreateSensorReadingAsync(SensorReadingCreateDto dto) => await PostAsync<SensorReadingCreateDto, SensorReadingReadDto>("api/sensorreadings", dto);
-    public async Task<SensorReadingReadDto?> UpdateSensorReadingAsync(Guid id, SensorReadingUpdateDto dto) => await PutAsync<SensorReadingUpdateDto, SensorReadingReadDto>($"api/sensorreadings/{id}", dto);
-    public async Task<bool> DeleteSensorReadingAsync(Guid id) => await DeleteAsync($"api/sensorreadings/{id}");
-    public async Task<List<IncidentReadDto>> GetIncidentsAsync() => await GetListAsync<IncidentReadDto>("api/incidents");
-    public async Task<IncidentReadDto?> GetIncidentAsync(Guid id) => await GetAsync<IncidentReadDto>($"api/incidents/{id}");
+    public async Task<List<IncidentReadDto>> GetIncidentsAsync(bool includeClosed = false)
+        => await GetListAsync<IncidentReadDto>($"api/incidents?includeClosed={includeClosed.ToString().ToLowerInvariant()}");
 
     private async Task<List<T>> GetListAsync<T>(string path)
     {
@@ -73,8 +71,9 @@ public class CoreApiClient(HttpClient httpClient, AuthSessionService authSession
         {
             return await _httpClient.GetFromJsonAsync<List<T>>(path) ?? [];
         }
-        catch
+        catch (Exception exception)
         {
+            logger.LogWarning(exception, "Core API list request to {Path} failed.", path);
             return [];
         }
     }
@@ -93,8 +92,9 @@ public class CoreApiClient(HttpClient httpClient, AuthSessionService authSession
         {
             return await _httpClient.GetFromJsonAsync<T>(path);
         }
-        catch
+        catch (Exception exception)
         {
+            logger.LogWarning(exception, "Core API GET request to {Path} failed.", path);
             return default;
         }
     }
@@ -114,8 +114,9 @@ public class CoreApiClient(HttpClient httpClient, AuthSessionService authSession
             var response = await _httpClient.PostAsJsonAsync(path, dto);
             return await ReadResponseAsync<TResponse>(response);
         }
-        catch
+        catch (Exception exception)
         {
+            logger.LogWarning(exception, "Core API POST request to {Path} failed.", path);
             return default;
         }
     }
@@ -135,8 +136,9 @@ public class CoreApiClient(HttpClient httpClient, AuthSessionService authSession
             var response = await _httpClient.PutAsJsonAsync(path, dto);
             return await ReadResponseAsync<TResponse>(response);
         }
-        catch
+        catch (Exception exception)
         {
+            logger.LogWarning(exception, "Core API PUT request to {Path} failed.", path);
             return default;
         }
     }
@@ -156,8 +158,9 @@ public class CoreApiClient(HttpClient httpClient, AuthSessionService authSession
             var response = await _httpClient.DeleteAsync(path);
             return response.IsSuccessStatusCode;
         }
-        catch
+        catch (Exception exception)
         {
+            logger.LogWarning(exception, "Core API DELETE request to {Path} failed.", path);
             return false;
         }
     }

@@ -22,13 +22,20 @@ public class TicketDispatchService(SrmCoreDbContext dbContext) : ITicketDispatch
                 ProviderName = ProviderName,
                 SyncStatus = TicketSyncStatus.PendingCreate,
                 LastSyncAttemptAtUtc = null,
+                SyncAttemptCount = 0,
+                NextSyncAttemptAtUtc = null,
+                PendingComment = string.Empty,
                 LastErrorMessage = string.Empty
             });
         }
-        else
+        else if (existing.SyncStatus == TicketSyncStatus.Error
+            && string.IsNullOrWhiteSpace(existing.ExternalTicketId))
         {
             existing.SyncStatus = TicketSyncStatus.PendingCreate;
             existing.LastSyncAttemptAtUtc = null;
+            existing.SyncAttemptCount = 0;
+            existing.NextSyncAttemptAtUtc = null;
+            existing.PendingComment = string.Empty;
             existing.LastErrorMessage = string.Empty;
             existing.UpdatedAtUtc = DateTime.UtcNow;
         }
@@ -49,19 +56,44 @@ public class TicketDispatchService(SrmCoreDbContext dbContext) : ITicketDispatch
                 ProviderName = ProviderName,
                 SyncStatus = TicketSyncStatus.PendingCreate,
                 LastSyncAttemptAtUtc = null,
-                LastErrorMessage = comment
+                SyncAttemptCount = 0,
+                NextSyncAttemptAtUtc = null,
+                PendingComment = comment,
+                LastErrorMessage = string.Empty
             });
         }
         else
         {
             existing.SyncStatus = string.IsNullOrWhiteSpace(existing.ExternalTicketId)
                 ? TicketSyncStatus.PendingCreate
-                : TicketSyncStatus.PendingComment;
+                : TicketSyncStatus.Created;
             existing.LastSyncAttemptAtUtc = null;
-            existing.LastErrorMessage = comment;
+            existing.SyncAttemptCount = 0;
+            existing.NextSyncAttemptAtUtc = null;
+            existing.PendingComment = comment;
+            existing.LastErrorMessage = string.Empty;
             existing.UpdatedAtUtc = DateTime.UtcNow;
         }
 
+        await dbContext.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task QueuePriorityUpdateAsync(Incident incident, CancellationToken cancellationToken = default)
+    {
+        var existing = await dbContext.TicketLinks
+            .FirstOrDefaultAsync(x => x.IncidentId == incident.Id && x.ProviderName == ProviderName, cancellationToken);
+
+        if (existing is null || string.IsNullOrWhiteSpace(existing.ExternalTicketId))
+        {
+            await QueueCreateAsync(incident, cancellationToken);
+            return;
+        }
+
+        existing.PriorityUpdatePending = true;
+        existing.NextSyncAttemptAtUtc = null;
+        existing.SyncAttemptCount = 0;
+        existing.LastErrorMessage = string.Empty;
+        existing.UpdatedAtUtc = DateTime.UtcNow;
         await dbContext.SaveChangesAsync(cancellationToken);
     }
 }

@@ -3,12 +3,12 @@
 @inherits LocalizedComponentBase
 @inject ICoreApiClient ApiClient
 @inject ICrudPageDataService CrudPageDataService
+@inject AuthSessionService AuthSessionService
 
 <PageTitle>@LanguageService.T("MaintenanceWindows")</PageTitle>
 
 <PageHeader Title="@LanguageService.T("MaintenanceWindows")" Description="@LanguageService.T("MaintenanceWindowsOverviewDescription")">
     <Actions>
-        <a class="btn btn-primary" href="@GetCreateHref()">@LanguageService.T("CreateMaintenanceWindow")</a>
         @if (serverRoomId is not null)
         {
             <a class="btn btn-outline-primary" href="/serverrooms/@serverRoomId/details">@LanguageService.T("BackToServerRooms")</a>
@@ -16,6 +16,10 @@
         else if (customerId is not null)
         {
             <a class="btn btn-outline-primary" href="/customers/@customerId/details">@LanguageService.T("BackToCustomerOverview")</a>
+        }
+        @if (AuthSessionService.CanManageConfiguration)
+        {
+            <a class="btn btn-primary" href="@GetCreateHref()">@LanguageService.T("CreateMaintenanceWindow")</a>
         }
     </Actions>
 </PageHeader>
@@ -29,7 +33,6 @@ else if (items.Count == 0)
     <div class="empty-state">
         <h3>@LanguageService.T("NoData")</h3>
         <p class="subtle">@LanguageService.T("MaintenanceWindowsOverviewDescription")</p>
-        <a class="btn btn-primary" href="@GetCreateHref()">@LanguageService.T("CreateMaintenanceWindow")</a>
     </div>
 }
 else
@@ -49,8 +52,11 @@ else
                     <div>@item.Description</div>
                 </Details>
                 <Actions>
-                    <a class="btn btn-outline-primary btn-sm" href="@GetEditHref(item.Id)">@LanguageService.T("Edit")</a>
-                    <button class="btn btn-outline-danger btn-sm" @onclick="() => DeleteAsync(item.Id)">@LanguageService.T("Delete")</button>
+                    @if (AuthSessionService.CanManageConfiguration)
+                    {
+                        <a class="btn btn-outline-primary btn-sm" href="@GetEditHref(item.Id)">@LanguageService.T("Edit")</a>
+                        <button class="btn btn-outline-danger btn-sm" @onclick="() => DeleteAsync(item.Id)">@LanguageService.T("Delete")</button>
+                    }
                 </Actions>
             </SummaryStatCard>
         }
