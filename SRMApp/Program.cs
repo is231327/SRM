@@ -41,7 +41,9 @@ public class Program
             var configuration = serviceProvider.GetRequiredService<IConfiguration>();
             client.BaseAddress = new Uri(configuration["AuthApi:BaseUrl"] ?? throw new InvalidOperationException("Missing configuration value 'AuthApi:BaseUrl'."));
         });
+        builder.Services.AddScoped<ProtectedLocalStorage>();
         builder.Services.AddScoped<ProtectedSessionStorage>();
+        builder.Services.AddScoped<IAuthSessionStore, ProtectedBrowserAuthSessionStore>();
         builder.Services.AddScoped<AuthSessionService>();
         builder.Services.AddScoped<LanguageService>();
         builder.Services.AddScoped<IOverviewDataService, OverviewDataService>();

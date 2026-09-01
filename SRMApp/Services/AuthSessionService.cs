@@ -1,4 +1,3 @@
-using Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage;
 using Microsoft.Extensions.Logging;
 using SRMShared.DTOs.Auth;
 using SRMShared.Auth;
@@ -6,10 +5,9 @@ using SRMShared.Auth;
 namespace SRMApp.Services;
 
 public class AuthSessionService(
-    ProtectedSessionStorage protectedSessionStorage,
+    IAuthSessionStore sessionStore,
     ILogger<AuthSessionService> logger)
 {
-    private const string StorageKey = "auth-session";
     private bool _isInitialized;
 
     public event Action? AuthenticationChanged;
@@ -42,13 +40,13 @@ public class AuthSessionService(
 
         try
         {
-            var result = await protectedSessionStorage.GetAsync<AuthSessionState>(StorageKey);
-            if (result.Success && result.Value is not null)
+            var state = await sessionStore.GetAsync();
+            if (state is not null)
             {
-                AccessToken = result.Value.AccessToken;
-                RefreshToken = result.Value.RefreshToken;
-                AccessTokenExpiresAtUtc = result.Value.AccessTokenExpiresAtUtc;
-                CurrentUser = result.Value.CurrentUser;
+                AccessToken = state.AccessToken;
+                RefreshToken = state.RefreshToken;
+                AccessTokenExpiresAtUtc = state.AccessTokenExpiresAtUtc;
+                CurrentUser = state.CurrentUser;
             }
         }
         catch (Exception exception)
@@ -69,7 +67,7 @@ public class AuthSessionService(
 
         try
         {
-            await protectedSessionStorage.SetAsync(StorageKey, new AuthSessionState
+            await sessionStore.SetAsync(new AuthSessionState
             {
                 AccessToken = tokenResponse.AccessToken,
                 RefreshToken = tokenResponse.RefreshToken,
@@ -106,7 +104,7 @@ public class AuthSessionService(
 
         try
         {
-            await protectedSessionStorage.DeleteAsync(StorageKey);
+            await sessionStore.DeleteAsync();
         }
         catch (Exception exception)
         {
@@ -147,11 +145,11 @@ public class AuthSessionService(
         {
             if (!IsAuthenticated || CurrentUser is null)
             {
-                await protectedSessionStorage.DeleteAsync(StorageKey);
+                await sessionStore.DeleteAsync();
                 return;
             }
 
-            await protectedSessionStorage.SetAsync(StorageKey, new AuthSessionState
+            await sessionStore.SetAsync(new AuthSessionState
             {
                 AccessToken = AccessToken!,
                 RefreshToken = RefreshToken ?? string.Empty,
@@ -171,7 +169,7 @@ public class AuthSessionService(
     }
 }
 
-internal sealed class AuthSessionState
+public sealed class AuthSessionState
 {
     public string AccessToken { get; set; } = string.Empty;
     public string RefreshToken { get; set; } = string.Empty;

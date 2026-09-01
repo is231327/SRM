@@ -26,6 +26,7 @@
     <ProjectReference Include="..\SRMCore\SRMCore.csproj" />
     <ProjectReference Include="..\SRMAuth\SRMAuth.csproj" />
     <ProjectReference Include="..\SRMAgent\SRMAgent.csproj" />
+    <ProjectReference Include="..\SRMApp\SRMApp.csproj" />
     <ProjectReference Include="..\SRMShared\SRMShared.csproj" />
   </ItemGroup>
 
