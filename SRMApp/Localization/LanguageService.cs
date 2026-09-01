@@ -110,7 +110,6 @@ public class LanguageService
         ["BackToAgents"] = ("Back to Agents", "Zurueck zu Agenten"),
         ["CustomerChildren"] = ("Customer Hierarchy", "Kundenhierarchie"),
         ["ServerRoomChildren"] = ("Server Room Hierarchy", "Serverraum-Hierarchie"),
-        ["AgentChildren"] = ("Agent Hierarchy", "Agenten-Hierarchie"),
         ["CustomerOverview"] = ("Customer Overview", "Kundenuebersicht"),
         ["CustomerOverviewDescription"] = ("Review the complete operational structure of one customer from a single page.", "Pruefen Sie die komplette operative Struktur eines Kunden auf einer Seite."),
         ["BackToCustomerOverview"] = ("Back to Customer Overview", "Zurueck zur Kundenuebersicht"),
