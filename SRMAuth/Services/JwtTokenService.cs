@@ -14,7 +14,7 @@ public class JwtTokenService(IOptions<JwtOptions> options) : IJwtTokenService
 {
     private readonly JwtOptions _options = options.Value;
 
-    public (string AccessToken, DateTime ExpiresAtUtc, string TokenJti) CreateUserAccessToken(AuthUser user, IEnumerable<string> roles, Guid? customerId)
+    public (string AccessToken, DateTime ExpiresAtUtc, string TokenJti) CreateUserAccessToken(AuthUser user, IEnumerable<string> roles, Guid? customerId, string sessionVersion)
     {
         var tokenJti = Guid.NewGuid().ToString();
         var claims = new List<Claim>
@@ -23,7 +23,9 @@ public class JwtTokenService(IOptions<JwtOptions> options) : IJwtTokenService
             new(JwtRegisteredClaimNames.UniqueName, user.Username),
             new(JwtRegisteredClaimNames.Jti, tokenJti),
             new(ClaimTypes.NameIdentifier, user.Id.ToString()),
-            new(ClaimTypes.Name, user.Username)
+            new(ClaimTypes.Name, user.Username),
+            new(AuthClaimTypes.SessionVersion, sessionVersion),
+            new(AuthClaimTypes.MustChangePassword, user.MustChangePassword ? "true" : "false")
         };
 
         claims.AddRange(roles.Select(role => new Claim(ClaimTypes.Role, role)));
@@ -36,7 +38,7 @@ public class JwtTokenService(IOptions<JwtOptions> options) : IJwtTokenService
         return CreateToken(claims, tokenJti);
     }
 
-    public (string AccessToken, DateTime ExpiresAtUtc, string TokenJti) CreateAgentAccessToken(AgentCredential agentCredential)
+    public (string AccessToken, DateTime ExpiresAtUtc, string TokenJti) CreateAgentAccessToken(AgentCredential agentCredential, string sessionVersion)
     {
         var tokenJti = Guid.NewGuid().ToString();
         var claims = new List<Claim>
@@ -48,7 +50,8 @@ public class JwtTokenService(IOptions<JwtOptions> options) : IJwtTokenService
             new(ClaimTypes.Name, agentCredential.ClientIdentifier),
             new(ClaimTypes.Role, AuthRoles.ToName(AuthRoleType.Agent)),
             new(AuthClaimTypes.AgentId, agentCredential.AgentId.ToString()),
-            new(AuthClaimTypes.Scope, "agent.api")
+            new(AuthClaimTypes.Scope, "agent.api"),
+            new(AuthClaimTypes.SessionVersion, sessionVersion)
         };
 
         return CreateToken(claims, tokenJti);

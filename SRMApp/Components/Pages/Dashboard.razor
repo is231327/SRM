@@ -3,6 +3,7 @@
 @using SRMShared.DTOs.MonitoredDevicePingResult
 @inherits LocalizedComponentBase
 @inject IOverviewDataService OverviewDataService
+@inject AuthSessionService AuthSessionService
 
 <PageTitle>@LanguageService.T("Dashboard")</PageTitle>
 
@@ -21,7 +22,10 @@ else
     </section>
 
     <div class="stats-grid">
-        <SummaryStatCard CardClass="@GetCustomerSummaryClass()" IconClass="stat-icon-customers" Title="@LanguageService.T("CustomersCard")" Value="@customers.Count.ToString()" SummaryText="@GetCustomerSummaryText()" SummaryTextClass="@OverviewUiHelper.GetStatusTextClass(GetCustomerSummaryClass())" ViewAllHref="/customers" ViewAllText="@LanguageService.T("ViewAll")" />
+        @if (AuthSessionService.CanManageCustomers)
+        {
+            <SummaryStatCard CardClass="@GetCustomerSummaryClass()" IconClass="stat-icon-customers" Title="@LanguageService.T("CustomersCard")" Value="@customers.Count.ToString()" SummaryText="@GetCustomerSummaryText()" SummaryTextClass="@OverviewUiHelper.GetStatusTextClass(GetCustomerSummaryClass())" ViewAllHref="/customers" ViewAllText="@LanguageService.T("ViewAll")" />
+        }
         <SummaryStatCard CardClass="@GetRoomsSummaryClass()" IconClass="stat-icon-rooms" Title="@LanguageService.T("RoomsCard")" Value="@serverRooms.Count.ToString()" SummaryText="@GetRoomSummaryText()" SummaryTextClass="@OverviewUiHelper.GetStatusTextClass(GetRoomsSummaryClass())" ViewAllHref="/serverrooms" ViewAllText="@LanguageService.T("ViewAll")" />
         <SummaryStatCard CardClass="@GetAgentSummaryClass()" IconClass="stat-icon-agents" Title="@LanguageService.T("AgentsCard")" Value="@agents.Count.ToString()" SummaryText="@GetAgentSummaryText()" SummaryTextClass="@OverviewUiHelper.GetStatusTextClass(GetAgentSummaryClass())" ViewAllHref="/agents" ViewAllText="@LanguageService.T("ViewAll")" />
         <SummaryStatCard CardClass="@GetShellySummaryClass()" IconClass="stat-icon-sensors" Title="@LanguageService.T("ShellyDevices")" Value="@shellyDevices.Count.ToString()" SummaryText="@GetShellySummaryText()" SummaryTextClass="@OverviewUiHelper.GetStatusTextClass(GetShellySummaryClass())" ViewAllHref="/shelly-devices" ViewAllText="@LanguageService.T("ViewAll")" />
@@ -89,10 +93,14 @@ else
 
         if (openIncidents.Count > 0)
         {
-            return LanguageService.Tf("DashboardLeadOpen", openIncidents.Count, customers.Count);
+            return AuthSessionService.IsCustomerScopedUser
+                ? LanguageService.Tf("DashboardLeadOpenScoped", openIncidents.Count)
+                : LanguageService.Tf("DashboardLeadOpen", openIncidents.Count, customers.Count);
         }
 
-        return LanguageService.Tf("DashboardLeadStable", customers.Count, serverRooms.Count, agents.Count);
+        return AuthSessionService.IsCustomerScopedUser
+            ? LanguageService.Tf("DashboardLeadStableScoped", serverRooms.Count, agents.Count)
+            : LanguageService.Tf("DashboardLeadStable", customers.Count, serverRooms.Count, agents.Count);
     }
 
     private string GetCustomerSummaryClass()

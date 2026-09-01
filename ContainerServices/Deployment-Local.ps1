@@ -174,6 +174,18 @@ if (-not (Test-Path -LiteralPath $envPath)) {
     throw "Missing $envPath. Copy $exampleFileName to $configurationFileName and replace every placeholder first."
 }
 
+if (-not (Select-String -LiteralPath $envPath -Pattern '^REDIS_PASSWORD=' -Quiet)) {
+    $bytes = [byte[]]::new(24)
+    $generator = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+    try { $generator.GetBytes($bytes) } finally { $generator.Dispose() }
+    $redisPassword = 'Aa9!' + ([BitConverter]::ToString($bytes) -replace '-', '').ToLowerInvariant()
+    [System.IO.File]::AppendAllLines(
+        (Resolve-Path -LiteralPath $envPath),
+        [string[]]@("REDIS_PASSWORD=$redisPassword"),
+        [System.Text.UTF8Encoding]::new($false))
+    Write-Host "Generated the missing Redis password in $configurationFileName." -ForegroundColor Yellow
+}
+
 if (Select-String -LiteralPath $envPath -Pattern 'replace-with-' -SimpleMatch) {
     throw "ContainerServices/$configurationFileName still contains placeholder values."
 }
@@ -222,7 +234,11 @@ function Get-PortValue {
 
 $redisHost = Get-RequiredValue -Values $values -Key 'REDIS_HOST'
 $redisPort = Get-PortValue -Key 'REDIS_PORT'
-$values['REDIS_CONNECTION_STRING'] = "${redisHost}:${redisPort},abortConnect=false"
+$redisPassword = Get-RequiredValue -Values $values -Key 'REDIS_PASSWORD'
+if ($redisPassword.Length -lt 16 -or $redisPassword.Contains(',')) {
+    throw 'REDIS_PASSWORD must contain at least 16 characters and must not contain a comma.'
+}
+$values['REDIS_CONNECTION_STRING'] = "${redisHost}:${redisPort},password=${redisPassword},abortConnect=false"
 
 if ($Mode -eq 'Full') {
     $servicePort = Get-PortValue -Key 'DOTNET_HTTP_PORTS'
@@ -285,6 +301,9 @@ Write-ServiceEnvironmentFile -Name 'srm-redmine-db' -Variables ([ordered]@{
 Write-ServiceEnvironmentFile -Name 'srm-redmine' -Variables ([ordered]@{
     REDMINE_DB_POSTGRES = 'REDMINE_DB_HOST'; REDMINE_DB_DATABASE = 'REDMINE_DB_NAME'
     REDMINE_DB_USERNAME = 'REDMINE_DB_USERNAME'; REDMINE_DB_PASSWORD = 'REDMINE_DB_PASSWORD'
+})
+Write-ServiceEnvironmentFile -Name 'srm-redis' -Variables ([ordered]@{
+    REDIS_PASSWORD = 'REDIS_PASSWORD'
 })
 if ($Mode -eq 'Full') {
 Write-ServiceEnvironmentFile -Name 'srm-auth' -Variables ([ordered]@{

@@ -16,6 +16,7 @@ public class SrmCoreDbContext(DbContextOptions<SrmCoreDbContext> options) : DbCo
     public DbSet<Incident> Incidents => Set<Incident>();
     public DbSet<IncidentEvent> IncidentEvents => Set<IncidentEvent>();
     public DbSet<TicketLink> TicketLinks => Set<TicketLink>();
+    public DbSet<SecurityAuditRecord> SecurityAuditRecords => Set<SecurityAuditRecord>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -129,6 +130,18 @@ public class SrmCoreDbContext(DbContextOptions<SrmCoreDbContext> options) : DbCo
         modelBuilder.Entity<TicketLink>()
             .HasIndex(ticketLink => new { ticketLink.IncidentId, ticketLink.ProviderName })
             .IsUnique();
+
+        modelBuilder.Entity<SecurityAuditRecord>(entity =>
+        {
+            entity.Property(x => x.EventType).HasMaxLength(100).IsRequired();
+            entity.Property(x => x.Outcome).HasMaxLength(32).IsRequired();
+            entity.Property(x => x.ActorIdentifier).HasMaxLength(200);
+            entity.Property(x => x.SourceAddress).HasMaxLength(128);
+            entity.Property(x => x.TargetType).HasMaxLength(100);
+            entity.Property(x => x.Description).HasMaxLength(1000);
+            entity.HasIndex(x => x.OccurredAtUtc);
+            entity.HasIndex(x => x.ActorId);
+        });
     }
 
     public override int SaveChanges()

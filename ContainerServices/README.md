@@ -55,6 +55,8 @@ There is one source file per execution environment:
 
 These files are deliberately separate because their hosts and URLs differ. A credential occurs only once inside a file. The scripts map that canonical value to the environment-variable names required by different images. For example, `SQL_PASSWORD` becomes `MSSQL_SA_PASSWORD` for SQL Server and `SqlServer__Password` for the SRM services.
 
+`REDIS_PASSWORD` is required in every environment, must contain at least 16 characters, and cannot contain a comma because it is embedded in the StackExchange.Redis connection string. `Deployment-Local.ps1` generates and persists a missing value in the selected ignored local/development file for compatibility with existing installations. New files created by `New-DeploymentConfiguration.ps1` already contain a random value. Redis requires the password, and the scripts pass a password-bearing connection string to Auth, Core, and App without printing it.
+
 Tracked `appsettings*.json` files contain generic application behavior such as logging only.
 
 ## Docker Compose explained
@@ -183,6 +185,14 @@ Copy-Item ContainerServices/.env.azure.example ContainerServices/.env.azure
 - `deployAgent`: whether to deploy the agent image and Container App.
 
 `.env.azure` is the single source for Container App names and runtime values. `Deployment-Azure.ps1` validates every key and passes the complete map to Bicep as one `@secure()` object. Bicep creates scoped Container App secrets and maps values to each container. Azure resource properties are still visible to authorized Azure users; `@secure()` prevents the parameter object from being recorded as ordinary deployment output.
+
+When upgrading an existing Azure environment to the password-protected Redis configuration, add a random `REDIS_PASSWORD` of at least 16 characters to `.env.azure`, update the GitHub `SRM_AZURE_ENV` secret with the complete file, and run a configuration deployment once. An application-only release does not reapply Bicep and therefore cannot introduce this infrastructure setting by itself:
+
+```powershell
+./ContainerServices/Deployment-Azure.ps1 -ImageTag '<existing-commit-sha>' -ConfigurationOnly
+```
+
+The configuration update invalidates the previous Redis connection and all existing login state. Users must sign in again after the updated services are ready.
 
 Use independent Azure credentials. Do not copy the local files wholesale.
 

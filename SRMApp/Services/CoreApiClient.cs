@@ -1,5 +1,6 @@
 using System.Net.Http.Json;
 using System.Net.Http.Headers;
+using System.Net;
 using SRMShared.DTOs.Agent;
 using SRMShared.DTOs.Customer;
 using SRMShared.DTOs.Incident;
@@ -69,7 +70,13 @@ public class CoreApiClient(
         ApplyBearerToken();
         try
         {
-            return await _httpClient.GetFromJsonAsync<List<T>>(path) ?? [];
+            using var response = await _httpClient.GetAsync(path);
+            if (await HandleUnauthorizedAsync(response) || !response.IsSuccessStatusCode)
+            {
+                return [];
+            }
+
+            return await response.Content.ReadFromJsonAsync<List<T>>() ?? [];
         }
         catch (Exception exception)
         {
@@ -90,7 +97,13 @@ public class CoreApiClient(
         ApplyBearerToken();
         try
         {
-            return await _httpClient.GetFromJsonAsync<T>(path);
+            using var response = await _httpClient.GetAsync(path);
+            if (await HandleUnauthorizedAsync(response) || !response.IsSuccessStatusCode)
+            {
+                return default;
+            }
+
+            return await response.Content.ReadFromJsonAsync<T>();
         }
         catch (Exception exception)
         {
@@ -111,7 +124,7 @@ public class CoreApiClient(
         ApplyBearerToken();
         try
         {
-            var response = await _httpClient.PostAsJsonAsync(path, dto);
+            using var response = await _httpClient.PostAsJsonAsync(path, dto);
             return await ReadResponseAsync<TResponse>(response);
         }
         catch (Exception exception)
@@ -133,7 +146,7 @@ public class CoreApiClient(
         ApplyBearerToken();
         try
         {
-            var response = await _httpClient.PutAsJsonAsync(path, dto);
+            using var response = await _httpClient.PutAsJsonAsync(path, dto);
             return await ReadResponseAsync<TResponse>(response);
         }
         catch (Exception exception)
@@ -155,8 +168,8 @@ public class CoreApiClient(
         ApplyBearerToken();
         try
         {
-            var response = await _httpClient.DeleteAsync(path);
-            return response.IsSuccessStatusCode;
+            using var response = await _httpClient.DeleteAsync(path);
+            return !await HandleUnauthorizedAsync(response) && response.IsSuccessStatusCode;
         }
         catch (Exception exception)
         {
@@ -167,12 +180,23 @@ public class CoreApiClient(
 
     private async Task<TResponse?> ReadResponseAsync<TResponse>(HttpResponseMessage response)
     {
-        if (!response.IsSuccessStatusCode)
+        if (await HandleUnauthorizedAsync(response) || !response.IsSuccessStatusCode)
         {
             return default;
         }
 
         return await response.Content.ReadFromJsonAsync<TResponse>();
+    }
+
+    private async Task<bool> HandleUnauthorizedAsync(HttpResponseMessage response)
+    {
+        if (response.StatusCode != HttpStatusCode.Unauthorized)
+        {
+            return false;
+        }
+
+        await authSessionService.ClearAsync();
+        return true;
     }
 
     private void ConfigureBaseAddress()

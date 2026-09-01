@@ -89,7 +89,7 @@ $resourceGroup = [string]$settings.resourceGroup
 $runtimeConfiguration = Read-KeyValueFile -Path $SecretsPath
 $requiredRuntimeKeys = @(
     'SQL_ACCEPT_EULA', 'SQL_EDITION', 'SQL_HOST', 'SQL_PORT', 'SQL_USERNAME', 'SQL_PASSWORD',
-    'SQL_AUTH_DATABASE', 'SQL_CORE_DATABASE', 'REDIS_HOST', 'REDIS_PORT',
+    'SQL_AUTH_DATABASE', 'SQL_CORE_DATABASE', 'REDIS_HOST', 'REDIS_PORT', 'REDIS_PASSWORD',
     'REDMINE_DB_HOST', 'REDMINE_DB_PORT', 'REDMINE_DB_NAME', 'REDMINE_DB_USERNAME', 'REDMINE_DB_PASSWORD',
     'REDMINE_HOST', 'REDMINE_PORT', 'AUTH_HOST', 'CORE_HOST', 'APP_HOST', 'AGENT_HOST', 'SHELLY_HOST', 'SHELLY_PORT',
     'DOTNET_ENVIRONMENT', 'DOTNET_HTTP_PORTS',
@@ -137,6 +137,10 @@ $environmentResourceGroup = [string]$settings.parameters.containerAppsEnvironmen
 if ([string]::IsNullOrWhiteSpace($location) -or [string]::IsNullOrWhiteSpace($registryName) -or
     [string]::IsNullOrWhiteSpace($storageAccountName)) {
     throw 'The Azure settings must include location, registryName, and storageAccountName parameters.'
+}
+$redisPassword = [string]$runtimeConfiguration['REDIS_PASSWORD']
+if ($redisPassword.Length -lt 16 -or $redisPassword.Contains(',')) {
+    throw 'REDIS_PASSWORD must contain at least 16 characters and must not contain a comma.'
 }
 if ([string]::IsNullOrWhiteSpace($environmentName) -ne [string]::IsNullOrWhiteSpace($environmentResourceGroup)) {
     throw 'containerAppsEnvironmentName and containerAppsEnvironmentResourceGroup must either both be set or both be empty.'

@@ -10,6 +10,7 @@ public class SrmAuthDbContext(DbContextOptions<SrmAuthDbContext> options) : DbCo
     public DbSet<AuthUserRole> UserRoles => Set<AuthUserRole>();
     public DbSet<CustomerUser> CustomerUsers => Set<CustomerUser>();
     public DbSet<AgentCredential> AgentCredentials => Set<AgentCredential>();
+    public DbSet<SecurityAuditRecord> SecurityAuditRecords => Set<SecurityAuditRecord>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -66,5 +67,19 @@ public class SrmAuthDbContext(DbContextOptions<SrmAuthDbContext> options) : DbCo
             entity.Property(x => x.SecretHash).HasMaxLength(1000).IsRequired();
             entity.HasIndex(x => x.ClientIdentifier).IsUnique();
         });
+
+        ConfigureSecurityAuditRecord(modelBuilder.Entity<SecurityAuditRecord>());
+    }
+
+    private static void ConfigureSecurityAuditRecord(Microsoft.EntityFrameworkCore.Metadata.Builders.EntityTypeBuilder<SecurityAuditRecord> entity)
+    {
+        entity.Property(x => x.EventType).HasMaxLength(100).IsRequired();
+        entity.Property(x => x.Outcome).HasMaxLength(32).IsRequired();
+        entity.Property(x => x.ActorIdentifier).HasMaxLength(200);
+        entity.Property(x => x.SourceAddress).HasMaxLength(128);
+        entity.Property(x => x.TargetType).HasMaxLength(100);
+        entity.Property(x => x.Description).HasMaxLength(1000);
+        entity.HasIndex(x => x.OccurredAtUtc);
+        entity.HasIndex(x => x.ActorId);
     }
 }

@@ -58,6 +58,29 @@ public class AuthSessionService(
         AuthenticationChanged?.Invoke();
     }
 
+    public async Task SynchronizeFromStoreAsync()
+    {
+        try
+        {
+            var state = await sessionStore.GetAsync();
+            if (state is null)
+            {
+                ClearState();
+            }
+            else
+            {
+                ApplyState(state);
+            }
+
+            _isInitialized = true;
+            AuthenticationChanged?.Invoke();
+        }
+        catch (Exception exception)
+        {
+            logger.LogWarning(exception, "Failed to synchronize the protected browser auth session.");
+        }
+    }
+
     public async Task SetSessionAsync(AuthTokenResponseDto tokenResponse, UserProfileDto profile)
     {
         AccessToken = tokenResponse.AccessToken;
@@ -97,10 +120,7 @@ public class AuthSessionService(
 
     public async Task ClearAsync()
     {
-        AccessToken = null;
-        RefreshToken = null;
-        AccessTokenExpiresAtUtc = null;
-        CurrentUser = null;
+        ClearState();
 
         try
         {
@@ -132,10 +152,7 @@ public class AuthSessionService(
 
     public void ClearInMemory()
     {
-        AccessToken = null;
-        RefreshToken = null;
-        AccessTokenExpiresAtUtc = null;
-        CurrentUser = null;
+        ClearState();
         AuthenticationChanged?.Invoke();
     }
 
@@ -166,6 +183,22 @@ public class AuthSessionService(
     private bool HasRole(AuthRoleType role)
     {
         return CurrentUser?.Roles.Contains(AuthRoles.ToName(role)) == true;
+    }
+
+    private void ApplyState(AuthSessionState state)
+    {
+        AccessToken = state.AccessToken;
+        RefreshToken = state.RefreshToken;
+        AccessTokenExpiresAtUtc = state.AccessTokenExpiresAtUtc;
+        CurrentUser = state.CurrentUser;
+    }
+
+    private void ClearState()
+    {
+        AccessToken = null;
+        RefreshToken = null;
+        AccessTokenExpiresAtUtc = null;
+        CurrentUser = null;
     }
 }
 

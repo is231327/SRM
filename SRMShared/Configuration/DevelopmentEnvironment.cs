@@ -15,6 +15,7 @@ public static class DevelopmentEnvironment
             ["SQL_TEST_CORE_DATABASE"] = "SqlServer:TestCoreDatabase",
             ["REDIS_HOST"] = "Private:RedisHost",
             ["REDIS_PORT"] = "Private:RedisPort",
+            ["REDIS_PASSWORD"] = "Private:RedisPassword",
             ["JWT_ISSUER"] = "Jwt:Issuer",
             ["JWT_AUDIENCE"] = "Jwt:Audience",
             ["JWT_SIGNING_KEY"] = "Jwt:SigningKey",
@@ -108,7 +109,21 @@ public static class DevelopmentEnvironment
             values[configurationKey] = value;
         }
 
-        AddDerivedEndpoint(values, "Redis", "Redis:ConnectionString", suffix: ",abortConnect=false");
+        if (!values.Remove("Private:RedisPassword", out var redisPassword)
+            || string.IsNullOrWhiteSpace(redisPassword))
+        {
+            throw new FormatException("REDIS_PASSWORD is required.");
+        }
+        if (redisPassword.Length < 16 || redisPassword.Contains(','))
+        {
+            throw new FormatException("REDIS_PASSWORD must contain at least 16 characters and must not contain a comma.");
+        }
+
+        AddDerivedEndpoint(
+            values,
+            "Redis",
+            "Redis:ConnectionString",
+            suffix: $",password={redisPassword},abortConnect=false");
         AddDerivedEndpoint(values, "Redmine", "Redmine:BaseUrl");
         AddDerivedEndpoint(values, "Core", "CoreApi:BaseUrl");
         AddDerivedEndpoint(values, "Auth", "AuthApi:BaseUrl");

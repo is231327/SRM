@@ -10,7 +10,7 @@
 
 <PageHeader Title="@LanguageService.T("ServerRooms")" Description="@LanguageService.T("ServerRoomsOverviewDescription")">
     <Actions>
-        @if (CustomerId is not null)
+        @if (CustomerId is not null && AuthSessionService.CanManageCustomers)
         {
             <a class="btn btn-outline-primary" href="/customers/@CustomerId/details">@LanguageService.T("BackToCustomerOverview")</a>
         }

@@ -2,6 +2,8 @@
 @inject IAuthApiClient AuthApiClient
 @inject NavigationManager NavigationManager
 @inject ILogger<Routes> Logger
+@inject IJSRuntime JSRuntime
+@implements IAsyncDisposable
 
 @if (!isReady)
 {
@@ -37,6 +39,7 @@ else
     ];
 
     private bool isReady;
+    private DotNetObjectReference<Routes>? syncReference;
 
     protected override async Task OnInitializedAsync()
     {
@@ -67,6 +70,24 @@ else
         AuthSessionService.AuthenticationChanged += OnAuthenticationChanged;
         isReady = true;
     }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+        {
+            return;
+        }
+
+        syncReference = DotNetObjectReference.Create(this);
+        await JSRuntime.InvokeVoidAsync("srmAuthSessionSync.subscribe", syncReference);
+    }
+
+    [JSInvokable]
+    public async Task OnAuthSessionStorageChanged()
+    {
+        await AuthSessionService.SynchronizeFromStoreAsync();
+    }
+
     private bool HandleRouteGuard(Type pageType)
     {
         var pageName = pageType.Name;
@@ -95,6 +116,12 @@ else
             return false;
         }
 
+        if (!UiPageAccessPolicy.CanAccess(pageName, AuthSessionService))
+        {
+            NavigateTo("/dashboard", relativePath);
+            return false;
+        }
+
         return true;
     }
 
@@ -114,8 +141,16 @@ else
         _ = InvokeAsync(StateHasChanged);
     }
 
-    public void Dispose()
+    public async ValueTask DisposeAsync()
     {
         AuthSessionService.AuthenticationChanged -= OnAuthenticationChanged;
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("srmAuthSessionSync.unsubscribe");
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+        syncReference?.Dispose();
     }
 }

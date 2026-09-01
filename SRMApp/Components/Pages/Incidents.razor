@@ -2,6 +2,7 @@
 @rendermode InteractiveServer
 @inherits LocalizedComponentBase
 @inject ICoreApiClient ApiClient
+@inject AuthSessionService AuthSessionService
 
 <PageTitle>@LanguageService.T("Incidents")</PageTitle>
 
@@ -15,7 +16,7 @@
         {
             <a class="btn btn-outline-primary" href="/serverrooms/@serverRoomId/details">@LanguageService.T("BackToServerRooms")</a>
         }
-        else if (customerId is not null)
+        else if (customerId is not null && AuthSessionService.CanManageCustomers)
         {
             <a class="btn btn-outline-primary" href="/customers/@customerId/details">@LanguageService.T("BackToCustomerOverview")</a>
         }

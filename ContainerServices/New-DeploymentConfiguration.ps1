@@ -60,6 +60,7 @@ function New-ApplicationValues {
         SQL_CORE_DATABASE = "${databasePrefix}${EnvironmentLabel}CoreDb"
         REDIS_HOST = $RedisHost
         REDIS_PORT = '6379'
+        REDIS_PASSWORD = New-Secret
         REDMINE_HOST = $RedmineHost
         REDMINE_PORT = '3000'
         JWT_ISSUER = "${Name}-${EnvironmentLabel}-auth"

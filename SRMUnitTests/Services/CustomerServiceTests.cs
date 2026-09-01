@@ -26,6 +26,7 @@ public class CustomerServiceTests
         Assert.That(created.Id, Is.Not.EqualTo(Guid.Empty));
         Assert.That(created.CreatedAtUtc, Is.Not.EqualTo(default(DateTime)));
         Assert.That(created.UpdatedAtUtc, Is.EqualTo(created.CreatedAtUtc));
+        Assert.That(context.SecurityAuditRecords.Single().EventType, Is.EqualTo("ConfigurationCreated"));
     }
 
     [Test]

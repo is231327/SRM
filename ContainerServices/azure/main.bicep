@@ -117,6 +117,7 @@ resource existingEnvironment 'Microsoft.App/managedEnvironments@2024-03-01' exis
 }
 
 var environmentId = useExistingEnvironment ? existingEnvironment.id : newEnvironment.id
+var environmentDefaultDomain = reference(environmentId, '2024-03-01').properties.defaultDomain
 
 resource sqlEnvironmentStorage 'Microsoft.App/managedEnvironments/storages@2024-03-01' = if (!useExistingEnvironment) {
   parent: newEnvironment
@@ -198,13 +199,15 @@ resource redis 'Microsoft.App/containerApps@2024-03-01' = if (deployApplications
     configuration: {
       activeRevisionsMode: 'Single'
       ingress: { external: false, transport: 'tcp', targetPort: int(runtimeConfiguration['REDIS_PORT']), exposedPort: int(runtimeConfiguration['REDIS_PORT']) }
+      secrets: [{ name: 'redis-password', value: runtimeConfiguration['REDIS_PASSWORD'] }]
     }
     template: {
       containers: [{
         name: 'redis'
         image: 'redis:7-alpine'
-        command: ['redis-server']
-        args: ['--appendonly', 'yes']
+        command: ['/bin/sh', '-c']
+        args: ['exec redis-server --appendonly yes --requirepass "$REDIS_PASSWORD"']
+        env: [{ name: 'REDIS_PASSWORD', secretRef: 'redis-password' }]
         resources: { cpu: json('0.25'), memory: '0.5Gi' }
         volumeMounts: [{ volumeName: 'data', mountPath: '/data' }]
       }]
@@ -292,6 +295,7 @@ resource auth 'Microsoft.App/containerApps@2024-03-01' = if (deployApplications)
         { name: 'sql-password', value: runtimeConfiguration['SQL_PASSWORD'] }
         { name: 'jwt-signing-key', value: runtimeConfiguration['JWT_SIGNING_KEY'] }
         { name: 'bootstrap-admin-password', value: runtimeConfiguration['BOOTSTRAP_ADMIN_PASSWORD'] }
+        { name: 'redis-connection', value: '${redisName}:${runtimeConfiguration['REDIS_PORT']},password=${runtimeConfiguration['REDIS_PASSWORD']},abortConnect=false' }
       ]
     }
     template: {
@@ -306,7 +310,7 @@ resource auth 'Microsoft.App/containerApps@2024-03-01' = if (deployApplications)
           { name: 'SqlServer__Username', value: runtimeConfiguration['SQL_USERNAME'] }
           { name: 'SqlServer__Password', secretRef: 'sql-password' }
           { name: 'SqlServer__AuthDatabase', value: runtimeConfiguration['SQL_AUTH_DATABASE'] }
-          { name: 'Redis__ConnectionString', value: '${redisName}:${runtimeConfiguration['REDIS_PORT']},abortConnect=false' }
+          { name: 'Redis__ConnectionString', secretRef: 'redis-connection' }
           { name: 'Jwt__Issuer', value: runtimeConfiguration['JWT_ISSUER'] }
           { name: 'Jwt__Audience', value: runtimeConfiguration['JWT_AUDIENCE'] }
           { name: 'Jwt__SigningKey', secretRef: 'jwt-signing-key' }
@@ -344,6 +348,7 @@ resource core 'Microsoft.App/containerApps@2024-03-01' = if (deployApplications)
         { name: 'sql-password', value: runtimeConfiguration['SQL_PASSWORD'] }
         { name: 'jwt-signing-key', value: runtimeConfiguration['JWT_SIGNING_KEY'] }
         { name: 'redmine-api-key', value: runtimeConfiguration['REDMINE_API_KEY'] }
+        { name: 'redis-connection', value: '${redisName}:${runtimeConfiguration['REDIS_PORT']},password=${runtimeConfiguration['REDIS_PASSWORD']},abortConnect=false' }
       ]
     }
     template: {
@@ -358,13 +363,13 @@ resource core 'Microsoft.App/containerApps@2024-03-01' = if (deployApplications)
           { name: 'SqlServer__Username', value: runtimeConfiguration['SQL_USERNAME'] }
           { name: 'SqlServer__Password', secretRef: 'sql-password' }
           { name: 'SqlServer__CoreDatabase', value: runtimeConfiguration['SQL_CORE_DATABASE'] }
-          { name: 'Redis__ConnectionString', value: '${redisName}:${runtimeConfiguration['REDIS_PORT']},abortConnect=false' }
+          { name: 'Redis__ConnectionString', secretRef: 'redis-connection' }
           { name: 'Jwt__Issuer', value: runtimeConfiguration['JWT_ISSUER'] }
           { name: 'Jwt__Audience', value: runtimeConfiguration['JWT_AUDIENCE'] }
           { name: 'Jwt__SigningKey', secretRef: 'jwt-signing-key' }
           { name: 'Redmine__Enabled', value: runtimeConfiguration['REDMINE_ENABLED'] }
           { name: 'Redmine__BaseUrl', value: 'http://${redmineName}' }
-          { name: 'Redmine__PublicBaseUrl', value: 'https://${redmineName}.${environment.properties.defaultDomain}' }
+          { name: 'Redmine__PublicBaseUrl', value: 'https://${redmineName}.${environmentDefaultDomain}' }
           { name: 'Redmine__ApiKey', secretRef: 'redmine-api-key' }
           { name: 'Redmine__ProjectIdentifier', value: runtimeConfiguration['REDMINE_PROJECT_IDENTIFIER'] }
           { name: 'Redmine__TrackerId', value: runtimeConfiguration['REDMINE_TRACKER_ID'] }
@@ -395,6 +400,7 @@ resource app 'Microsoft.App/containerApps@2024-03-01' = if (deployApplications) 
       activeRevisionsMode: 'Single'
       ingress: { external: true, allowInsecure: false, transport: 'auto', targetPort: int(runtimeConfiguration['DOTNET_HTTP_PORTS']) }
       registries: [{ server: registry.properties.loginServer, identity: identity.id }]
+      secrets: [{ name: 'redis-connection', value: '${redisName}:${runtimeConfiguration['REDIS_PORT']},password=${runtimeConfiguration['REDIS_PASSWORD']},abortConnect=false' }]
     }
     template: {
       containers: [{
@@ -405,7 +411,7 @@ resource app 'Microsoft.App/containerApps@2024-03-01' = if (deployApplications) 
           { name: 'ASPNETCORE_HTTP_PORTS', value: runtimeConfiguration['DOTNET_HTTP_PORTS'] }
           { name: 'CoreApi__BaseUrl', value: 'http://${coreName}/' }
           { name: 'AuthApi__BaseUrl', value: 'http://${authName}/' }
-          { name: 'Redis__ConnectionString', value: '${redisName}:${runtimeConfiguration['REDIS_PORT']},abortConnect=false' }
+          { name: 'Redis__ConnectionString', secretRef: 'redis-connection' }
         ]
         resources: { cpu: json('0.5'), memory: '1Gi' }
         probes: [{ type: 'Liveness', httpGet: { path: '/health', port: int(runtimeConfiguration['DOTNET_HTTP_PORTS']) }, initialDelaySeconds: 30, periodSeconds: 30 }]

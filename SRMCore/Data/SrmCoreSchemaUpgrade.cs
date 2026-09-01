@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using SRMShared.Entities;
 
 namespace SRMCore.Data;
 
@@ -6,6 +7,7 @@ public static class SrmCoreSchemaUpgrade
 {
     public static void Apply(SrmCoreDbContext dbContext)
     {
+        dbContext.Database.ExecuteSqlRaw(SecurityAuditSchema.CreateTableSql);
         dbContext.Database.ExecuteSqlRaw("""
             IF COL_LENGTH('dbo.TicketLinks', 'ExternalStatusName') IS NULL
             BEGIN

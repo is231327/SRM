@@ -49,6 +49,10 @@ public class Program
         builder.Services.AddSingleton<IConnectionMultiplexer>(_ =>
             ConnectionMultiplexer.Connect(ResolveRedisConnectionString(builder.Configuration)));
         builder.Services.AddSingleton<ITokenStateStore, RedisTokenStateStore>();
+        JwtSecurityConfiguration.Validate(
+            builder.Configuration["Jwt:Issuer"],
+            builder.Configuration["Jwt:Audience"],
+            builder.Configuration["Jwt:SigningKey"]);
         builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             .AddJwtBearer(options =>
             {
@@ -79,6 +83,19 @@ public class Program
                         if (revoked)
                         {
                             context.Fail("The access token has been revoked.");
+                            return;
+                        }
+
+                        if (TokenSessionSecurity.MustChangePassword(context.Principal!))
+                        {
+                            context.Fail("The password must be changed before accessing Core.");
+                            return;
+                        }
+
+                        if (!await TokenSessionSecurity.IsCurrentAsync(
+                            context.Principal!, tokenStateStore, context.HttpContext.RequestAborted))
+                        {
+                            context.Fail("The principal session has been revoked.");
                         }
                     }
                 };

@@ -133,23 +133,8 @@ else
         {
             await AuthApiClient.ChangePasswordAsync(passwordForm);
             passwordForm = new ChangePasswordRequestDto();
-            if (AuthSessionService.CurrentUser is not null)
-            {
-                var updatedProfile = new UserProfileDto
-                {
-                    Id = AuthSessionService.CurrentUser.Id,
-                    Username = AuthSessionService.CurrentUser.Username,
-                    Email = AuthSessionService.CurrentUser.Email,
-                    FirstName = AuthSessionService.CurrentUser.FirstName,
-                    LastName = AuthSessionService.CurrentUser.LastName,
-                    PhoneNumber = AuthSessionService.CurrentUser.PhoneNumber,
-                    Roles = AuthSessionService.CurrentUser.Roles,
-                    CustomerId = AuthSessionService.CurrentUser.CustomerId,
-                    MustChangePassword = false
-                };
-                await AuthSessionService.UpdateCurrentUserAsync(updatedProfile);
-            }
-            statusMessage = LanguageService.T("PasswordChanged");
+            await AuthSessionService.ClearAsync();
+            NavigationManager.NavigateTo("/login", forceLoad: true);
         }
         catch (InvalidOperationException ex)
         {

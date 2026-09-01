@@ -38,6 +38,15 @@ jobs:
       MSSQL_SA_PASSWORD: "Aa9!Run-${{ github.run_id }}-${{ github.run_attempt }}"
 
     services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - "6379:6379"
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
       sqlserver:
         image: mcr.microsoft.com/mssql/server:2022-latest
         env:
@@ -106,6 +115,7 @@ jobs:
           $connectionBase = "Server=localhost,1433;User Id=sa;Password=$env:MSSQL_SA_PASSWORD;TrustServerCertificate=True;Encrypt=False"
           "ConnectionStrings__SrmAuthDatabase=$connectionBase;Database=SrmCiAuth$databaseSuffix" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           "ConnectionStrings__SrmCoreDatabase=$connectionBase;Database=SrmCiCore$databaseSuffix" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "Redis__ConnectionString=localhost:6379,abortConnect=false" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           ./ContainerServices/New-DeploymentConfiguration.ps1 -Name srm-ci
 
       - name: Restore

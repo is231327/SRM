@@ -331,7 +331,11 @@ public class LanguageService
         ,
         ["DashboardLeadOpen"] = ("{0} open incidents are currently being tracked across {1} customers.", "{0} offene Vorfaelle werden aktuell ueber {1} Kunden hinweg verfolgt.")
         ,
+        ["DashboardLeadOpenScoped"] = ("{0} open incidents are currently being tracked for your server rooms.", "{0} offene Vorfaelle werden aktuell fuer Ihre Serverraeume verfolgt.")
+        ,
         ["DashboardLeadStable"] = ("Monitoring is active across {0} customers, {1} server rooms, and {2} agents.", "Das Monitoring ist ueber {0} Kunden, {1} Serverraeume und {2} Agenten aktiv.")
+        ,
+        ["DashboardLeadStableScoped"] = ("Monitoring is active across {0} server rooms and {1} agents.", "Das Monitoring ist fuer {0} Serverraeume und {1} Agenten aktiv.")
         ,
         ["ConfiguredCustomerRecords"] = ("{0} configured customer record(s)", "{0} konfigurierte Kundeneintraege")
         ,

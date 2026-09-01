@@ -1,4 +1,5 @@
 using System.Text.Json;
+using SRMAuth.Services;
 
 namespace SRMAuth.Middleware;
 
@@ -9,6 +10,21 @@ public class AuthorizationExceptionMiddleware(RequestDelegate next)
         try
         {
             await next(context);
+        }
+        catch (TooManyLoginAttemptsException exception)
+        {
+            context.Response.StatusCode = StatusCodes.Status429TooManyRequests;
+            context.Response.ContentType = "application/json";
+            context.Response.Headers.RetryAfter = Math.Max(1, (int)Math.Ceiling(exception.RetryAfter.TotalSeconds)).ToString();
+
+            var payload = new
+            {
+                Title = "Too Many Requests",
+                Status = StatusCodes.Status429TooManyRequests,
+                Detail = exception.Message
+            };
+
+            await context.Response.WriteAsync(JsonSerializer.Serialize(payload));
         }
         catch (UnauthorizedAccessException exception)
         {

@@ -1,5 +1,6 @@
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Net;
 using System.Text.Json;
 using SRMShared.DTOs.Auth;
 
@@ -38,21 +39,21 @@ public class AuthApiClient(
 
         if (!response.IsSuccessStatusCode)
         {
-            authSessionService.ClearInMemory();
+            await authSessionService.ClearAsync();
             return null;
         }
 
         var token = await response.Content.ReadFromJsonAsync<AuthTokenResponseDto>();
         if (token is null)
         {
-            authSessionService.ClearInMemory();
+            await authSessionService.ClearAsync();
             return null;
         }
 
         var profile = await GetOwnProfileCoreAsync(token.AccessToken);
         if (profile is null)
         {
-            authSessionService.ClearInMemory();
+            await authSessionService.ClearAsync();
             return null;
         }
 
@@ -121,6 +122,10 @@ public class AuthApiClient(
 
         ApplyBearerToken();
         var response = await _httpClient.PutAsJsonAsync("api/auth/me", request);
+        if (await HandleUnauthorizedAsync(response))
+        {
+            return null;
+        }
         return response.IsSuccessStatusCode
             ? await response.Content.ReadFromJsonAsync<UserProfileDto>()
             : null;
@@ -137,6 +142,10 @@ public class AuthApiClient(
 
         ApplyBearerToken();
         var response = await _httpClient.PostAsJsonAsync("api/auth/change-password", request);
+        if (await HandleUnauthorizedAsync(response))
+        {
+            throw new InvalidOperationException("The session has expired.");
+        }
         if (response.IsSuccessStatusCode)
         {
             return;
@@ -156,6 +165,10 @@ public class AuthApiClient(
 
         ApplyBearerToken();
         var response = await _httpClient.PostAsJsonAsync("api/auth/users", request);
+        if (await HandleUnauthorizedAsync(response))
+        {
+            throw new InvalidOperationException("The session has expired.");
+        }
         if (response.IsSuccessStatusCode)
         {
             return await response.Content.ReadFromJsonAsync<UserProfileDto>();
@@ -175,6 +188,10 @@ public class AuthApiClient(
 
         ApplyBearerToken();
         var response = await _httpClient.GetAsync("api/auth/users");
+        if (await HandleUnauthorizedAsync(response))
+        {
+            throw new InvalidOperationException("The session has expired.");
+        }
         if (response.IsSuccessStatusCode)
         {
             return await response.Content.ReadFromJsonAsync<List<UserManagementDto>>() ?? [];
@@ -194,6 +211,10 @@ public class AuthApiClient(
 
         ApplyBearerToken();
         var response = await _httpClient.PutAsJsonAsync($"api/auth/users/{userId}", request);
+        if (await HandleUnauthorizedAsync(response))
+        {
+            throw new InvalidOperationException("The session has expired.");
+        }
         if (response.IsSuccessStatusCode)
         {
             return await response.Content.ReadFromJsonAsync<UserManagementDto>();
@@ -213,6 +234,10 @@ public class AuthApiClient(
 
         ApplyBearerToken();
         var response = await _httpClient.PostAsJsonAsync($"api/auth/users/{userId}/reset-password", request);
+        if (await HandleUnauthorizedAsync(response))
+        {
+            throw new InvalidOperationException("The session has expired.");
+        }
         if (response.IsSuccessStatusCode)
         {
             return true;
@@ -232,6 +257,10 @@ public class AuthApiClient(
 
         ApplyBearerToken();
         var response = await _httpClient.PostAsJsonAsync("api/auth/agent-credentials", request);
+        if (await HandleUnauthorizedAsync(response))
+        {
+            throw new InvalidOperationException("The session has expired.");
+        }
         if (response.IsSuccessStatusCode)
         {
             return await response.Content.ReadFromJsonAsync<AgentCredentialReadDto>();
@@ -251,6 +280,10 @@ public class AuthApiClient(
 
         ApplyBearerToken();
         var response = await _httpClient.GetAsync("api/auth/agent-credentials");
+        if (await HandleUnauthorizedAsync(response))
+        {
+            throw new InvalidOperationException("The session has expired.");
+        }
         if (response.IsSuccessStatusCode)
         {
             return await response.Content.ReadFromJsonAsync<List<AgentCredentialReadDto>>() ?? [];
@@ -270,6 +303,10 @@ public class AuthApiClient(
 
         ApplyBearerToken();
         var response = await _httpClient.PutAsJsonAsync($"api/auth/agent-credentials/{credentialId}", request);
+        if (await HandleUnauthorizedAsync(response))
+        {
+            throw new InvalidOperationException("The session has expired.");
+        }
         if (response.IsSuccessStatusCode)
         {
             return await response.Content.ReadFromJsonAsync<AgentCredentialReadDto>();
@@ -296,9 +333,24 @@ public class AuthApiClient(
     {
         ApplyBearerToken(accessToken);
         var response = await _httpClient.GetAsync("api/auth/me");
+        if (await HandleUnauthorizedAsync(response))
+        {
+            return null;
+        }
         return response.IsSuccessStatusCode
             ? await response.Content.ReadFromJsonAsync<UserProfileDto>()
             : null;
+    }
+
+    private async Task<bool> HandleUnauthorizedAsync(HttpResponseMessage response)
+    {
+        if (response.StatusCode != HttpStatusCode.Unauthorized)
+        {
+            return false;
+        }
+
+        await authSessionService.ClearAsync();
+        return true;
     }
 
     private static async Task<string> ExtractErrorMessageAsync(HttpResponseMessage response)

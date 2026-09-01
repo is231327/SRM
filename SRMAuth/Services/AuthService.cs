@@ -19,10 +19,13 @@ public class AuthService(
     IJwtTokenService jwtTokenService,
     ICurrentUserContext currentUserContext,
     ITokenStateStore tokenStateStore,
+    ILoginAttemptLimiter loginAttemptLimiter,
+    ISecurityAuditService securityAuditService,
     IOptions<JwtOptions> jwtOptions) : IAuthService
 {
     public async Task<AuthTokenResponseDto?> LoginAsync(LoginRequestDto request, CancellationToken cancellationToken = default)
     {
+        await loginAttemptLimiter.EnsureAllowedAsync("user", request.Username, cancellationToken);
         var user = await dbContext.Users
             .Include(x => x.UserRoles)
                 .ThenInclude(x => x.Role)
@@ -31,14 +34,20 @@ public class AuthService(
 
         if (user is null)
         {
+            await securityAuditService.RecordAsync("HumanLogin", "Failure", request.Username, description: "Invalid credentials.", cancellationToken: cancellationToken);
+            await loginAttemptLimiter.RecordFailureAsync("user", request.Username, cancellationToken);
             return null;
         }
 
         var passwordResult = passwordHasher.VerifyHashedPassword(user, user.PasswordHash, request.Password);
         if (passwordResult is PasswordVerificationResult.Failed)
         {
+            await securityAuditService.RecordAsync("HumanLogin", "Failure", request.Username, targetType: "AuthUser", targetId: user.Id, description: "Invalid credentials.", cancellationToken: cancellationToken);
+            await loginAttemptLimiter.RecordFailureAsync("user", request.Username, cancellationToken);
             return null;
         }
+
+        await loginAttemptLimiter.ResetAsync("user", request.Username, cancellationToken);
 
         user.LastLoginAtUtc = DateTime.UtcNow;
         user.UpdatedAtUtc = DateTime.UtcNow;
@@ -52,16 +61,21 @@ public class AuthService(
             .ToArray();
 
         var customerId = user.CustomerUsers.Select(x => (Guid?)x.CustomerId).FirstOrDefault();
-        return await CreateUserAuthResponseAsync(user, roles, customerId, cancellationToken);
+        var sessionVersion = await tokenStateStore.GetOrCreateSessionVersionAsync(
+            RedisTokenStateStore.BuildUserPrincipalKey(user.Id), cancellationToken);
+        return await CreateUserAuthResponseAsync(user, roles, customerId, sessionVersion, cancellationToken);
     }
 
     public async Task<AuthTokenResponseDto?> LoginAgentAsync(AgentLoginRequestDto request, CancellationToken cancellationToken = default)
     {
+        await loginAttemptLimiter.EnsureAllowedAsync("agent", request.ClientIdentifier, cancellationToken);
         var agentCredential = await dbContext.AgentCredentials
             .FirstOrDefaultAsync(x => x.ClientIdentifier == request.ClientIdentifier && x.IsActive, cancellationToken);
 
         if (agentCredential is null)
         {
+            await securityAuditService.RecordAsync("AgentLogin", "Failure", request.ClientIdentifier, description: "Invalid credentials.", cancellationToken: cancellationToken);
+            await loginAttemptLimiter.RecordFailureAsync("agent", request.ClientIdentifier, cancellationToken);
             return null;
         }
 
@@ -72,14 +86,20 @@ public class AuthService(
 
         if (verificationResult is PasswordVerificationResult.Failed)
         {
+            await securityAuditService.RecordAsync("AgentLogin", "Failure", request.ClientIdentifier, targetType: "AgentCredential", targetId: agentCredential.Id, description: "Invalid credentials.", cancellationToken: cancellationToken);
+            await loginAttemptLimiter.RecordFailureAsync("agent", request.ClientIdentifier, cancellationToken);
             return null;
         }
+
+        await loginAttemptLimiter.ResetAsync("agent", request.ClientIdentifier, cancellationToken);
 
         agentCredential.LastAuthenticatedAtUtc = DateTime.UtcNow;
         agentCredential.UpdatedAtUtc = DateTime.UtcNow;
         await dbContext.SaveChangesAsync(cancellationToken);
 
-        var token = jwtTokenService.CreateAgentAccessToken(agentCredential);
+        var sessionVersion = await tokenStateStore.GetOrCreateSessionVersionAsync(
+            RedisTokenStateStore.BuildAgentPrincipalKey(agentCredential.Id), cancellationToken);
+        var token = jwtTokenService.CreateAgentAccessToken(agentCredential, sessionVersion);
         return new AuthTokenResponseDto
         {
             AccessToken = token.AccessToken,
@@ -98,7 +118,12 @@ public class AuthService(
 
         if (storedToken is null
             || storedToken.RevokedAtUtc.HasValue
-            || storedToken.ExpiresAtUtc <= DateTime.UtcNow)
+            || storedToken.ExpiresAtUtc <= DateTime.UtcNow
+            || string.IsNullOrWhiteSpace(storedToken.SessionVersion)
+            || !await tokenStateStore.IsSessionVersionCurrentAsync(
+                RedisTokenStateStore.BuildUserPrincipalKey(storedToken.UserId),
+                storedToken.SessionVersion,
+                cancellationToken))
         {
             return null;
         }
@@ -122,9 +147,13 @@ public class AuthService(
             .ToArray();
         var customerId = user.CustomerUsers.Select(x => (Guid?)x.CustomerId).FirstOrDefault();
 
-        var response = await CreateUserAuthResponseAsync(user, roles, customerId, cancellationToken);
-        await tokenStateStore.RevokeRefreshTokenAsync(refreshTokenHash, DateTime.UtcNow, HashToken(response.RefreshToken), cancellationToken);
-        return response;
+        var (response, replacementToken) = CreateUserAuthResponse(user, roles, customerId, storedToken.SessionVersion);
+        var rotated = await tokenStateStore.TryRotateRefreshTokenAsync(
+            refreshTokenHash,
+            replacementToken,
+            DateTime.UtcNow,
+            cancellationToken);
+        return rotated ? response : null;
     }
 
     public async Task LogoutAsync(Guid userId, LogoutRequestDto request, string? currentTokenJti, DateTime? currentTokenExpiresAtUtc, CancellationToken cancellationToken = default)
@@ -195,6 +224,7 @@ public class AuthService(
         var passwordResult = passwordHasher.VerifyHashedPassword(user, user.PasswordHash, request.CurrentPassword);
         if (passwordResult is PasswordVerificationResult.Failed)
         {
+            await securityAuditService.RecordAsync("PasswordChange", "Failure", string.Empty, targetType: "AuthUser", targetId: user.Id, description: "Current password verification failed.", cancellationToken: cancellationToken);
             throw new InvalidOperationException("The current password is incorrect.");
         }
 
@@ -209,7 +239,10 @@ public class AuthService(
         user.MustChangePassword = false;
         user.UpdatedAtUtc = DateTime.UtcNow;
 
+        await tokenStateStore.RotateSessionVersionAsync(
+            RedisTokenStateStore.BuildUserPrincipalKey(user.Id), cancellationToken);
         await dbContext.SaveChangesAsync(cancellationToken);
+        await securityAuditService.RecordAsync("PasswordChange", "Success", user.Username, targetType: "AuthUser", targetId: user.Id, customerId: user.CustomerUsers.Select(x => (Guid?)x.CustomerId).FirstOrDefault(), cancellationToken: cancellationToken);
     }
 
     public async Task<UserProfileDto?> CreateUserAsync(CreateUserRequestDto request, CancellationToken cancellationToken = default)
@@ -269,11 +302,16 @@ public class AuthService(
 
         await dbContext.SaveChangesAsync(cancellationToken);
 
+        await tokenStateStore.RotateSessionVersionAsync(
+            RedisTokenStateStore.BuildUserPrincipalKey(user.Id), cancellationToken);
+
         user = await dbContext.Users
             .Include(x => x.UserRoles)
                 .ThenInclude(x => x.Role)
             .Include(x => x.CustomerUsers)
             .FirstAsync(x => x.Id == user.Id, cancellationToken);
+
+        await securityAuditService.RecordAsync("UserCreated", "Success", string.Empty, targetType: "AuthUser", targetId: user.Id, customerId: request.CustomerId, description: $"Created user '{user.Username}'.", cancellationToken: cancellationToken);
 
         return MapProfile(user);
     }
@@ -358,7 +396,11 @@ public class AuthService(
             });
         }
 
+        await tokenStateStore.RotateSessionVersionAsync(
+            RedisTokenStateStore.BuildUserPrincipalKey(user.Id), cancellationToken);
         await dbContext.SaveChangesAsync(cancellationToken);
+
+        await securityAuditService.RecordAsync("UserUpdated", "Success", string.Empty, targetType: "AuthUser", targetId: user.Id, customerId: request.CustomerId, description: $"Updated user '{user.Username}'.", cancellationToken: cancellationToken);
 
         user = await dbContext.Users
             .AsNoTracking()
@@ -387,7 +429,10 @@ public class AuthService(
         user.MustChangePassword = true;
         user.UpdatedAtUtc = DateTime.UtcNow;
 
+        await tokenStateStore.RotateSessionVersionAsync(
+            RedisTokenStateStore.BuildUserPrincipalKey(user.Id), cancellationToken);
         await dbContext.SaveChangesAsync(cancellationToken);
+        await securityAuditService.RecordAsync("UserPasswordReset", "Success", string.Empty, targetType: "AuthUser", targetId: user.Id, description: $"Reset password for user '{user.Username}'.", cancellationToken: cancellationToken);
         return true;
     }
 
@@ -415,7 +460,10 @@ public class AuthService(
         credential.SecretHash = passwordHasher.HashPassword(new AuthUser { Username = credential.ClientIdentifier }, request.ClientSecret);
 
         dbContext.AgentCredentials.Add(credential);
+        await tokenStateStore.RotateSessionVersionAsync(
+            RedisTokenStateStore.BuildAgentPrincipalKey(credential.Id), cancellationToken);
         await dbContext.SaveChangesAsync(cancellationToken);
+        await securityAuditService.RecordAsync("AgentCredentialCreated", "Success", string.Empty, targetType: "AgentCredential", targetId: credential.Id, description: $"Created agent credential '{credential.ClientIdentifier}'.", cancellationToken: cancellationToken);
         return MapAgentCredential(credential);
     }
 
@@ -460,7 +508,10 @@ public class AuthService(
             credential.SecretHash = passwordHasher.HashPassword(new AuthUser { Username = credential.ClientIdentifier }, request.NewClientSecret);
         }
 
+        await tokenStateStore.RotateSessionVersionAsync(
+            RedisTokenStateStore.BuildAgentPrincipalKey(credential.Id), cancellationToken);
         await dbContext.SaveChangesAsync(cancellationToken);
+        await securityAuditService.RecordAsync("AgentCredentialUpdated", "Success", string.Empty, targetType: "AgentCredential", targetId: credential.Id, description: $"Updated agent credential '{credential.ClientIdentifier}'.", cancellationToken: cancellationToken);
         return MapAgentCredential(credential);
     }
 
@@ -640,21 +691,37 @@ public class AuthService(
         }
     }
 
-    private async Task<AuthTokenResponseDto> CreateUserAuthResponseAsync(AuthUser user, IReadOnlyCollection<string> roles, Guid? customerId, CancellationToken cancellationToken)
+    private async Task<AuthTokenResponseDto> CreateUserAuthResponseAsync(
+        AuthUser user,
+        IReadOnlyCollection<string> roles,
+        Guid? customerId,
+        string sessionVersion,
+        CancellationToken cancellationToken)
     {
-        var token = jwtTokenService.CreateUserAccessToken(user, roles, customerId);
+        var (response, refreshTokenState) = CreateUserAuthResponse(user, roles, customerId, sessionVersion);
+        await tokenStateStore.StoreRefreshTokenAsync(refreshTokenState, cancellationToken);
+        return response;
+    }
+
+    private (AuthTokenResponseDto Response, RefreshTokenState RefreshTokenState) CreateUserAuthResponse(
+        AuthUser user,
+        IReadOnlyCollection<string> roles,
+        Guid? customerId,
+        string sessionVersion)
+    {
+        var token = jwtTokenService.CreateUserAccessToken(user, roles, customerId, sessionVersion);
         var refreshToken = GenerateRefreshToken();
         var refreshTokenHash = HashToken(refreshToken);
-
-        await tokenStateStore.StoreRefreshTokenAsync(new RefreshTokenState
+        var refreshTokenState = new RefreshTokenState
         {
             UserId = user.Id,
             TokenHash = refreshTokenHash,
+            SessionVersion = sessionVersion,
             CreatedAtUtc = DateTime.UtcNow,
             ExpiresAtUtc = DateTime.UtcNow.AddDays(jwtOptions.Value.RefreshTokenLifetimeDays)
-        }, cancellationToken);
+        };
 
-        return new AuthTokenResponseDto
+        return (new AuthTokenResponseDto
         {
             AccessToken = token.AccessToken,
             RefreshToken = refreshToken,
@@ -662,7 +729,7 @@ public class AuthService(
             Username = user.Username,
             Roles = roles,
             CustomerId = customerId
-        };
+        }, refreshTokenState);
     }
 
     private static string GenerateRefreshToken()

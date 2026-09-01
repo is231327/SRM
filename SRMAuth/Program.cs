@@ -31,6 +31,7 @@ public class Program
 
         builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection(JwtOptions.SectionName));
         builder.Services.Configure<RedisOptions>(builder.Configuration.GetSection(RedisOptions.SectionName));
+        builder.Services.Configure<LoginSecurityOptions>(builder.Configuration.GetSection(LoginSecurityOptions.SectionName));
         builder.Services.AddHttpContextAccessor();
         builder.Services.AddDbContext<SrmAuthDbContext>(options =>
             options.UseSqlServer(
@@ -42,9 +43,16 @@ public class Program
         builder.Services.AddScoped<ICurrentUserContext, CurrentUserContext>();
         builder.Services.AddScoped<IPasswordHasher<AuthUser>, PasswordHasher<AuthUser>>();
         builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
+        builder.Services.AddScoped<ISecurityAuditService, SecurityAuditService>();
+        builder.Services.AddSingleton<ILoginAttemptLimiter, RedisLoginAttemptLimiter>();
         builder.Services.AddScoped<IAuthService, AuthService>();
 
         var jwtOptions = builder.Configuration.GetSection(JwtOptions.SectionName).Get<JwtOptions>() ?? new JwtOptions();
+        JwtSecurityConfiguration.Validate(jwtOptions.Issuer, jwtOptions.Audience, jwtOptions.SigningKey);
+        if (jwtOptions.AccessTokenLifetimeMinutes is < 1 or > 60 || jwtOptions.RefreshTokenLifetimeDays is < 1 or > 30)
+        {
+            throw new InvalidOperationException("JWT lifetimes must be 1-60 minutes for access tokens and 1-30 days for refresh tokens.");
+        }
         builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             .AddJwtBearer(options =>
             {
@@ -75,6 +83,13 @@ public class Program
                         if (revoked)
                         {
                             context.Fail("The access token has been revoked.");
+                            return;
+                        }
+
+                        if (!await TokenSessionSecurity.IsCurrentAsync(
+                            context.Principal!, tokenStateStore, context.HttpContext.RequestAborted))
+                        {
+                            context.Fail("The principal session has been revoked.");
                         }
                     }
                 };
@@ -100,6 +115,7 @@ public class Program
         }
         app.UseMiddleware<AuthorizationExceptionMiddleware>();
         app.UseAuthentication();
+        app.UseMiddleware<ForcedPasswordChangeMiddleware>();
         app.UseAuthorization();
         app.MapControllers();
         app.MapHealthChecks("/health");
@@ -124,6 +140,7 @@ public class Program
                 var configuration = scope.ServiceProvider.GetRequiredService<IConfiguration>();
 
                 dbContext.Database.EnsureCreated();
+                SrmAuthSchemaUpgrade.Apply(dbContext);
                 AuthDbSeeder.SeedAsync(dbContext, passwordHasher, configuration).GetAwaiter().GetResult();
                 logger.LogInformation("SRMAuth database initialization completed on attempt {Attempt}.", attempt);
                 return;
@@ -149,6 +166,7 @@ public class Program
             var configuration = finalScope.ServiceProvider.GetRequiredService<IConfiguration>();
 
             dbContext.Database.EnsureCreated();
+            SrmAuthSchemaUpgrade.Apply(dbContext);
             AuthDbSeeder.SeedAsync(dbContext, passwordHasher, configuration).GetAwaiter().GetResult();
         }
         catch (Exception exception)

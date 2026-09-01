@@ -1,7 +1,9 @@
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Options;
 using SRMAuth.Configuration;
 using SRMAuth.Services;
+using SRMAuth.Services.Interfaces;
 using SRMShared.DTOs.Auth;
 using SRMShared.Entities;
 using SRMUnitTests.TestHelpers;
@@ -96,6 +98,80 @@ public class AuthServiceTests
 
         Assert.That(verificationResult, Is.Not.EqualTo(PasswordVerificationResult.Failed));
         Assert.That(updatedUser.MustChangePassword, Is.False);
+    }
+
+    [Test]
+    public async Task ChangePasswordAsync_ShouldInvalidateEveryPreviouslyIssuedSession()
+    {
+        using var context = AuthDbContextFactory.CreateContext();
+        var passwordHasher = new PasswordHasher<AuthUser>();
+        var user = CreateUser(passwordHasher, "currentPassword1!");
+        context.Users.Add(user);
+        context.SaveChanges();
+        var tokenStore = new FakeTokenStateStore();
+        var principalKey = RedisTokenStateStore.BuildUserPrincipalKey(user.Id);
+        var oldVersion = await tokenStore.GetOrCreateSessionVersionAsync(principalKey);
+        var service = CreateService(context, tokenStore: tokenStore);
+
+        await service.ChangePasswordAsync(user.Id, new ChangePasswordRequestDto
+        {
+            CurrentPassword = "currentPassword1!",
+            NewPassword = "NewPassword1!"
+        });
+
+        Assert.That(await tokenStore.IsSessionVersionCurrentAsync(principalKey, oldVersion), Is.False);
+    }
+
+    [Test]
+    public async Task RefreshAsync_ShouldAllowARefreshTokenOnlyOnce()
+    {
+        using var context = AuthDbContextFactory.CreateContext();
+        var passwordHasher = new PasswordHasher<AuthUser>();
+        var user = CreateUser(passwordHasher, "currentPassword1!");
+        context.Users.Add(user);
+        context.SaveChanges();
+        var tokenStore = new FakeTokenStateStore();
+        var service = CreateService(context, tokenStore: tokenStore);
+        var login = await service.LoginAsync(new LoginRequestDto
+        {
+            Username = user.Username,
+            Password = "currentPassword1!"
+        });
+
+        var firstRefresh = await service.RefreshAsync(new RefreshTokenRequestDto { RefreshToken = login!.RefreshToken });
+        var replay = await service.RefreshAsync(new RefreshTokenRequestDto { RefreshToken = login.RefreshToken });
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(firstRefresh, Is.Not.Null);
+            Assert.That(replay, Is.Null);
+        });
+    }
+
+    [Test]
+    public async Task LoginAsync_ShouldPersistFailureAuditWithoutSensitivePassword()
+    {
+        using var context = AuthDbContextFactory.CreateContext();
+        var currentUser = new FakeCurrentUserContext();
+        var httpContextAccessor = new HttpContextAccessor { HttpContext = new DefaultHttpContext() };
+        var auditService = new SecurityAuditService(context, currentUser, httpContextAccessor);
+        var service = CreateService(context, currentUser, auditService: auditService);
+
+        var result = await service.LoginAsync(new LoginRequestDto
+        {
+            Username = "unknown-user",
+            Password = "NeverStoreThis1!"
+        });
+
+        var audit = context.SecurityAuditRecords.Single();
+        Assert.Multiple(() =>
+        {
+            Assert.That(result, Is.Null);
+            Assert.That(audit.EventType, Is.EqualTo("HumanLogin"));
+            Assert.That(audit.Outcome, Is.EqualTo("Failure"));
+            Assert.That(audit.ActorIdentifier, Is.EqualTo("unknown-user"));
+            Assert.That(audit.Description, Does.Not.Contain("NeverStoreThis1!"));
+        });
     }
 
     [Test]
@@ -210,14 +286,20 @@ public class AuthServiceTests
         Assert.That(action, Throws.TypeOf<UnauthorizedAccessException>());
     }
 
-    private static AuthService CreateService(SRMAuth.Data.SrmAuthDbContext context, FakeCurrentUserContext? currentUserContext = null)
+    private static AuthService CreateService(
+        SRMAuth.Data.SrmAuthDbContext context,
+        FakeCurrentUserContext? currentUserContext = null,
+        FakeTokenStateStore? tokenStore = null,
+        ISecurityAuditService? auditService = null)
     {
         return new AuthService(
             context,
             new PasswordHasher<AuthUser>(),
             new FakeJwtTokenService(),
             currentUserContext ?? new FakeCurrentUserContext(),
-            new FakeTokenStateStore(),
+            tokenStore ?? new FakeTokenStateStore(),
+            new NullLoginAttemptLimiter(),
+            auditService ?? new NullSecurityAuditService(),
             Options.Create(new JwtOptions()));
     }
 

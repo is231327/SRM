@@ -27,6 +27,7 @@ public class CrudService<TEntity>(SrmCoreDbContext dbContext, ICurrentUserContex
         await EnsureCanWriteAsync(entity);
         entity.Id = Guid.NewGuid();
         DbContext.Set<TEntity>().Add(entity);
+        AddConfigurationAuditRecord("ConfigurationCreated", entity.Id);
         await DbContext.SaveChangesAsync();
         return entity;
     }
@@ -44,6 +45,7 @@ public class CrudService<TEntity>(SrmCoreDbContext dbContext, ICurrentUserContex
         entity.CreatedAtUtc = existing.CreatedAtUtc;
         entity.UpdatedAtUtc = existing.UpdatedAtUtc;
         DbContext.Entry(existing).CurrentValues.SetValues(entity);
+        AddConfigurationAuditRecord("ConfigurationUpdated", id);
         await DbContext.SaveChangesAsync();
         return existing;
     }
@@ -57,6 +59,7 @@ public class CrudService<TEntity>(SrmCoreDbContext dbContext, ICurrentUserContex
         }
 
         DbContext.Set<TEntity>().Remove(existing);
+        AddConfigurationAuditRecord("ConfigurationDeleted", id);
         await DbContext.SaveChangesAsync();
         return true;
     }
@@ -112,5 +115,29 @@ public class CrudService<TEntity>(SrmCoreDbContext dbContext, ICurrentUserContex
         {
             throw new ForbiddenAccessException("The current user is not allowed to access the target customer data.");
         }
+    }
+
+    private void AddConfigurationAuditRecord(string eventType, Guid targetId)
+    {
+        if (typeof(TEntity) != typeof(Customer)
+            && typeof(TEntity) != typeof(ServerRoom)
+            && typeof(TEntity) != typeof(Agent)
+            && typeof(TEntity) != typeof(ShellyDevice)
+            && typeof(TEntity) != typeof(MonitoredDevice)
+            && typeof(TEntity) != typeof(MaintenanceWindow))
+        {
+            return;
+        }
+
+        DbContext.SecurityAuditRecords.Add(new SecurityAuditRecord
+        {
+            EventType = eventType,
+            Outcome = "Success",
+            ActorId = CurrentUserContext.UserId,
+            CustomerId = CurrentUserContext.CustomerId,
+            TargetType = typeof(TEntity).Name,
+            TargetId = targetId,
+            Description = $"{eventType} for {typeof(TEntity).Name}."
+        });
     }
 }

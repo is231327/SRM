@@ -5,12 +5,12 @@ namespace SRMUnitTests.TestHelpers;
 
 internal class FakeJwtTokenService : IJwtTokenService
 {
-    public (string AccessToken, DateTime ExpiresAtUtc, string TokenJti) CreateUserAccessToken(AuthUser user, IEnumerable<string> roles, Guid? customerId)
+    public (string AccessToken, DateTime ExpiresAtUtc, string TokenJti) CreateUserAccessToken(AuthUser user, IEnumerable<string> roles, Guid? customerId, string sessionVersion)
     {
         return ("fake-user-token", DateTime.UtcNow.AddMinutes(10), "fake-user-jti");
     }
 
-    public (string AccessToken, DateTime ExpiresAtUtc, string TokenJti) CreateAgentAccessToken(AgentCredential agentCredential)
+    public (string AccessToken, DateTime ExpiresAtUtc, string TokenJti) CreateAgentAccessToken(AgentCredential agentCredential, string sessionVersion)
     {
         return ("fake-agent-token", DateTime.UtcNow.AddMinutes(10), "fake-agent-jti");
     }
