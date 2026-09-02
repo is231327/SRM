@@ -31,7 +31,7 @@ public sealed class OverviewDataService(ICoreApiClient apiClient) : IOverviewDat
         var pingResults = await apiClient.GetMonitoredDevicePingResultsAsync();
         var incidents = await apiClient.GetIncidentsAsync();
         var openIncidents = incidents.Where(OverviewUiHelper.IsOpenIncident).ToList();
-        var openCriticalIncidents = openIncidents.Where(x => x.Severity.ToString() == "Critical").ToList();
+        var openCriticalIncidents = openIncidents.Where(OverviewUiHelper.IsCriticalIncident).ToList();
         var roomIdsByCustomerId = serverRooms
             .GroupBy(x => x.CustomerId)
             .ToDictionary(x => x.Key, x => x.Select(y => y.Id).ToHashSet());
@@ -61,7 +61,7 @@ public sealed class OverviewDataService(ICoreApiClient apiClient) : IOverviewDat
                     .Where(y => roomIdsByCustomerId.GetValueOrDefault(x.Id)?.Contains(y.ServerRoomId) == true)
                     .ToList();
 
-                if (customerIncidents.Any(y => y.Severity.ToString() == "Critical" && OverviewUiHelper.IsOpenIncident(y)))
+                if (customerIncidents.Any(y => OverviewUiHelper.IsOpenIncident(y) && OverviewUiHelper.IsCriticalIncident(y)))
                 {
                     return "alert-critical";
                 }

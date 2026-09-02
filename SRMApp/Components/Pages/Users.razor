@@ -30,6 +30,58 @@ else
         <div class="alert @(isErrorMessage ? "alert-danger" : "alert-info")">@statusMessage</div>
     }
 
+    <div class="list-controls" aria-label="@LanguageService.T("FilterAndSorting")">
+        <div class="list-control list-control-search">
+            <label for="user-search">@LanguageService.T("Search")</label>
+            <input id="user-search" class="form-control" type="search" placeholder="@LanguageService.T("SearchUsersPlaceholder")" @bind="userSearchText" @bind:event="oninput" />
+        </div>
+        <div class="list-control">
+            <label for="user-role-filter">@LanguageService.T("Role")</label>
+            <select id="user-role-filter" class="form-select" @bind="roleFilter">
+                <option value="">@LanguageService.T("All")</option>
+                @foreach (var role in GetAvailableRoles())
+                {
+                    <option value="@role">@role</option>
+                }
+            </select>
+        </div>
+        <div class="list-control">
+            <label for="user-activity-filter">@LanguageService.T("Status")</label>
+            <select id="user-activity-filter" class="form-select" @bind="activityFilter">
+                <option value="">@LanguageService.T("All")</option>
+                <option value="active">@LanguageService.T("Active")</option>
+                <option value="inactive">@LanguageService.T("Inactive")</option>
+            </select>
+        </div>
+        @if (AuthSessionService.CanManageCustomers)
+        {
+            <div class="list-control">
+                <label for="user-customer-filter">@LanguageService.T("Customer")</label>
+                <select id="user-customer-filter" class="form-select" @bind="customerFilter">
+                    <option value="">@LanguageService.T("All")</option>
+                    <option value="@UserListViewHelper.UnassignedCustomerFilter">@LanguageService.T("NoCustomer")</option>
+                    @foreach (var customer in customers)
+                    {
+                        <option value="@customer.Id.ToString()">@customer.Name</option>
+                    }
+                </select>
+            </div>
+        }
+        <div class="list-control">
+            <label for="user-sort">@LanguageService.T("SortBy")</label>
+            <select id="user-sort" class="form-select" @bind="userSort">
+                <option value="UsernameAscending">@LanguageService.T("UsernameAscending")</option>
+                <option value="UsernameDescending">@LanguageService.T("UsernameDescending")</option>
+                <option value="NameAscending">@LanguageService.T("NameAscending")</option>
+                <option value="NameDescending">@LanguageService.T("NameDescending")</option>
+                <option value="LastLoginNewest">@LanguageService.T("LastLoginNewest")</option>
+                <option value="LastLoginOldest">@LanguageService.T("LastLoginOldest")</option>
+            </select>
+        </div>
+        <button class="btn btn-outline-secondary list-control-reset" type="button" @onclick="ResetUserFilters">@LanguageService.T("ResetFilters")</button>
+    </div>
+
+    var visibleUsers = VisibleUsers;
     <div class="entity-grid">
         <section class="entity-list">
             @if (isLoading)
@@ -40,9 +92,14 @@ else
             {
                 <p>@LanguageService.T("NoData")</p>
             }
+            else if (visibleUsers.Count == 0)
+            {
+                <p>@LanguageService.T("NoMatchingData")</p>
+            }
             else
             {
-                @foreach (var user in users)
+                <p class="list-result-count">@LanguageService.Tf("ShowingResults", visibleUsers.Count, users.Count)</p>
+                @foreach (var user in visibleUsers)
                 {
                     <article class="entity-card">
                         <div class="entity-card-header">
@@ -156,6 +213,13 @@ else
     private string? selectedCustomerId;
     private Guid? editingId;
     private string? statusMessage;
+    private string userSearchText = string.Empty;
+    private string roleFilter = string.Empty;
+    private string activityFilter = string.Empty;
+    private string customerFilter = string.Empty;
+    private UserSortOption userSort = UserSortOption.UsernameAscending;
+    private IReadOnlyList<UserManagementDto> VisibleUsers => UserListViewHelper.FilterAndSort(
+        users, userSearchText, roleFilter, activityFilter, customerFilter, userSort);
 
     protected override async Task OnInitializedAsync()
     {
@@ -296,6 +360,15 @@ else
     private void SyncSelectedRole()
     {
         form.Roles = [selectedRole];
+    }
+
+    private void ResetUserFilters()
+    {
+        userSearchText = string.Empty;
+        roleFilter = string.Empty;
+        activityFilter = string.Empty;
+        customerFilter = string.Empty;
+        userSort = UserSortOption.UsernameAscending;
     }
 
     private string FormatCustomer(Guid? customerId)

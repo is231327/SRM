@@ -263,6 +263,51 @@ public class AuthServiceTests
     }
 
     [Test]
+    public async Task UpdateUserAsync_ShouldChangeCustomerWithoutRecreatingTrackedAssignments()
+    {
+        using var context = AuthDbContextFactory.CreateContext();
+        SeedRoles(context);
+        var originalCustomerId = Guid.NewGuid();
+        var replacementCustomerId = Guid.NewGuid();
+        var user = CreateUserWithoutPassword("moving-customer-user");
+        var customerRoleId = GetRoleId(context, AuthRoleType.Customer);
+        context.Users.Add(user);
+        context.UserRoles.Add(CreateUserRole(user.Id, customerRoleId));
+        context.CustomerUsers.Add(new CustomerUser
+        {
+            UserId = user.Id,
+            CustomerId = originalCustomerId
+        });
+        context.SaveChanges();
+
+        var service = CreateService(context, new FakeCurrentUserContext
+        {
+            IsSystemAdmin = true,
+            CanManageUsers = true
+        });
+
+        var updated = await service.UpdateUserAsync(user.Id, new UpdateUserRequestDto
+        {
+            Username = user.Username,
+            Email = user.Email,
+            FirstName = user.FirstName,
+            LastName = user.LastName,
+            PhoneNumber = user.PhoneNumber,
+            Roles = [AuthRoles.ToName(AuthRoleType.Customer)],
+            CustomerId = replacementCustomerId,
+            IsActive = true
+        });
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(updated, Is.Not.Null);
+            Assert.That(updated!.CustomerId, Is.EqualTo(replacementCustomerId));
+            Assert.That(context.CustomerUsers.Count(x => x.UserId == user.Id), Is.EqualTo(1));
+            Assert.That(context.UserRoles.Count(x => x.UserId == user.Id), Is.EqualTo(1));
+        });
+    }
+
+    [Test]
     public void CreateUserAsync_ShouldRejectUnknownRole()
     {
         using var context = AuthDbContextFactory.CreateContext();

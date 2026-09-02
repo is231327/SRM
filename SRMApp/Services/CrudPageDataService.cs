@@ -100,7 +100,7 @@ public sealed class CrudPageDataService(ICoreApiClient apiClient) : ICrudPageDat
             .GroupBy(x => x.MonitoredDeviceId)
             .ToDictionary(x => x.Key, x => x.OrderByDescending(y => y.RecordedAtUtc).First());
         var openCriticalIncidentDeviceIds = incidents
-            .Where(x => x.MonitoredDeviceId.HasValue && OverviewUiHelper.IsOpenIncident(x) && x.Severity.ToString() == "Critical")
+            .Where(x => x.MonitoredDeviceId.HasValue && OverviewUiHelper.IsOpenIncident(x) && OverviewUiHelper.IsCriticalIncident(x))
             .Select(x => x.MonitoredDeviceId!.Value)
             .ToHashSet();
 

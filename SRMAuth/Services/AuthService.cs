@@ -369,10 +369,17 @@ public class AuthService(
             .Where(x => request.Roles.Contains(x.Name))
             .ToListAsync(cancellationToken);
 
-        dbContext.UserRoles.RemoveRange(user.UserRoles);
-        user.UserRoles.Clear();
+        var requestedRoleIds = roles.Select(x => x.Id).ToHashSet();
+        var obsoleteRoles = user.UserRoles
+            .Where(x => !requestedRoleIds.Contains(x.RoleId))
+            .ToList();
+        dbContext.UserRoles.RemoveRange(obsoleteRoles);
 
-        foreach (var role in roles)
+        var assignedRoleIds = user.UserRoles
+            .Where(x => requestedRoleIds.Contains(x.RoleId))
+            .Select(x => x.RoleId)
+            .ToHashSet();
+        foreach (var role in roles.Where(x => !assignedRoleIds.Contains(x.Id)))
         {
             user.UserRoles.Add(new AuthUserRole
             {
@@ -381,19 +388,29 @@ public class AuthService(
             });
         }
 
-        dbContext.CustomerUsers.RemoveRange(user.CustomerUsers);
-        user.CustomerUsers.Clear();
-
         var requiresCustomerAssignment = request.Roles.Contains(AuthRoles.ToName(AuthRoleType.CustomerAdmin))
             || request.Roles.Contains(AuthRoles.ToName(AuthRoleType.Customer));
 
         if (requiresCustomerAssignment && request.CustomerId.HasValue)
         {
-            user.CustomerUsers.Add(new CustomerUser
+            var customerAssignment = user.CustomerUsers.SingleOrDefault();
+            if (customerAssignment is null)
             {
-                UserId = user.Id,
-                CustomerId = request.CustomerId.Value
-            });
+                user.CustomerUsers.Add(new CustomerUser
+                {
+                    UserId = user.Id,
+                    CustomerId = request.CustomerId.Value
+                });
+            }
+            else
+            {
+                customerAssignment.CustomerId = request.CustomerId.Value;
+                customerAssignment.UpdatedAtUtc = DateTime.UtcNow;
+            }
+        }
+        else
+        {
+            dbContext.CustomerUsers.RemoveRange(user.CustomerUsers);
         }
 
         await tokenStateStore.RotateSessionVersionAsync(

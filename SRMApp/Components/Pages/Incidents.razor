@@ -105,7 +105,7 @@
                     <div class="entity-card-header">
                         <div>
                             <h3>@GetIncidentTitle(item, ticketLink)</h3>
-                            <div class="@GetIncidentStatusClass(item)">@LanguageService.T("TicketPriority"): @GetTicketPriority(item, ticketLink) | @LanguageService.T("TicketStatus"): @GetTicketStatus(ticketLink)</div>
+                            <div class="@GetIncidentStatusClass(item)">@LanguageService.T("TicketPriority"): @GetTicketPriority(item) | @LanguageService.T("TicketStatus"): @GetTicketStatus(ticketLink)</div>
                             <div class="subtle">@LanguageService.T("OpenedAt"): <BrowserLocalDateTime Value="@item.OpenedAtUtc" /></div>
                             <div class="subtle">@LanguageService.T("ServerRoom"): @item.ServerRoomName</div>
                             @if (!string.IsNullOrWhiteSpace(item.ShellyDeviceName))
@@ -240,45 +240,20 @@
     private string GetIncidentCardClass(IncidentReadDto incident)
         => OverviewUiHelper.IsClosedIncident(incident)
             ? "incident-closed"
-            : incident.Severity.ToString() switch
-        {
-            "Critical" => "alert-critical",
-            "Major" => "alert-warning",
-            _ => string.Empty
-        };
+            : OverviewUiHelper.GetIncidentStateClass(incident);
 
     private string GetIncidentBadgeClass(IncidentReadDto incident)
-        => incident.Severity.ToString() switch
-        {
-            "Critical" => "badge-critical",
-            "Major" => "badge-warning",
-            _ => "badge-soft"
-        };
+        => OverviewUiHelper.GetBadgeClass(OverviewUiHelper.GetIncidentStateClass(incident));
 
     private string GetIncidentStatusClass(IncidentReadDto incident)
         => OverviewUiHelper.IsClosedIncident(incident)
             ? "subtle"
-            : incident.Severity.ToString() switch
-        {
-            "Critical" => "status-line-critical",
-            "Major" => "status-line-warning",
-            _ => "subtle"
-        };
+            : OverviewUiHelper.GetStatusTextClass(OverviewUiHelper.GetIncidentStateClass(incident));
 
-    private string GetTicketPriority(IncidentReadDto incident, TicketLinkReadDto? ticketLink)
+    private string GetTicketPriority(IncidentReadDto incident)
     {
-        if (!string.IsNullOrWhiteSpace(ticketLink?.ExternalPriorityName))
-        {
-            return LanguageService.T(ticketLink.ExternalPriorityName);
-        }
-
-        return LanguageService.T(incident.Severity switch
-        {
-            IncidentSeverity.Warning => "High",
-            IncidentSeverity.Major => "Urgent",
-            IncidentSeverity.Critical => "Immediate",
-            _ => "Unknown"
-        });
+        var priority = OverviewUiHelper.GetIncidentPriorityName(incident);
+        return LanguageService.T(string.IsNullOrWhiteSpace(priority) ? "Unknown" : priority);
     }
 
     private string GetTicketStatus(TicketLinkReadDto? ticketLink)

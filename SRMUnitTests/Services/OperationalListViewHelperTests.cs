@@ -58,6 +58,27 @@ public class OperationalListViewHelperTests
     }
 
     [Test]
+    public void IncidentColors_ShouldUseSynchronizedRedminePriority()
+    {
+        var incident = Incident(
+            "Priority changed externally",
+            "Berlin",
+            IncidentType.TemperatureCriticalThresholdExceeded,
+            IncidentSeverity.Critical,
+            "Low",
+            "New",
+            "10",
+            new DateTime(2026, 8, 4));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(OverviewUiHelper.GetIncidentPriorityName(incident), Is.EqualTo("Low"));
+            Assert.That(OverviewUiHelper.IsCriticalIncident(incident), Is.False);
+            Assert.That(OverviewUiHelper.GetIncidentStateClass(incident), Is.EqualTo("alert-info"));
+        });
+    }
+
+    [Test]
     public void FilterAndSortPingResults_AppliesFiltersAndSorts()
     {
         var oldest = Ping(false, true, 0, 3, new DateTime(2026, 8, 1));

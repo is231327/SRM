@@ -88,7 +88,7 @@ else
         => incidents.Count(OverviewUiHelper.IsOpenIncident);
 
     private int GetOpenCriticalIncidentCount()
-        => incidents.Count(x => OverviewUiHelper.IsOpenIncident(x) && x.Severity.ToString() == "Critical");
+        => incidents.Count(x => OverviewUiHelper.IsOpenIncident(x) && OverviewUiHelper.IsCriticalIncident(x));
 
     private string GetServerRoomsSummaryClass()
     {
@@ -206,7 +206,7 @@ else
     private string GetServerRoomCardClass(Guid serverRoomId)
     {
         var roomIncidents = incidents.Where(x => x.ServerRoomId == serverRoomId).ToList();
-        if (roomIncidents.Any(x => OverviewUiHelper.IsOpenIncident(x) && x.Severity.ToString() == "Critical"))
+        if (roomIncidents.Any(x => OverviewUiHelper.IsOpenIncident(x) && OverviewUiHelper.IsCriticalIncident(x)))
         {
             return "alert-critical";
         }
@@ -224,7 +224,7 @@ else
 
     private string GetShellyCardClass(Guid shellyDeviceId)
     {
-        var criticalIncident = incidents.Any(x => x.ShellyDeviceId == shellyDeviceId && OverviewUiHelper.IsOpenIncident(x) && x.Severity.ToString() == "Critical");
+        var criticalIncident = incidents.Any(x => x.ShellyDeviceId == shellyDeviceId && OverviewUiHelper.IsOpenIncident(x) && OverviewUiHelper.IsCriticalIncident(x));
         if (criticalIncident)
         {
             return "alert-critical";

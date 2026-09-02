@@ -20,6 +20,36 @@ public static class OverviewUiHelper
     public static bool IsOpenIncident(IncidentReadDto incident)
         => !IsClosedIncident(incident);
 
+    public static string GetIncidentPriorityName(IncidentReadDto incident)
+    {
+        var externalPriority = incident.TicketLinks
+            .FirstOrDefault(x => x.ProviderName == "Redmine")?.ExternalPriorityName;
+        if (!string.IsNullOrWhiteSpace(externalPriority))
+        {
+            return externalPriority;
+        }
+
+        return incident.Severity switch
+        {
+            IncidentSeverity.Warning => "High",
+            IncidentSeverity.Major => "Urgent",
+            IncidentSeverity.Critical => "Immediate",
+            _ => string.Empty
+        };
+    }
+
+    public static bool IsCriticalIncident(IncidentReadDto incident)
+        => string.Equals(GetIncidentPriorityName(incident), "Immediate", StringComparison.OrdinalIgnoreCase);
+
+    public static string GetIncidentStateClass(IncidentReadDto incident)
+        => GetIncidentPriorityName(incident).ToUpperInvariant() switch
+        {
+            "IMMEDIATE" => "alert-critical",
+            "URGENT" or "HIGH" => "alert-warning",
+            "NORMAL" or "LOW" => "alert-info",
+            _ => GetSeverityCardClass(incident.Severity.ToString())
+        };
+
     public static string FormatTemperatureCelsius(double value, int decimals = 1)
         => $"{Math.Round(value, decimals).ToString($"F{decimals}")} C";
 

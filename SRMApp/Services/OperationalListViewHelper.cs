@@ -77,21 +77,7 @@ public static class OperationalListViewHelper
     }
 
     public static string GetTicketPriority(IncidentReadDto incident)
-    {
-        var externalPriority = GetRedmineTicketLink(incident)?.ExternalPriorityName;
-        if (!string.IsNullOrWhiteSpace(externalPriority))
-        {
-            return externalPriority;
-        }
-
-        return incident.Severity switch
-        {
-            IncidentSeverity.Warning => "High",
-            IncidentSeverity.Major => "Urgent",
-            IncidentSeverity.Critical => "Immediate",
-            _ => string.Empty
-        };
-    }
+        => OverviewUiHelper.GetIncidentPriorityName(incident);
 
     public static string GetTicketStatus(IncidentReadDto incident)
         => GetRedmineTicketLink(incident)?.ExternalStatusName ?? string.Empty;

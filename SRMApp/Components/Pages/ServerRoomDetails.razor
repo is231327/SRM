@@ -117,7 +117,7 @@ else
     private string GetIncidentsSummaryClass()
     {
         if (incidents.Count == 0) return string.Empty;
-        if (incidents.Any(x => OverviewUiHelper.IsOpenIncident(x) && x.Severity.ToString() == "Critical")) return "alert-critical";
+        if (incidents.Any(x => OverviewUiHelper.IsOpenIncident(x) && OverviewUiHelper.IsCriticalIncident(x))) return "alert-critical";
         if (incidents.Any(OverviewUiHelper.IsOpenIncident)) return "alert-warning";
         return "alert-ok";
     }
@@ -149,7 +149,7 @@ else
 
     private string GetShellyCardClass(Guid shellyDeviceId)
     {
-        if (incidents.Any(x => x.ShellyDeviceId == shellyDeviceId && OverviewUiHelper.IsOpenIncident(x) && x.Severity.ToString() == "Critical"))
+        if (incidents.Any(x => x.ShellyDeviceId == shellyDeviceId && OverviewUiHelper.IsOpenIncident(x) && OverviewUiHelper.IsCriticalIncident(x)))
         {
             return "alert-critical";
         }
@@ -199,7 +199,7 @@ else
 
     private string BuildServerRoomLead()
     {
-        if (incidents.Any(x => OverviewUiHelper.IsOpenIncident(x) && x.Severity.ToString() == "Critical"))
+        if (incidents.Any(x => OverviewUiHelper.IsOpenIncident(x) && OverviewUiHelper.IsCriticalIncident(x)))
         {
             return LanguageService.T("ServerRoomLeadCritical");
         }
@@ -250,7 +250,7 @@ else
     private string GetIncidentSummaryText()
         => incidents.Count == 0
             ? LanguageService.T("NoData")
-            : incidents.Any(x => OverviewUiHelper.IsOpenIncident(x) && x.Severity.ToString() == "Critical")
+            : incidents.Any(x => OverviewUiHelper.IsOpenIncident(x) && OverviewUiHelper.IsCriticalIncident(x))
                 ? LanguageService.T("CriticalIncidentsImmediateReview")
                 : incidents.Any(OverviewUiHelper.IsOpenIncident)
                     ? LanguageService.T("OpenIncidentsUnresolved")
