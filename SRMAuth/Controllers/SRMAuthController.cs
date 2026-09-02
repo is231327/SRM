@@ -12,7 +12,7 @@ public class SRMAuthController(IAuthService authService) : ControllerBase
 {
     [HttpPost("login")]
     [AllowAnonymous]
-    public async Task<ActionResult<AuthTokenResponseDto>> Login(
+    public async Task<ActionResult<HumanLoginResponseDto>> Login(
         [FromBody] LoginRequestDto request,
         CancellationToken cancellationToken)
     {
@@ -27,6 +27,25 @@ public class SRMAuthController(IAuthService authService) : ControllerBase
             });
         }
 
+        return Ok(result);
+    }
+
+    [HttpPost("mfa/verify")]
+    [AllowAnonymous]
+    public async Task<ActionResult<MfaAuthenticationResponseDto>> VerifyMfa(
+        [FromBody] VerifyMfaRequestDto request,
+        CancellationToken cancellationToken)
+    {
+        var result = await authService.VerifyMfaAsync(request, cancellationToken);
+        if (result is null)
+        {
+            return Unauthorized(new ProblemDetails
+            {
+                Title = "Unauthorized",
+                Status = StatusCodes.Status401Unauthorized,
+                Detail = "The verification code or MFA challenge is invalid."
+            });
+        }
         return Ok(result);
     }
 
@@ -161,6 +180,15 @@ public class SRMAuthController(IAuthService authService) : ControllerBase
         CancellationToken cancellationToken)
     {
         return await authService.ResetUserPasswordAsync(userId, request, cancellationToken)
+            ? NoContent()
+            : NotFound();
+    }
+
+    [HttpPost("users/{userId:guid}/reset-mfa")]
+    [Authorize(Roles = "SystemAdmin,Employee,CustomerAdmin")]
+    public async Task<IActionResult> ResetUserMfa(Guid userId, CancellationToken cancellationToken)
+    {
+        return await authService.ResetUserMfaAsync(userId, cancellationToken)
             ? NoContent()
             : NotFound();
     }

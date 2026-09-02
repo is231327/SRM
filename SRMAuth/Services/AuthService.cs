@@ -19,11 +19,14 @@ public class AuthService(
     IJwtTokenService jwtTokenService,
     ICurrentUserContext currentUserContext,
     ITokenStateStore tokenStateStore,
+    IMfaChallengeStore mfaChallengeStore,
+    IMfaTotpService mfaTotpService,
     ILoginAttemptLimiter loginAttemptLimiter,
     ISecurityAuditService securityAuditService,
-    IOptions<JwtOptions> jwtOptions) : IAuthService
+    IOptions<JwtOptions> jwtOptions,
+    IOptions<MfaOptions> mfaOptions) : IAuthService
 {
-    public async Task<AuthTokenResponseDto?> LoginAsync(LoginRequestDto request, CancellationToken cancellationToken = default)
+    public async Task<HumanLoginResponseDto?> LoginAsync(LoginRequestDto request, CancellationToken cancellationToken = default)
     {
         await loginAttemptLimiter.EnsureAllowedAsync("user", request.Username, cancellationToken);
         var user = await dbContext.Users
@@ -49,21 +52,133 @@ public class AuthService(
 
         await loginAttemptLimiter.ResetAsync("user", request.Username, cancellationToken);
 
+        var isEnrollment = !user.MfaEnabled;
+        var secret = isEnrollment ? mfaTotpService.GenerateSecret() : string.Empty;
+        var lifetimeMinutes = Math.Clamp(mfaOptions.Value.ChallengeLifetimeMinutes, 1, 15);
+        var challenge = await mfaChallengeStore.CreateAsync(
+            new MfaChallengeState
+            {
+                UserId = user.Id,
+                IsEnrollment = isEnrollment,
+                ProtectedSecret = isEnrollment ? mfaTotpService.ProtectSecret(secret) : string.Empty
+            },
+            TimeSpan.FromMinutes(lifetimeMinutes),
+            cancellationToken);
+
+        return new HumanLoginResponseDto
+        {
+            ChallengeToken = challenge.Token,
+            ExpiresAtUtc = challenge.ExpiresAtUtc,
+            RequiresEnrollment = isEnrollment,
+            Setup = isEnrollment
+                ? new TotpSetupDto
+                {
+                    ManualEntryKey = secret,
+                    QrCodeSvgDataUrl = mfaTotpService.BuildQrCodeSvgDataUrl(user.Username, secret)
+                }
+                : null
+        };
+    }
+
+    public async Task<MfaAuthenticationResponseDto?> VerifyMfaAsync(
+        VerifyMfaRequestDto request,
+        CancellationToken cancellationToken = default)
+    {
+        var challenge = await mfaChallengeStore.GetAsync(request.ChallengeToken, cancellationToken);
+        if (challenge is null)
+        {
+            return null;
+        }
+
+        var user = await dbContext.Users
+            .Include(x => x.UserRoles).ThenInclude(x => x.Role)
+            .Include(x => x.CustomerUsers)
+            .Include(x => x.MfaRecoveryCodes)
+            .FirstOrDefaultAsync(x => x.Id == challenge.UserId && x.IsActive, cancellationToken);
+        if (user is null)
+        {
+            return null;
+        }
+
+        await loginAttemptLimiter.EnsureAllowedAsync("mfa", user.Username, cancellationToken);
+        var protectedSecret = challenge.IsEnrollment ? challenge.ProtectedSecret : user.MfaSecretProtected;
+        if (string.IsNullOrWhiteSpace(protectedSecret))
+        {
+            return null;
+        }
+
+        var secret = mfaTotpService.UnprotectSecret(protectedSecret);
+        var validTotp = mfaTotpService.TryVerifyTotp(secret, request.Code, user.MfaLastUsedTimeStep, out var matchedTimeStep);
+        MfaRecoveryCode? usedRecoveryCode = null;
+        if (!validTotp && !challenge.IsEnrollment)
+        {
+            var requestedHash = mfaTotpService.HashRecoveryCode(request.Code);
+            usedRecoveryCode = user.MfaRecoveryCodes.FirstOrDefault(x =>
+                !x.UsedAtUtc.HasValue && FixedTimeEquals(x.CodeHash, requestedHash));
+        }
+
+        if (!validTotp && usedRecoveryCode is null)
+        {
+            await securityAuditService.RecordAsync("MfaVerification", "Failure", user.Username, targetType: "AuthUser", targetId: user.Id, description: "Invalid MFA code.", cancellationToken: cancellationToken);
+            await loginAttemptLimiter.RecordFailureAsync("mfa", user.Username, cancellationToken);
+            return null;
+        }
+
+        var consumedChallenge = await mfaChallengeStore.ConsumeAsync(request.ChallengeToken, cancellationToken);
+        if (consumedChallenge is null || consumedChallenge.UserId != user.Id)
+        {
+            return null;
+        }
+
+        await loginAttemptLimiter.ResetAsync("mfa", user.Username, cancellationToken);
+        IReadOnlyCollection<string> recoveryCodes = Array.Empty<string>();
+        string sessionVersion;
+        if (challenge.IsEnrollment)
+        {
+            user.MfaEnabled = true;
+            user.MfaSecretProtected = protectedSecret;
+            user.MfaLastUsedTimeStep = matchedTimeStep;
+            recoveryCodes = mfaTotpService.GenerateRecoveryCodes();
+            foreach (var recoveryCode in recoveryCodes)
+            {
+                dbContext.MfaRecoveryCodes.Add(new MfaRecoveryCode
+                {
+                    UserId = user.Id,
+                    CodeHash = mfaTotpService.HashRecoveryCode(recoveryCode)
+                });
+            }
+            sessionVersion = await tokenStateStore.RotateSessionVersionAsync(
+                RedisTokenStateStore.BuildUserPrincipalKey(user.Id), cancellationToken);
+            await securityAuditService.RecordAsync("MfaEnrollment", "Success", user.Username, targetType: "AuthUser", targetId: user.Id, cancellationToken: cancellationToken);
+        }
+        else
+        {
+            if (validTotp)
+            {
+                user.MfaLastUsedTimeStep = matchedTimeStep;
+            }
+            else
+            {
+                usedRecoveryCode!.UsedAtUtc = DateTime.UtcNow;
+                usedRecoveryCode.UpdatedAtUtc = DateTime.UtcNow;
+            }
+            sessionVersion = await tokenStateStore.GetOrCreateSessionVersionAsync(
+                RedisTokenStateStore.BuildUserPrincipalKey(user.Id), cancellationToken);
+        }
+
         user.LastLoginAtUtc = DateTime.UtcNow;
         user.UpdatedAtUtc = DateTime.UtcNow;
         await dbContext.SaveChangesAsync(cancellationToken);
+        await securityAuditService.RecordAsync("HumanLogin", "Success", user.Username, targetType: "AuthUser", targetId: user.Id, cancellationToken: cancellationToken);
 
-        var roles = user.UserRoles
-            .Select(x => x.Role?.Name)
-            .Where(x => !string.IsNullOrWhiteSpace(x))
-            .Cast<string>()
-            .Distinct()
-            .ToArray();
-
+        var roles = user.UserRoles.Select(x => x.Role?.Name)
+            .Where(x => !string.IsNullOrWhiteSpace(x)).Cast<string>().Distinct().ToArray();
         var customerId = user.CustomerUsers.Select(x => (Guid?)x.CustomerId).FirstOrDefault();
-        var sessionVersion = await tokenStateStore.GetOrCreateSessionVersionAsync(
-            RedisTokenStateStore.BuildUserPrincipalKey(user.Id), cancellationToken);
-        return await CreateUserAuthResponseAsync(user, roles, customerId, sessionVersion, cancellationToken);
+        return new MfaAuthenticationResponseDto
+        {
+            Token = await CreateUserAuthResponseAsync(user, roles, customerId, sessionVersion, cancellationToken),
+            RecoveryCodes = recoveryCodes
+        };
     }
 
     public async Task<AuthTokenResponseDto?> LoginAgentAsync(AgentLoginRequestDto request, CancellationToken cancellationToken = default)
@@ -134,7 +249,7 @@ public class AuthService(
             .Include(x => x.CustomerUsers)
             .FirstOrDefaultAsync(x => x.Id == storedToken.UserId && x.IsActive, cancellationToken);
 
-        if (user is null)
+        if (user is null || !user.MfaEnabled)
         {
             return null;
         }
@@ -453,6 +568,30 @@ public class AuthService(
         return true;
     }
 
+    public async Task<bool> ResetUserMfaAsync(Guid userId, CancellationToken cancellationToken = default)
+    {
+        EnsureCanManageUsers();
+
+        var user = await ApplyUserManagementScope(
+                dbContext.Users.Include(x => x.MfaRecoveryCodes))
+            .FirstOrDefaultAsync(x => x.Id == userId, cancellationToken);
+        if (user is null)
+        {
+            return false;
+        }
+
+        dbContext.MfaRecoveryCodes.RemoveRange(user.MfaRecoveryCodes);
+        user.MfaEnabled = false;
+        user.MfaSecretProtected = string.Empty;
+        user.MfaLastUsedTimeStep = null;
+        user.UpdatedAtUtc = DateTime.UtcNow;
+        await tokenStateStore.RotateSessionVersionAsync(
+            RedisTokenStateStore.BuildUserPrincipalKey(user.Id), cancellationToken);
+        await dbContext.SaveChangesAsync(cancellationToken);
+        await securityAuditService.RecordAsync("MfaReset", "Success", string.Empty, targetType: "AuthUser", targetId: user.Id, description: $"Reset MFA for user '{user.Username}'.", cancellationToken: cancellationToken);
+        return true;
+    }
+
     public async Task<AgentCredentialReadDto?> CreateAgentCredentialAsync(AgentCredentialCreateRequestDto request, CancellationToken cancellationToken = default)
     {
         EnsureCanManageUsers();
@@ -549,7 +688,8 @@ public class AuthService(
                 .Distinct()
                 .ToArray(),
             CustomerId = user.CustomerUsers.Select(x => (Guid?)x.CustomerId).FirstOrDefault(),
-            MustChangePassword = user.MustChangePassword
+            MustChangePassword = user.MustChangePassword,
+            MfaEnabled = user.MfaEnabled
         };
     }
 
@@ -572,7 +712,8 @@ public class AuthService(
             CustomerId = user.CustomerUsers.Select(x => (Guid?)x.CustomerId).FirstOrDefault(),
             IsActive = user.IsActive,
             MustChangePassword = user.MustChangePassword,
-            LastLoginAtUtc = user.LastLoginAtUtc
+            LastLoginAtUtc = user.LastLoginAtUtc,
+            MfaEnabled = user.MfaEnabled
         };
     }
 
@@ -706,6 +847,14 @@ public class AuthService(
         {
             throw new InvalidOperationException(string.Join(" ", errors));
         }
+    }
+
+    private static bool FixedTimeEquals(string left, string right)
+    {
+        var leftBytes = Encoding.ASCII.GetBytes(left);
+        var rightBytes = Encoding.ASCII.GetBytes(right);
+        return leftBytes.Length == rightBytes.Length
+            && CryptographicOperations.FixedTimeEquals(leftBytes, rightBytes);
     }
 
     private async Task<AuthTokenResponseDto> CreateUserAuthResponseAsync(

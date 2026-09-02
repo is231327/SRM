@@ -128,6 +128,8 @@ public class AuthServiceTests
         using var context = AuthDbContextFactory.CreateContext();
         var passwordHasher = new PasswordHasher<AuthUser>();
         var user = CreateUser(passwordHasher, "currentPassword1!");
+        user.MfaEnabled = true;
+        user.MfaSecretProtected = "protected:FAKESECRET";
         context.Users.Add(user);
         context.SaveChanges();
         var tokenStore = new FakeTokenStateStore();
@@ -138,13 +140,140 @@ public class AuthServiceTests
             Password = "currentPassword1!"
         });
 
-        var firstRefresh = await service.RefreshAsync(new RefreshTokenRequestDto { RefreshToken = login!.RefreshToken });
-        var replay = await service.RefreshAsync(new RefreshTokenRequestDto { RefreshToken = login.RefreshToken });
+        var authentication = await service.VerifyMfaAsync(new VerifyMfaRequestDto
+        {
+            ChallengeToken = login!.ChallengeToken,
+            Code = "123456"
+        });
+        var firstRefresh = await service.RefreshAsync(new RefreshTokenRequestDto { RefreshToken = authentication!.Token.RefreshToken });
+        var replay = await service.RefreshAsync(new RefreshTokenRequestDto { RefreshToken = authentication.Token.RefreshToken });
 
         Assert.Multiple(() =>
         {
             Assert.That(firstRefresh, Is.Not.Null);
             Assert.That(replay, Is.Null);
+        });
+    }
+
+    [Test]
+    public async Task LoginAndVerifyMfa_ShouldEnrollUserBeforeIssuingTokens()
+    {
+        using var context = AuthDbContextFactory.CreateContext();
+        var passwordHasher = new PasswordHasher<AuthUser>();
+        var user = CreateUser(passwordHasher, "currentPassword1!");
+        context.Users.Add(user);
+        context.SaveChanges();
+        var service = CreateService(context);
+
+        var challenge = await service.LoginAsync(new LoginRequestDto
+        {
+            Username = user.Username,
+            Password = "currentPassword1!"
+        });
+        var authentication = await service.VerifyMfaAsync(new VerifyMfaRequestDto
+        {
+            ChallengeToken = challenge!.ChallengeToken,
+            Code = "123456"
+        });
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(challenge.RequiresEnrollment, Is.True);
+            Assert.That(challenge.Setup?.ManualEntryKey, Is.EqualTo("FAKESECRET"));
+            Assert.That(authentication, Is.Not.Null);
+            Assert.That(authentication!.Token.AccessToken, Is.EqualTo("fake-user-token"));
+            Assert.That(authentication.RecoveryCodes, Has.Count.EqualTo(10));
+            Assert.That(user.MfaEnabled, Is.True);
+            Assert.That(user.MfaSecretProtected, Is.EqualTo("protected:FAKESECRET"));
+            Assert.That(context.MfaRecoveryCodes.Count(x => x.UserId == user.Id), Is.EqualTo(10));
+        });
+    }
+
+    [Test]
+    public async Task LoginAsync_ShouldInvalidatePreviousMfaChallengeForSameUser()
+    {
+        using var context = AuthDbContextFactory.CreateContext();
+        var passwordHasher = new PasswordHasher<AuthUser>();
+        var user = CreateUser(passwordHasher, "currentPassword1!");
+        context.Users.Add(user);
+        context.SaveChanges();
+        var challengeStore = new FakeMfaChallengeStore();
+        var service = CreateService(context, mfaChallengeStore: challengeStore);
+
+        var first = await service.LoginAsync(new LoginRequestDto { Username = user.Username, Password = "currentPassword1!" });
+        var second = await service.LoginAsync(new LoginRequestDto { Username = user.Username, Password = "currentPassword1!" });
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(challengeStore.GetAsync(first!.ChallengeToken).Result, Is.Null);
+            Assert.That(challengeStore.GetAsync(second!.ChallengeToken).Result, Is.Not.Null);
+        });
+    }
+
+    [Test]
+    public async Task VerifyMfa_ShouldConsumeRecoveryCodeOnlyOnce()
+    {
+        using var context = AuthDbContextFactory.CreateContext();
+        var passwordHasher = new PasswordHasher<AuthUser>();
+        var mfa = new FakeMfaTotpService();
+        var user = CreateUser(passwordHasher, "currentPassword1!");
+        user.MfaEnabled = true;
+        user.MfaSecretProtected = "protected:FAKESECRET";
+        context.Users.Add(user);
+        context.MfaRecoveryCodes.Add(new MfaRecoveryCode
+        {
+            UserId = user.Id,
+            CodeHash = mfa.HashRecoveryCode("AAAA-BBBB-CCCC-0001")
+        });
+        context.SaveChanges();
+        var challengeStore = new FakeMfaChallengeStore();
+        var service = CreateService(context, mfaChallengeStore: challengeStore, mfaTotpService: mfa);
+
+        var firstChallenge = await service.LoginAsync(new LoginRequestDto { Username = user.Username, Password = "currentPassword1!" });
+        var first = await service.VerifyMfaAsync(new VerifyMfaRequestDto
+        {
+            ChallengeToken = firstChallenge!.ChallengeToken,
+            Code = "AAAA-BBBB-CCCC-0001"
+        });
+        var secondChallenge = await service.LoginAsync(new LoginRequestDto { Username = user.Username, Password = "currentPassword1!" });
+        var second = await service.VerifyMfaAsync(new VerifyMfaRequestDto
+        {
+            ChallengeToken = secondChallenge!.ChallengeToken,
+            Code = "AAAA-BBBB-CCCC-0001"
+        });
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(first, Is.Not.Null);
+            Assert.That(second, Is.Null);
+            Assert.That(context.MfaRecoveryCodes.Single().UsedAtUtc, Is.Not.Null);
+        });
+    }
+
+    [Test]
+    public async Task ResetUserMfaAsync_ShouldRemoveConfigurationAndRevokeSessions()
+    {
+        using var context = AuthDbContextFactory.CreateContext();
+        var user = CreateUserWithoutPassword("mfa-reset-user");
+        user.MfaEnabled = true;
+        user.MfaSecretProtected = "protected:FAKESECRET";
+        context.Users.Add(user);
+        context.MfaRecoveryCodes.Add(new MfaRecoveryCode { UserId = user.Id, CodeHash = new string('A', 64) });
+        context.SaveChanges();
+        var tokenStore = new FakeTokenStateStore();
+        var principalKey = RedisTokenStateStore.BuildUserPrincipalKey(user.Id);
+        var previousVersion = await tokenStore.GetOrCreateSessionVersionAsync(principalKey);
+        var service = CreateService(context, new FakeCurrentUserContext { IsSystemAdmin = true, CanManageUsers = true }, tokenStore);
+
+        var result = await service.ResetUserMfaAsync(user.Id);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result, Is.True);
+            Assert.That(user.MfaEnabled, Is.False);
+            Assert.That(user.MfaSecretProtected, Is.Empty);
+            Assert.That(context.MfaRecoveryCodes.Any(x => x.UserId == user.Id), Is.False);
+            Assert.That(tokenStore.IsSessionVersionCurrentAsync(principalKey, previousVersion).Result, Is.False);
         });
     }
 
@@ -335,7 +464,9 @@ public class AuthServiceTests
         SRMAuth.Data.SrmAuthDbContext context,
         FakeCurrentUserContext? currentUserContext = null,
         FakeTokenStateStore? tokenStore = null,
-        ISecurityAuditService? auditService = null)
+        ISecurityAuditService? auditService = null,
+        FakeMfaChallengeStore? mfaChallengeStore = null,
+        FakeMfaTotpService? mfaTotpService = null)
     {
         return new AuthService(
             context,
@@ -343,9 +474,12 @@ public class AuthServiceTests
             new FakeJwtTokenService(),
             currentUserContext ?? new FakeCurrentUserContext(),
             tokenStore ?? new FakeTokenStateStore(),
+            mfaChallengeStore ?? new FakeMfaChallengeStore(),
+            mfaTotpService ?? new FakeMfaTotpService(),
             new NullLoginAttemptLimiter(),
             auditService ?? new NullSecurityAuditService(),
-            Options.Create(new JwtOptions()));
+            Options.Create(new JwtOptions()),
+            Options.Create(new MfaOptions()));
     }
 
     private static AuthUser CreateUser(IPasswordHasher<AuthUser> passwordHasher, string password)

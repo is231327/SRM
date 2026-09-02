@@ -43,9 +43,12 @@ public class AuthServiceAgentIntegrationTests
             new FakeJwtTokenService(),
             AuthCurrentUserContextFactory.Create(),
             new FakeTokenStateStore(),
+            new FakeMfaChallengeStore(),
+            new FakeMfaTotpService(),
             new NullLoginAttemptLimiter(),
             new NullSecurityAuditService(),
-            Options.Create(new JwtOptions()));
+            Options.Create(new JwtOptions()),
+            Options.Create(new MfaOptions()));
 
         var result = await service.LoginAgentAsync(new AgentLoginRequestDto
         {

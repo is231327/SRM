@@ -14,7 +14,7 @@ This file lists verified gaps after the code and documentation review on Septemb
 
 - Add Redmine adapter/worker integration tests covering creation, retry, duplicate suppression, and resolution comments.
 - Extend the HTTP-level authorization matrix to every protected controller. Foundational tests already cover all roles, customer filtering, anonymous requests, and read-only customer mutation attempts for server rooms.
-- Add end-to-end Blazor tests for login, forced password change, role-aware controls, configuration, and incidents.
+- Add end-to-end Blazor tests for password/MFA login, MFA enrollment and recovery, forced password change, role-aware controls, configuration, and incidents.
 - Add Agent tests with a real or protocol-compatible physical Shelly device.
 
 ## Optional or deferred functionality

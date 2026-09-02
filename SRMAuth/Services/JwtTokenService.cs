@@ -25,7 +25,8 @@ public class JwtTokenService(IOptions<JwtOptions> options) : IJwtTokenService
             new(ClaimTypes.NameIdentifier, user.Id.ToString()),
             new(ClaimTypes.Name, user.Username),
             new(AuthClaimTypes.SessionVersion, sessionVersion),
-            new(AuthClaimTypes.MustChangePassword, user.MustChangePassword ? "true" : "false")
+            new(AuthClaimTypes.MustChangePassword, user.MustChangePassword ? "true" : "false"),
+            new(AuthClaimTypes.MfaAuthenticated, "true")
         };
 
         claims.AddRange(roles.Select(role => new Claim(ClaimTypes.Role, role)));

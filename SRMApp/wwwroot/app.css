@@ -125,6 +125,8 @@ h1:focus { outline: none; }
 .list-control-search { grid-column: span 2; }
 .list-control-reset { min-height: 38px; }
 .list-result-count { margin: 0 0 0.75rem; color: #617269; font-size: 0.88rem; }
+.recovery-code-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); gap: 0.65rem; margin: 1rem 0; }
+.recovery-code-list code { display: block; padding: 0.7rem; text-align: center; background: rgba(17,59,45,0.07); border-radius: 8px; }
 .help-grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
 .faq-section { margin-top: 1rem; }
 .faq-section h2 { margin-top: 0; }

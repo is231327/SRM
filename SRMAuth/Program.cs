@@ -2,6 +2,7 @@
 using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Scalar.AspNetCore;
@@ -32,14 +33,21 @@ public class Program
         builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection(JwtOptions.SectionName));
         builder.Services.Configure<RedisOptions>(builder.Configuration.GetSection(RedisOptions.SectionName));
         builder.Services.Configure<LoginSecurityOptions>(builder.Configuration.GetSection(LoginSecurityOptions.SectionName));
+        builder.Services.Configure<MfaOptions>(builder.Configuration.GetSection(MfaOptions.SectionName));
         builder.Services.AddHttpContextAccessor();
         builder.Services.AddDbContext<SrmAuthDbContext>(options =>
             options.UseSqlServer(
                 ResolveAuthSqlConnectionString(builder.Configuration),
                 sqlOptions => sqlOptions.EnableRetryOnFailure()));
-        builder.Services.AddSingleton<IConnectionMultiplexer>(_ =>
-            ConnectionMultiplexer.Connect(ResolveRedisConnectionString(builder.Configuration)));
+        var redisConnection = ConnectionMultiplexer.Connect(ResolveRedisConnectionString(builder.Configuration));
+        builder.Services.AddSingleton<IConnectionMultiplexer>(redisConnection);
+        builder.Services.AddDataProtection()
+            .SetApplicationName("SRMAuth")
+            .PersistKeysToStackExchangeRedis(redisConnection, "SRMAuth-DataProtection-Keys");
         builder.Services.AddSingleton<ITokenStateStore, RedisTokenStateStore>();
+        builder.Services.AddSingleton<IMfaChallengeStore, RedisMfaChallengeStore>();
+        builder.Services.AddSingleton(TimeProvider.System);
+        builder.Services.AddSingleton<IMfaTotpService, MfaTotpService>();
         builder.Services.AddScoped<ICurrentUserContext, CurrentUserContext>();
         builder.Services.AddScoped<IPasswordHasher<AuthUser>, PasswordHasher<AuthUser>>();
         builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
@@ -75,6 +83,12 @@ public class Program
                         if (string.IsNullOrWhiteSpace(tokenJti))
                         {
                             context.Fail("Missing token jti claim.");
+                            return;
+                        }
+
+                        if (!MfaTokenSecurity.HasRequiredMfa(context.Principal!))
+                        {
+                            context.Fail("Human access tokens require MFA authentication.");
                             return;
                         }
 

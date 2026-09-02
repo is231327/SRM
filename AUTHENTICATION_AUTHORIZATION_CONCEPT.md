@@ -6,7 +6,7 @@ This document defines the implemented security model. The project requirement th
 
 ## Service responsibilities
 
-- `SRMAuth` authenticates human users and Agent identities, rate-limits failed logins, manages identity data, issues JWTs, rotates refresh tokens, revokes principal sessions, and records security audits.
+- `SRMAuth` authenticates human users with password plus TOTP MFA, authenticates Agent identities, rate-limits failed logins, manages identity data, issues JWTs, rotates refresh tokens, revokes principal sessions, and records security audits.
 - `SRMCore` validates JWTs, checks token and principal-session revocation, enforces endpoint roles, applies customer ownership filters in the service layer, and records monitoring-configuration audits.
 - `SRMApp` keeps the browser session in encrypted protected browser storage, synchronizes login/logout changes across tabs, and forwards bearer tokens.
 - `SRMAgent` exchanges its client identifier and secret for an Agent JWT and calls only dedicated Agent endpoints.
@@ -15,7 +15,7 @@ This document defines the implemented security model. The project requirement th
 
 | Store | Owner | Data |
 |---|---|---|
-| Auth SQL database | `SRMAuth` | users, roles, user-role assignments, customer ID assignments, Agent credentials, identity security audits |
+| Auth SQL database | `SRMAuth` | users, roles, user-role assignments, customer ID assignments, encrypted MFA secrets, hashed recovery codes, Agent credentials, identity security audits |
 | Core SQL database | `SRMCore` | customers, rooms, devices, telemetry, incidents, ticket links, configuration security audits |
 | Redis | Auth/Core/App | hashed refresh-token state, revoked access-token JTIs, principal session versions, and failed-login counters |
 
@@ -49,6 +49,7 @@ Core permits human roles on read endpoints. Monitoring mutations require `System
 - unique `jti` checked against Redis by Auth and Core
 - a principal `session_version` checked against Redis by Auth and Core
 - human claims: subject/user ID, username, roles, optional `customer_id`, and forced-password-change state
+- human access tokens contain an MFA-authenticated claim; Auth and Core reject human tokens without it
 - Agent claims: credential subject, `Agent` role, `agent_id`, `agent.api` scope, and session version
 - startup validation rejects a missing issuer/audience or a signing key shorter than 32 characters
 
@@ -75,6 +76,16 @@ Human and Agent logins use Redis-backed counters keyed by a hash of the normaliz
 
 Accounts marked `MustChangePassword` receive a corresponding JWT claim. Server-side middleware permits only profile read, logout, and password change until the password is changed; UI visibility is not the enforcement boundary.
 
+## Multi-factor authentication
+
+MFA is mandatory for every human user and does not apply to Agent machine identities. After a password is verified, Auth returns only a random, short-lived MFA challenge stored by its SHA-256-derived Redis key. No access or refresh token exists at this stage.
+
+On first login, SRM generates a 160-bit TOTP secret and displays an `otpauth` QR code compatible with Microsoft Authenticator. The user must prove enrollment with the current six-digit code before the secret is stored. Secrets are encrypted with ASP.NET Core Data Protection; its SRMAuth key ring is persisted in password-protected Redis so container replacement does not invalidate enrolled authenticators.
+
+TOTP uses RFC 6238 with SHA-1, six digits, and a 30-second period. Verification accepts one time step before or after the server time and records the last successful step to reject OTP replay. Ten high-entropy, single-use recovery codes are shown once after enrollment; only their SHA-256 hashes are stored. MFA failures use a separate Redis-backed attempt counter.
+
+Authorized user managers can reset MFA within their existing user-management scope. A reset deletes the encrypted secret and recovery codes, rotates the principal session version, and forces fresh Microsoft Authenticator enrollment on the next login. It does not affect Agent authentication.
+
 ## Authentication flow
 
 ```mermaid
@@ -85,6 +96,10 @@ sequenceDiagram
     participant Core as SRMCore
     UI->>Auth: username + password
     Auth->>Auth: verify password hash and active account
+    Auth->>Redis: create short-lived MFA challenge
+    Auth-->>UI: enrollment QR or OTP challenge
+    UI->>Auth: Authenticator OTP or recovery code
+    Auth->>Auth: verify TOTP/recovery code
     Auth->>Redis: store hashed refresh-token state
     Auth-->>UI: JWT + opaque refresh token
     UI->>Core: request with JWT
@@ -99,6 +114,7 @@ erDiagram
     AUTH_USER ||--o{ AUTH_USER_ROLE : has
     AUTH_ROLE ||--o{ AUTH_USER_ROLE : grants
     AUTH_USER ||--o| CUSTOMER_USER : scoped_by
+    AUTH_USER ||--o{ MFA_RECOVERY_CODE : owns
 
     AUTH_USER {
         uuid Id PK
@@ -108,6 +124,9 @@ erDiagram
         bool IsActive
         bool MustChangePassword
         datetime LastLoginAtUtc
+        bool MfaEnabled
+        string MfaSecretProtected
+        bigint MfaLastUsedTimeStep
     }
     AUTH_ROLE {
         uuid Id PK
@@ -120,6 +139,12 @@ erDiagram
     CUSTOMER_USER {
         uuid UserId FK,UK
         uuid CustomerId
+    }
+    MFA_RECOVERY_CODE {
+        uuid Id PK
+        uuid UserId FK
+        string CodeHash
+        datetime UsedAtUtc
     }
     AGENT_CREDENTIAL {
         uuid Id PK
@@ -136,6 +161,8 @@ erDiagram
 - ASP.NET Core `PasswordHasher` and a 12-character complexity policy
 - unique usernames, emails, role names, client identifiers, and one customer assignment per user
 - forced password change after administrative reset
+- mandatory Microsoft Authenticator-compatible TOTP MFA for human users
+- encrypted TOTP secrets, replay protection, one-time recovery codes, and scoped administrative MFA reset
 - API-level restriction while a forced password change is pending
 - Redis-backed human and Agent login throttling
 - atomic, single-use refresh-token rotation

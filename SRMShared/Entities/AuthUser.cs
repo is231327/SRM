@@ -11,7 +11,11 @@ public class AuthUser : BaseEntity
     public bool IsActive { get; set; }
     public bool MustChangePassword { get; set; }
     public DateTime? LastLoginAtUtc { get; set; }
+    public bool MfaEnabled { get; set; }
+    public string MfaSecretProtected { get; set; } = string.Empty;
+    public long? MfaLastUsedTimeStep { get; set; }
 
     public ICollection<AuthUserRole> UserRoles { get; set; } = new List<AuthUserRole>();
     public ICollection<CustomerUser> CustomerUsers { get; set; } = new List<CustomerUser>();
+    public ICollection<MfaRecoveryCode> MfaRecoveryCodes { get; set; } = new List<MfaRecoveryCode>();
 }

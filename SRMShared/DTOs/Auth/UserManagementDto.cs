@@ -13,4 +13,5 @@ public class UserManagementDto
     public bool IsActive { get; set; }
     public bool MustChangePassword { get; set; }
     public DateTime? LastLoginAtUtc { get; set; }
+    public bool MfaEnabled { get; set; }
 }

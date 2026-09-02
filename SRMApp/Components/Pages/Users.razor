@@ -110,6 +110,7 @@ else
                                 <div class="subtle">@FormatCustomer(user.CustomerId)</div>
                                 <div class="subtle">@LanguageService.T("UserRoles"): @string.Join(", ", user.Roles)</div>
                                 <div class="subtle">@LanguageService.T("LastLogin"): @FormatDate(user.LastLoginAtUtc)</div>
+                                <div class="subtle">@LanguageService.T("Mfa"): @LanguageService.T(user.MfaEnabled ? "Enabled" : "EnrollmentRequired")</div>
                             </div>
                             <span class="badge-soft">@(user.IsActive ? LanguageService.T("Active") : LanguageService.T("Inactive"))</span>
                         </div>
@@ -182,6 +183,14 @@ else
                         <button type="submit" class="btn btn-outline-primary">@LanguageService.T("ResetPassword")</button>
                     </div>
                 </EditForm>
+
+                @if (selectedUserMfaEnabled)
+                {
+                    <div class="form-actions">
+                        <button type="button" class="btn btn-outline-danger" @onclick="ResetManagedMfaAsync">@LanguageService.T("ResetMfa")</button>
+                    </div>
+                    <p class="subtle">@LanguageService.T("ResetMfaHelp")</p>
+                }
             }
         </section>
     </div>
@@ -218,6 +227,7 @@ else
     private string activityFilter = string.Empty;
     private string customerFilter = string.Empty;
     private UserSortOption userSort = UserSortOption.UsernameAscending;
+    private bool selectedUserMfaEnabled;
     private IReadOnlyList<UserManagementDto> VisibleUsers => UserListViewHelper.FilterAndSort(
         users, userSearchText, roleFilter, activityFilter, customerFilter, userSort);
 
@@ -331,6 +341,7 @@ else
             : user.CustomerId?.ToString();
         createPassword = string.Empty;
         resetPasswordForm = new ResetUserPasswordRequestDto();
+        selectedUserMfaEnabled = user.MfaEnabled;
         form = new UpdateUserRequestDto
         {
             Username = user.Username,
@@ -349,6 +360,7 @@ else
         editingId = null;
         createPassword = string.Empty;
         resetPasswordForm = new ResetUserPasswordRequestDto();
+        selectedUserMfaEnabled = false;
         selectedRole = GetDefaultRole();
         selectedCustomerId = AuthSessionService.IsCustomerAdmin
             ? AuthSessionService.CustomerId?.ToString()
@@ -442,6 +454,25 @@ else
             await AuthApiClient.ResetUserPasswordAsync(editingId.Value, resetPasswordForm);
             resetPasswordForm = new ResetUserPasswordRequestDto();
             statusMessage = LanguageService.T("ManagedPasswordResetSuccess");
+        }
+        catch (InvalidOperationException ex)
+        {
+            isErrorMessage = true;
+            statusMessage = ex.Message;
+        }
+    }
+
+    private async Task ResetManagedMfaAsync()
+    {
+        if (editingId is null) return;
+        statusMessage = null;
+        isErrorMessage = false;
+        try
+        {
+            await AuthApiClient.ResetUserMfaAsync(editingId.Value);
+            selectedUserMfaEnabled = false;
+            statusMessage = LanguageService.T("ManagedMfaResetSuccess");
+            await LoadUsersAsync();
         }
         catch (InvalidOperationException ex)
         {

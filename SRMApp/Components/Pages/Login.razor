@@ -7,70 +7,106 @@
 <PageTitle>@LanguageService.T("Login")</PageTitle>
 
 <div class="entity-grid">
-    <section class="form-card" style="max-width: 32rem; margin: 3rem auto;">
-        <h3>@LanguageService.T("Login")</h3>
+    <section class="form-card" style="max-width: 36rem; margin: 3rem auto;">
+        <h3>@LanguageService.T(loginChallenge is null ? "Login" : "MfaVerification")</h3>
         @if (!string.IsNullOrWhiteSpace(errorMessage))
         {
             <div class="alert alert-danger">@errorMessage</div>
         }
-        <EditForm Model="form" OnValidSubmit="LoginAsync">
-            <DataAnnotationsValidator />
-            <ValidationSummary />
-            <div class="form-grid">
-                <div>
-                    <label class="form-label">@LanguageService.T("Username")</label>
-                    <InputText class="form-control" name="username" autocomplete="username" disabled="@isSubmitting" @bind-Value="form.Username" />
-                </div>
-                <div>
-                    <label class="form-label">@LanguageService.T("Password")</label>
-                    <InputText class="form-control" name="current-password" autocomplete="current-password" type="password" disabled="@isSubmitting" @bind-Value="form.Password" />
-                </div>
+
+        @if (pendingAuthentication is not null)
+        {
+            <div class="alert alert-warning">@LanguageService.T("RecoveryCodesWarning")</div>
+            <div class="recovery-code-list">
+                @foreach (var recoveryCode in pendingAuthentication.RecoveryCodes)
+                {
+                    <code>@recoveryCode</code>
+                }
             </div>
             <div class="form-actions">
-                <button type="submit" class="btn btn-primary" disabled="@isSubmitting">
-                    @(isSubmitting ? "Signing in..." : LanguageService.T("Login"))
-                </button>
+                <button class="btn btn-primary" @onclick="CompleteLoginAsync" disabled="@isSubmitting">@LanguageService.T("RecoveryCodesSaved")</button>
             </div>
-        </EditForm>
+        }
+        else if (loginChallenge is not null)
+        {
+            @if (loginChallenge.RequiresEnrollment && loginChallenge.Setup is not null)
+            {
+                <p>@LanguageService.T("MfaEnrollmentInstructions")</p>
+                <img src="@loginChallenge.Setup.QrCodeSvgDataUrl" alt="@LanguageService.T("MfaQrCode")" style="display:block; width:min(100%, 22rem); margin:1rem auto;" />
+                <div class="subtle">@LanguageService.T("MfaManualEntryKey")</div>
+                <code style="display:block; overflow-wrap:anywhere; margin-bottom:1rem;">@loginChallenge.Setup.ManualEntryKey</code>
+            }
+            else
+            {
+                <p>@LanguageService.T("MfaLoginInstructions")</p>
+            }
+
+            <EditForm Model="mfaForm" OnValidSubmit="VerifyMfaAsync">
+                <DataAnnotationsValidator />
+                <ValidationSummary />
+                <div class="form-grid">
+                    <div>
+                        <label class="form-label">@LanguageService.T("VerificationCode")</label>
+                        <InputText class="form-control" name="one-time-code" autocomplete="one-time-code" disabled="@isSubmitting" @bind-Value="mfaForm.Code" />
+                        @if (!loginChallenge.RequiresEnrollment)
+                        {
+                            <div class="subtle">@LanguageService.T("RecoveryCodeAlternative")</div>
+                        }
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary" disabled="@isSubmitting">@LanguageService.T("Verify")</button>
+                    <button type="button" class="btn btn-outline-secondary" disabled="@isSubmitting" @onclick="RestartLogin">@LanguageService.T("Back")</button>
+                </div>
+            </EditForm>
+        }
+        else
+        {
+            <EditForm Model="loginForm" OnValidSubmit="LoginAsync">
+                <DataAnnotationsValidator />
+                <ValidationSummary />
+                <div class="form-grid">
+                    <div>
+                        <label class="form-label">@LanguageService.T("Username")</label>
+                        <InputText class="form-control" name="username" autocomplete="username" disabled="@isSubmitting" @bind-Value="loginForm.Username" />
+                    </div>
+                    <div>
+                        <label class="form-label">@LanguageService.T("Password")</label>
+                        <InputText class="form-control" name="current-password" autocomplete="current-password" type="password" disabled="@isSubmitting" @bind-Value="loginForm.Password" />
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary" disabled="@isSubmitting">
+                        @(isSubmitting ? LanguageService.T("SigningIn") : LanguageService.T("Login"))
+                    </button>
+                </div>
+            </EditForm>
+        }
     </section>
 </div>
 
 @code {
-    private LoginRequestDto form = new();
+    private LoginRequestDto loginForm = new();
+    private VerifyMfaRequestDto mfaForm = new();
+    private HumanLoginResponseDto? loginChallenge;
+    private MfaAuthenticationResponseDto? pendingAuthentication;
     private string? errorMessage;
     private bool isSubmitting;
 
     private async Task LoginAsync()
     {
-        if (isSubmitting)
-        {
-            return;
-        }
-
+        if (isSubmitting) return;
         isSubmitting = true;
         errorMessage = null;
         try
         {
-            var token = await AuthApiClient.LoginAsync(form);
-            if (token is null)
+            loginChallenge = await AuthApiClient.LoginAsync(loginForm);
+            if (loginChallenge is null)
             {
-                errorMessage = "Login failed.";
+                errorMessage = LanguageService.T("LoginFailed");
                 return;
             }
-
-            var profile = await AuthApiClient.GetOwnProfileAsync(token.AccessToken);
-            if (profile is null)
-            {
-                errorMessage = "Could not load the user profile.";
-                return;
-            }
-
-            await AuthSessionService.SetSessionAsync(token, profile);
-            NavigationManager.NavigateTo(profile.MustChangePassword ? "/profile" : "/");
-        }
-        catch (InvalidOperationException exception)
-        {
-            errorMessage = exception.Message;
+            mfaForm = new VerifyMfaRequestDto { ChallengeToken = loginChallenge.ChallengeToken };
         }
         catch (Exception exception)
         {
@@ -81,7 +117,61 @@
             isSubmitting = false;
         }
     }
+
+    private async Task VerifyMfaAsync()
+    {
+        if (isSubmitting) return;
+        isSubmitting = true;
+        errorMessage = null;
+        try
+        {
+            var authentication = await AuthApiClient.VerifyMfaAsync(mfaForm);
+            if (authentication is null)
+            {
+                errorMessage = LanguageService.T("MfaVerificationFailed");
+                return;
+            }
+
+            if (authentication.RecoveryCodes.Count > 0)
+            {
+                pendingAuthentication = authentication;
+                return;
+            }
+
+            await CompleteLoginAsync(authentication);
+        }
+        catch (Exception exception)
+        {
+            errorMessage = exception.Message;
+        }
+        finally
+        {
+            isSubmitting = false;
+        }
+    }
+
+    private Task CompleteLoginAsync()
+        => pendingAuthentication is null ? Task.CompletedTask : CompleteLoginAsync(pendingAuthentication);
+
+    private async Task CompleteLoginAsync(MfaAuthenticationResponseDto authentication)
+    {
+        var profile = await AuthApiClient.GetOwnProfileAsync(authentication.Token.AccessToken);
+        if (profile is null)
+        {
+            errorMessage = LanguageService.T("ProfileLoadFailed");
+            return;
+        }
+
+        await AuthSessionService.SetSessionAsync(authentication.Token, profile);
+        NavigationManager.NavigateTo(profile.MustChangePassword ? "/profile" : "/");
+    }
+
+    private void RestartLogin()
+    {
+        loginChallenge = null;
+        pendingAuthentication = null;
+        mfaForm = new VerifyMfaRequestDto();
+        loginForm.Password = string.Empty;
+        errorMessage = null;
+    }
 }
-
-
-

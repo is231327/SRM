@@ -78,6 +78,12 @@ public class Program
                             return;
                         }
 
+                        if (!MfaTokenSecurity.HasRequiredMfa(context.Principal!))
+                        {
+                            context.Fail("Human access tokens require MFA authentication.");
+                            return;
+                        }
+
                         var tokenStateStore = context.HttpContext.RequestServices.GetRequiredService<ITokenStateStore>();
                         var revoked = await tokenStateStore.IsAccessTokenRevokedAsync(tokenJti, context.HttpContext.RequestAborted);
                         if (revoked)

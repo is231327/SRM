@@ -12,13 +12,25 @@ public class AuthApiClient(
 {
     private readonly HttpClient _httpClient = httpClient;
 
-    public async Task<AuthTokenResponseDto?> LoginAsync(LoginRequestDto request)
+    public async Task<HumanLoginResponseDto?> LoginAsync(LoginRequestDto request)
     {
         ConfigureBaseAddress();
         var response = await _httpClient.PostAsJsonAsync("api/auth/login", request);
         if (response.IsSuccessStatusCode)
         {
-            return await response.Content.ReadFromJsonAsync<AuthTokenResponseDto>();
+            return await response.Content.ReadFromJsonAsync<HumanLoginResponseDto>();
+        }
+
+        throw new InvalidOperationException(await ExtractErrorMessageAsync(response));
+    }
+
+    public async Task<MfaAuthenticationResponseDto?> VerifyMfaAsync(VerifyMfaRequestDto request)
+    {
+        ConfigureBaseAddress();
+        var response = await _httpClient.PostAsJsonAsync("api/auth/mfa/verify", request);
+        if (response.IsSuccessStatusCode)
+        {
+            return await response.Content.ReadFromJsonAsync<MfaAuthenticationResponseDto>();
         }
 
         throw new InvalidOperationException(await ExtractErrorMessageAsync(response));
@@ -234,6 +246,29 @@ public class AuthApiClient(
 
         ApplyBearerToken();
         var response = await _httpClient.PostAsJsonAsync($"api/auth/users/{userId}/reset-password", request);
+        if (await HandleUnauthorizedAsync(response))
+        {
+            throw new InvalidOperationException("The session has expired.");
+        }
+        if (response.IsSuccessStatusCode)
+        {
+            return true;
+        }
+
+        throw new InvalidOperationException(await ExtractErrorMessageAsync(response));
+    }
+
+    public async Task<bool> ResetUserMfaAsync(Guid userId)
+    {
+        ConfigureBaseAddress();
+        var ensured = await EnsureAccessTokenAsync();
+        if (!ensured)
+        {
+            throw new InvalidOperationException("The session has expired.");
+        }
+
+        ApplyBearerToken();
+        var response = await _httpClient.PostAsync($"api/auth/users/{userId}/reset-mfa", null);
         if (await HandleUnauthorizedAsync(response))
         {
             throw new InvalidOperationException("The session has expired.");

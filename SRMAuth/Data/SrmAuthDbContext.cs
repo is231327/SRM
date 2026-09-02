@@ -11,6 +11,7 @@ public class SrmAuthDbContext(DbContextOptions<SrmAuthDbContext> options) : DbCo
     public DbSet<CustomerUser> CustomerUsers => Set<CustomerUser>();
     public DbSet<AgentCredential> AgentCredentials => Set<AgentCredential>();
     public DbSet<SecurityAuditRecord> SecurityAuditRecords => Set<SecurityAuditRecord>();
+    public DbSet<MfaRecoveryCode> MfaRecoveryCodes => Set<MfaRecoveryCode>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -26,6 +27,7 @@ public class SrmAuthDbContext(DbContextOptions<SrmAuthDbContext> options) : DbCo
             entity.Property(x => x.PhoneNumber).HasMaxLength(100);
             entity.HasIndex(x => x.Username).IsUnique();
             entity.HasIndex(x => x.Email).IsUnique();
+            entity.Property(x => x.MfaSecretProtected).HasMaxLength(2000);
         });
 
         modelBuilder.Entity<AuthRole>(entity =>
@@ -59,6 +61,16 @@ public class SrmAuthDbContext(DbContextOptions<SrmAuthDbContext> options) : DbCo
                 .HasForeignKey(x => x.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
 
+        });
+
+        modelBuilder.Entity<MfaRecoveryCode>(entity =>
+        {
+            entity.Property(x => x.CodeHash).HasMaxLength(64).IsRequired();
+            entity.HasIndex(x => new { x.UserId, x.CodeHash }).IsUnique();
+            entity.HasOne(x => x.User)
+                .WithMany(x => x.MfaRecoveryCodes)
+                .HasForeignKey(x => x.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<AgentCredential>(entity =>

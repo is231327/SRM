@@ -11,4 +11,5 @@ public class UserProfileDto
     public IReadOnlyCollection<string> Roles { get; set; } = Array.Empty<string>();
     public Guid? CustomerId { get; set; }
     public bool MustChangePassword { get; set; }
+    public bool MfaEnabled { get; set; }
 }
